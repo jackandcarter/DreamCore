@@ -50,6 +50,7 @@ target_include_directories(game
 
 target_link_libraries(game
   PRIVATE
+    dc_compat
     trinity-core-interface
     efsw
   PUBLIC

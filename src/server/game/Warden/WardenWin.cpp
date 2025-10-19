@@ -35,7 +35,9 @@
 #include "WorldSession.h"
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
-#include <openssl/md5.h>
+#include "compat/openssl_compat.hpp"
+
+#include <cstring>
 
 WardenWin::WardenWin() : Warden(), _serverTicks(0) {}
 
@@ -79,10 +81,8 @@ ClientWardenModule* WardenWin::GetModuleForClient()
     memcpy(mod->Key, Module.ModuleKey, 16);
 
     // md5 hash
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    MD5_Update(&ctx, mod->CompressedData, length);
-    MD5_Final((uint8*)&mod->Id, &ctx);
+    auto digest = dc_crypto::md5(reinterpret_cast<unsigned char const*>(mod->CompressedData), length);
+    std::memcpy(mod->Id, digest.data(), sizeof(mod->Id));
 
     return mod;
 }

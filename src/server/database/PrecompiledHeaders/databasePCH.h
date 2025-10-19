@@ -10,6 +10,10 @@
 #ifdef _WIN32 // hack for broken mysql.h not including the correct winsock header for SOCKET definition, fixed in 5.7
 #include <winsock2.h>
 #endif
+#if __has_include(<mysql/mysql.h>)
+#include <mysql/mysql.h>
+#else
 #include <mysql.h>
+#endif
 #include <string>
 #include <vector>

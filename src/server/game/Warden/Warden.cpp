@@ -28,7 +28,9 @@
 #include "AccountMgr.h"
 #include "WardenPackets.h"
 
-#include <openssl/sha.h>
+#include "compat/openssl_compat.hpp"
+
+#include <cstring>
 
 Warden::Warden() : _session(nullptr), _checkTimer(10000/*10 sec*/), _clientResponseTimer(0),
                    _dataSent(false), _previousTimestamp(0), _module(nullptr), _initialized(false)
@@ -173,7 +175,8 @@ struct keyData {
 uint32 Warden::BuildChecksum(const uint8* data, uint32 length)
 {
     keyData hash;
-    SHA1(data, length, hash.bytes.bytes);
+    auto digest = dc_crypto::sha1(data, length);
+    std::memcpy(hash.bytes.bytes, digest.data(), digest.size());
     uint32 checkSum = 0;
     for (uint8 i = 0; i < 5; ++i)
         checkSum = checkSum ^ hash.ints.ints[i];
