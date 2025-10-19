@@ -15,6 +15,10 @@ cmake --build build -j"$(nproc)"
 
 CI runs on ubuntu-24.04 for both GCC and Clang.
 
+## Client
+
+See [docs/clients.md](docs/clients.md) for supported client versions and the build.info detector.
+
 Contributing
 Use C++17 or newer.
 Prefer standard <type_traits> and lambdas over legacy Boost MPL/bind.
