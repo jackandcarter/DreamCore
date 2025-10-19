@@ -17,9 +17,9 @@
 
 #include "BattlenetAccountMgr.h"
 #include "AccountMgr.h"
-#include "CryptoHash.h"
 #include "DatabaseEnv.h"
 #include "Util.h"
+#include "compat/openssl_compat.hpp"
 
 using GameAccountMgr = AccountMgr;
 
@@ -177,15 +177,8 @@ uint8 Battlenet::AccountMgr::GetMaxIndex(uint32 accountId)
 
 std::string Battlenet::AccountMgr::CalculateShaPassHash(std::string const& name, std::string const& password)
 {
-    Trinity::Crypto::SHA256 email;
-    email.UpdateData(name);
-    email.Finalize();
-
-    Trinity::Crypto::SHA256 sha;
-    sha.UpdateData(ByteArrayToHexStr(email.GetDigest()));
-    sha.UpdateData(":");
-    sha.UpdateData(password);
-    sha.Finalize();
-
-    return ByteArrayToHexStr(sha.GetDigest(), true);
+    auto emailDigest = dc_crypto::sha256(reinterpret_cast<unsigned char const*>(name.data()), name.size());
+    std::string salted = ByteArrayToHexStr(emailDigest) + ":" + password;
+    auto finalDigest = dc_crypto::sha256(reinterpret_cast<unsigned char const*>(salted.data()), salted.size());
+    return ByteArrayToHexStr(finalDigest, true);
 }
