@@ -44,3 +44,4 @@ dc_collect(WORLD_SRCS DIR "${CMAKE_SOURCE_DIR}/src/server/worldserver" EXCLUDES 
 add_executable(worldserver ${WORLD_SRCS})
 target_link_libraries(worldserver PRIVATE dc_common dc_shared dc_game trinity-core-interface dc_compat)
 target_include_directories(worldserver PRIVATE ${WORLD_SRCS_INCLUDES})
+add_subdirectory(server)
