@@ -17,7 +17,6 @@
 
 #include "LoginRESTService.h"
 #include "Configuration/Config.h"
-#include "CryptoHash.h"
 #include "CryptoRandom.h"
 #include "DatabaseEnv.h"
 #include "Errors.h"
@@ -31,6 +30,7 @@
 #include "httpget.h"
 #include "httppost.h"
 #include "soapH.h"
+#include "compat/openssl_compat.hpp"
 
 int ns1__executeCommand(soap*, char*, char**) { return SOAP_OK; }
 
@@ -502,17 +502,10 @@ void LoginRESTService::HandleAsyncRequest(std::shared_ptr<AsyncRequest> request)
 
 std::string LoginRESTService::CalculateShaPassHash(std::string const& name, std::string const& password)
 {
-    Trinity::Crypto::SHA256 email;
-    email.UpdateData(name);
-    email.Finalize();
-
-    Trinity::Crypto::SHA256 sha;
-    sha.UpdateData(ByteArrayToHexStr(email.GetDigest()));
-    sha.UpdateData(":");
-    sha.UpdateData(password);
-    sha.Finalize();
-
-    return ByteArrayToHexStr(sha.GetDigest(), true);
+    auto emailDigest = dc_crypto::sha256(reinterpret_cast<unsigned char const*>(name.data()), name.size());
+    std::string salted = ByteArrayToHexStr(emailDigest) + ":" + password;
+    auto finalDigest = dc_crypto::sha256(reinterpret_cast<unsigned char const*>(salted.data()), salted.size());
+    return ByteArrayToHexStr(finalDigest, true);
 }
 
 Namespace namespaces[] =

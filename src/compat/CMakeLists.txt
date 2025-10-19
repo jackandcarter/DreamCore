@@ -8,3 +8,5 @@ target_include_directories(dc_compat
 target_link_libraries(dc_compat
   PUBLIC
     OpenSSL::Crypto)
+
+set_target_properties(dc_compat PROPERTIES POSITION_INDEPENDENT_CODE ON)

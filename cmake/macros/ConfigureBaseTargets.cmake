@@ -76,4 +76,13 @@ add_library(trinity-core-interface INTERFACE)
 target_link_libraries(trinity-core-interface
   INTERFACE
     trinity-default-interface
-    trinity-warning-interface)
+    trinity-warning-interface
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${Boost_LIBRARIES}
+    mysql
+    dc_compat)
+target_include_directories(trinity-core-interface
+  INTERFACE
+    ${Boost_INCLUDE_DIRS}
+    ${MYSQL_INCLUDE_DIR})

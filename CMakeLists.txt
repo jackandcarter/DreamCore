@@ -42,6 +42,15 @@ if(NOT MYSQLCLIENT_LIB OR NOT MYSQLCLIENT_INCLUDE_DIR)
   message(FATAL_ERROR "MySQL client not found — install 'mysql-client' via Homebrew.")
 endif()
 
+set(MYSQL_INCLUDE_DIR ${MYSQLCLIENT_INCLUDE_DIR})
+
+if(NOT TARGET mysql)
+  add_library(mysql UNKNOWN IMPORTED)
+  set_target_properties(mysql PROPERTIES
+    IMPORTED_LOCATION "${MYSQLCLIENT_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}")
+endif()
+
 if(APPLE)
   set(CMAKE_MACOSX_RPATH ON)
   set(CMAKE_INSTALL_RPATH
@@ -58,10 +67,4 @@ add_compile_options(-Wno-register -Wno-deprecated-declarations)
 
 message(STATUS "DreamCore scaffold: C++${CMAKE_CXX_STANDARD} configured")
 
-add_library(dreamcore_placeholder INTERFACE)
-target_link_libraries(dreamcore_placeholder INTERFACE
-  ${MYSQLCLIENT_LIB}
-  OpenSSL::SSL OpenSSL::Crypto
-  ${Boost_LIBRARIES})
-target_include_directories(dreamcore_placeholder INTERFACE
-  ${MYSQLCLIENT_INCLUDE_DIR})
+add_subdirectory(src/compat)
