@@ -30,21 +30,18 @@ namespace Trinity
             std::string const& host, std::string const& service)
         {
             boost::system::error_code ec;
-#if BOOST_VERSION >= 106600
-            boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(protocol, host, service, ec);
-            if (results.empty() || ec)
+            std::string const serviceValue = service.empty() ? "0" : service;
+            auto results = resolver.resolve(host, serviceValue, ec);
+            if (ec)
                 return {};
 
-            return results.begin()->endpoint();
-#else
-            boost::asio::ip::tcp::resolver::query query(std::move(protocol), std::move(host), std::move(service));
-            boost::asio::ip::tcp::resolver::iterator itr = resolver.resolve(query, ec);
-            boost::asio::ip::tcp::resolver::iterator end;
-            if (itr == end || ec)
-                return {};
+            for (auto const& entry : results)
+            {
+                if (entry.endpoint().protocol() == protocol)
+                    return entry.endpoint();
+            }
 
-            return itr->endpoint();
-#endif
+            return {};
         }
     }
 }

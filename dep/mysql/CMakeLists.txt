@@ -14,9 +14,16 @@ endif()
 
 add_library(mysql STATIC IMPORTED GLOBAL)
 
+set(_mysql_interface_dirs "${MYSQL_INCLUDE_DIR}")
+get_filename_component(_mysql_parent "${MYSQL_INCLUDE_DIR}" DIRECTORY)
+if (_mysql_parent)
+  list(APPEND _mysql_interface_dirs "${_mysql_parent}")
+endif()
+list(REMOVE_DUPLICATES _mysql_interface_dirs)
+
 set_target_properties(mysql
   PROPERTIES
     IMPORTED_LOCATION
       "${MYSQL_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES
-      "${MYSQL_INCLUDE_DIR}")
+      "${_mysql_interface_dirs}")

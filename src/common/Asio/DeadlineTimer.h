@@ -19,9 +19,12 @@
 #define DeadlineTimer_h__
 
 #include <boost/asio/deadline_timer.hpp>
+#if BOOST_VERSION >= 107000
+#include <boost/asio/any_io_executor.hpp>
+#endif
 
 #if BOOST_VERSION >= 107000
-#define BasicDeadlineTimerThirdTemplateArg , boost::asio::io_context::executor_type
+#define BasicDeadlineTimerThirdTemplateArg , boost::asio::any_io_executor
 #elif BOOST_VERSION >= 106600
 #define BasicDeadlineTimerThirdTemplateArg
 #else

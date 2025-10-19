@@ -16,6 +16,7 @@ if(WIN32)
 endif(WIN32)
 
 add_subdirectory(genrev)
+add_subdirectory(compat)
 add_subdirectory(common)
 
 if(SERVERS)
