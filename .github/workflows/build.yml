@@ -26,3 +26,16 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build -j"$(nproc)"
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Brew deps
+        run: |
+          brew update
+          brew install cmake ninja openssl@3 boost mysql-client \
+                       readline ncurses zlib bzip2
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
