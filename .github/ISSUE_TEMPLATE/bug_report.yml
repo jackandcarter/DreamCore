@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a problem
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      placeholder: Steps, logs, screenshots
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / Compiler
+      placeholder: "Ubuntu 24.04, gcc-13 / clang-16"

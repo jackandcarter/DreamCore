@@ -1,0 +1,29 @@
+# Build trees
+build/
+build-*/
+out/
+bin/
+lib/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# IDE/OS cruft
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# Logs & dumps
+*.log
+*.stackdump
+
+# Packages / caches
+*.tgz
+*.tar.gz
+*.zip
+*.7z
+.cache/
