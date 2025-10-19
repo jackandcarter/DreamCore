@@ -68,3 +68,18 @@ add_compile_options(-Wno-register -Wno-deprecated-declarations)
 message(STATUS "DreamCore scaffold: C++${CMAKE_CXX_STANDARD} configured")
 
 add_subdirectory(src/compat)
+
+add_library(trinity-core-interface INTERFACE)
+target_link_libraries(trinity-core-interface
+  INTERFACE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${Boost_LIBRARIES}
+    mysql
+    dc_compat)
+target_include_directories(trinity-core-interface
+  INTERFACE
+    ${Boost_INCLUDE_DIRS}
+    ${MYSQL_INCLUDE_DIR})
+
+add_subdirectory(src)

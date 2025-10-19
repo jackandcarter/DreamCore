@@ -1,28 +1,46 @@
-# Copyright (C) 2022 BfaCore Reforged
-#
-# This file is free software; as a special exception the author gives
-# unlimited permission to copy and/or distribute it, with or without
-# modifications, as long as this notice is preserved.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY, to the extent permitted by law; without even the
-# implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Helper to gather sources while skipping vendored/irrelevant dirs
+function(dc_collect out_var)
+  set(options)
+  set(oneValueArgs DIR)
+  set(multiValueArgs EXCLUDES)
+  cmake_parse_arguments(DC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+  if (NOT DC_DIR)
+    message(FATAL_ERROR "dc_collect needs DIR=<path>")
+  endif()
+  file(GLOB_RECURSE _SRCS CONFIGURE_DEPENDS
+    "${DC_DIR}/*.c" "${DC_DIR}/*.cc" "${DC_DIR}/*.cpp"
+    "${DC_DIR}/*.h" "${DC_DIR}/*.hh" "${DC_DIR}/*.hpp")
+  foreach (RX IN LISTS DC_EXCLUDES)
+    list(FILTER _SRCS EXCLUDE REGEX "${RX}")
+  endforeach()
+  set(_DIRS)
+  foreach(SRC IN LISTS _SRCS)
+    get_filename_component(_DIR "${SRC}" DIRECTORY)
+    list(APPEND _DIRS "${_DIR}")
+  endforeach()
+  list(REMOVE_DUPLICATES _DIRS)
+  set(${out_var} ${_SRCS} PARENT_SCOPE)
+  set(${out_var}_INCLUDES ${_DIRS} PARENT_SCOPE)
+endfunction()
 
-if(WIN32)
-  set(sources_windows
-    ${CMAKE_SOURCE_DIR}/src/common/Debugging/WheatyExceptionReport.cpp
-    ${CMAKE_SOURCE_DIR}/src/common/Debugging/WheatyExceptionReport.h
-  )
-endif(WIN32)
+set(DC_EXCLUDES "/dep/" "/sql/" "/tools/" "/build/")
 
-add_subdirectory(genrev)
-add_subdirectory(compat)
-add_subdirectory(common)
+dc_collect(COMMON_SRCS DIR "${CMAKE_SOURCE_DIR}/src/common" EXCLUDES ${DC_EXCLUDES})
+add_library(dc_common STATIC ${COMMON_SRCS})
+target_link_libraries(dc_common PRIVATE trinity-core-interface dc_compat)
+target_include_directories(dc_common PRIVATE ${COMMON_SRCS_INCLUDES})
 
-if(SERVERS)
-  add_subdirectory(server)
-endif(SERVERS)
+dc_collect(SHARED_SRCS DIR "${CMAKE_SOURCE_DIR}/src/server/shared" EXCLUDES ${DC_EXCLUDES})
+add_library(dc_shared STATIC ${SHARED_SRCS})
+target_link_libraries(dc_shared PRIVATE trinity-core-interface dc_compat)
+target_include_directories(dc_shared PRIVATE ${SHARED_SRCS_INCLUDES})
 
-if(TOOLS)
-  add_subdirectory(tools)
-endif(TOOLS)
+dc_collect(GAME_SRCS DIR "${CMAKE_SOURCE_DIR}/src/server/game" EXCLUDES ${DC_EXCLUDES})
+add_library(dc_game STATIC ${GAME_SRCS})
+target_link_libraries(dc_game PRIVATE trinity-core-interface dc_compat)
+target_include_directories(dc_game PRIVATE ${GAME_SRCS_INCLUDES})
+
+dc_collect(WORLD_SRCS DIR "${CMAKE_SOURCE_DIR}/src/server/worldserver" EXCLUDES ${DC_EXCLUDES})
+add_executable(worldserver ${WORLD_SRCS})
+target_link_libraries(worldserver PRIVATE dc_common dc_shared dc_game trinity-core-interface dc_compat)
+target_include_directories(worldserver PRIVATE ${WORLD_SRCS_INCLUDES})
