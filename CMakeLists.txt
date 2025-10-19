@@ -4,6 +4,12 @@ project(DreamCore LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(cmake/macros/ConfigureScripts.cmake)
+include(cmake/macros/AutoCollect.cmake)
+include(cmake/macros/GroupSources.cmake)
+
+include(cmake/options.cmake)
+
 # Detect Homebrew prefix on macOS and add common hint paths
 if(APPLE)
   # Try both Apple Silicon and Intel prefixes
@@ -60,26 +66,14 @@ if(APPLE)
       "/opt/homebrew/lib" "/usr/local/lib")
 endif()
 
-include_directories(${Boost_INCLUDE_DIRS} ${MYSQLCLIENT_INCLUDE_DIR})
-link_directories(${Boost_LIBRARY_DIRS})
-
 add_compile_options(-Wno-register -Wno-deprecated-declarations)
 
 message(STATUS "DreamCore scaffold: C++${CMAKE_CXX_STANDARD} configured")
 
+add_subdirectory(dep)
 add_subdirectory(src/compat)
 
-add_library(trinity-core-interface INTERFACE)
-target_link_libraries(trinity-core-interface
-  INTERFACE
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    ${Boost_LIBRARIES}
-    mysql
-    dc_compat)
-target_include_directories(trinity-core-interface
-  INTERFACE
-    ${Boost_INCLUDE_DIRS}
-    ${MYSQL_INCLUDE_DIR})
+include(cmake/macros/ConfigureBaseTargets.cmake)
+include(cmake/macros/CheckPlatform.cmake)
 
 add_subdirectory(src)
