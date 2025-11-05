@@ -168,7 +168,7 @@ const REG_PAGE = () => `<!doctype html>
           <h1 class="text-4xl font-semibold tracking-tight text-white">DreamCore</h1>
           <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
         </div>
-        <p class="text-sm text-gray-400 mt-2">Create your account for <span class="font-medium text-indigo-300">DreamCore</span></p>
+        <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">DreamCore</span></p>
         <form id="regForm" class="mt-6 space-y-4">
           <div>
             <label class="block text-sm mb-1" for="username">Username</label>
