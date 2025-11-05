@@ -58,8 +58,6 @@ const CONFIG = {
   BRAND_NAME: process.env.BRAND_NAME || 'DreamCore',
   HEADER_TITLE: process.env.HEADER_TITLE || 'DreamCore.WoW',
   CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
-  LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
-  SHORTCUT_URL: process.env.SHORTCUT_URL || 'https://www.the-demiurge.com/DreamCore.rar',
   GUIDE_URL:
     process.env.GUIDE_URL ||
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
@@ -480,38 +478,14 @@ app.get('/verify', async (req, res) => {
           successSteps: [
             {
               number: 2,
-              title: 'Install and prepare the Arctium launcher',
+              title: 'Verification completed',
               body: [
-                'Download the latest Arctium launcher package and extract it directly into your World of Warcraft folder (the one that contains the _retail_ directory).',
-                'Launch the Arctium executable, point it at your WoW install if prompted, and keep it open—this patches the client and must stay running whenever you hop into DreamCore.',
+                'Nice work—you\'ve finished Step 2.',
+                'Your DreamCore account is active and ready for the final client setup steps below.',
               ],
-              cta: CONFIG.LAUNCHER_URL
-                ? {
-                    href: CONFIG.LAUNCHER_URL,
-                    label: 'Download Arctium Launcher',
-                  }
-                : null,
             },
             {
               number: 3,
-              title: 'Run Azar\'s DreamCore shortcut',
-              body: [
-                'Grab the DreamCore shortcut bundle and extract it somewhere convenient after the launcher is set up.',
-                'Use the DreamCore shortcut to start playing—it automatically sets the launcher flags and relaunches Arctium for you, so the order matters.',
-                'Keep Arctium open while the shortcut finishes launching the game. If you close it early, the client will not connect to DreamCore.',
-                'When you reach the login screen, sign in with this verified email and the password you created in Step 1.',
-              ],
-              cta: CONFIG.SHORTCUT_URL
-                ? {
-                    href: CONFIG.SHORTCUT_URL,
-                    label: 'Download DreamCore Shortcut',
-                  }
-                : null,
-              note:
-                'Native Mac client support is in active testing. We\'ll publish the Mac-ready shortcut as soon as it passes QA.',
-            },
-            {
-              number: 4,
               title: 'Review the DreamCore guide & latest updates',
               body: [
                 'Before you dive in, read through the DreamCore guide that covers launcher tips, shortcut setup, and any hotfixes we\'ve published.',
