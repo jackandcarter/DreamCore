@@ -1,0 +1,21 @@
+[Unit]
+Description=TrinityCore Self-Serve Registration
+After=network.target
+Wants=network-online.target
+
+[Service]
+User=devunit
+Group=devunit
+Type=simple
+WorkingDirectory=/opt/tc-register
+EnvironmentFile=/etc/tc-register.env
+ExecStart=/usr/bin/node /opt/tc-register/server.js
+Restart=always
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
