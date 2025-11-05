@@ -182,7 +182,7 @@ const REG_PAGE = () => `<!doctype html>
               <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
               <div>
                 <h2 class="text-lg font-semibold text-white">Step 1 · Create your account</h2>
-                <p class="text-[15px] text-indigo-100/90">Fill out the secure form below. Verification arrives instantly.</p>
+                <p class="text-[15px] text-indigo-100/90">Fill out the secure form below. A verification email will be sent to the address you provide.</p>
               </div>
             </div>
             <form id="regForm" class="mt-6 space-y-5">
