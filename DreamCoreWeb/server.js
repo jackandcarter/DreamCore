@@ -165,7 +165,7 @@ const REG_PAGE = () => `<!doctype html>
     }
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
@@ -580,7 +580,7 @@ function VERIFY_PAGE({ state, title, message, steps }) {
     }
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border ${tone.border} overflow-hidden">
