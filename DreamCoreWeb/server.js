@@ -303,9 +303,23 @@ async function callSoap(command) {
   return text;
 }
 
-async function tcCreateAccount(email, password) {
+function extractSoapReturn(text) {
+  const match = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
+  return match ? match[1].trim() : text.trim();
+}
+
+async function tcSetPassword(identifier, newPassword) {
+  return callSoap(`bnetaccount set password ${identifier} ${newPassword} ${newPassword}`);
+}
+
+async function tcEnsureAccount(email, password) {
   // TrinityCore master (Battle.net): login is an email address
   const out = await callSoap(`bnetaccount create ${email} ${password}`);
+  const message = extractSoapReturn(out);
+  if (/already exists/i.test(message)) {
+    console.info('Account already exists; issuing password reset via SOAP');
+    await tcSetPassword(email, password);
+  }
   return out;
 }
 
@@ -416,7 +430,7 @@ app.get('/verify', async (req, res) => {
 
     // Create real TC account now
     try {
-      await tcCreateAccount(row.email, row.password);
+      await tcEnsureAccount(row.email, row.password);
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res
