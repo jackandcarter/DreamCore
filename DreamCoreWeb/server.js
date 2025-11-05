@@ -138,6 +138,14 @@ const REG_PAGE = () => `<!doctype html>
   <script src="/client.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
+    :root {
+      font-size: 18px;
+    }
+    @media (max-width: 640px) {
+      :root {
+        font-size: 16px;
+      }
+    }
     body {
       background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
     }
@@ -167,40 +175,68 @@ const REG_PAGE = () => `<!doctype html>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
-  <div class="w-full max-w-xl relative z-10">
+  <div class="w-full max-w-2xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
-      <div class="px-6 pt-8 pb-10 sm:px-10">
-        <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">${CONFIG.BRAND_NAME}</h1>
-          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
-        </div>
-        <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span></p>
-        <form id="regForm" class="mt-6 space-y-4">
+      <div class="px-6 pt-10 pb-12 sm:px-12">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <label class="block text-sm mb-1" for="email">Email</label>
+            <p class="text-sm uppercase tracking-[0.5em] text-indigo-400/80">Registration</p>
+            <h1 class="mt-2 text-4xl sm:text-5xl font-semibold tracking-tight text-white">Join ${CONFIG.BRAND_NAME}</h1>
+          </div>
+          <span class="text-sm font-medium text-indigo-300/90">Secure access in minutes</span>
+        </div>
+        <p class="mt-6 text-base text-gray-100/90 leading-relaxed">Follow the quick steps below to create your DreamCore account, verify your email, and jump into the realm with our launcher.</p>
+
+        <div class="mt-8 space-y-8">
+          <div class="relative pl-14">
+            <span class="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 font-semibold text-white">1</span>
+            <h2 class="text-lg font-semibold text-white">Create your login</h2>
+            <p class="mt-1 text-sm text-indigo-100/80">Enter a valid email and strong password. Your email becomes your Battle.net-style username.</p>
+          </div>
+          <div class="h-px bg-gradient-to-r from-indigo-500/0 via-indigo-400/60 to-indigo-500/0" aria-hidden="true"></div>
+          <div class="relative pl-14">
+            <span class="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 font-semibold text-white">2</span>
+            <h2 class="text-lg font-semibold text-white">Verify your inbox</h2>
+            <p class="mt-1 text-sm text-indigo-100/80">We’ll send a secure verification link. Click it within ${CONFIG.TOKEN_TTL_MIN} minutes to finalize your account.</p>
+          </div>
+          <div class="h-px bg-gradient-to-r from-indigo-500/0 via-indigo-400/60 to-indigo-500/0" aria-hidden="true"></div>
+          <div class="relative pl-14">
+            <span class="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 font-semibold text-white">3</span>
+            <h2 class="text-lg font-semibold text-white">Launch into Azeroth</h2>
+            <p class="mt-1 text-sm text-indigo-100/80">Download our launcher, log in with your verified email, and start exploring DreamCore.</p>
+          </div>
+        </div>
+
+        <div class="mt-10 h-px bg-gradient-to-r from-indigo-500/0 via-indigo-400/80 to-indigo-500/0"></div>
+
+        <form id="regForm" class="mt-10 space-y-5">
+          <div>
+            <label class="block text-sm font-medium mb-2 text-indigo-100/90" for="email">Email</label>
             <input id="email" type="email" name="email" required
                    class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="you@example.com" />
           </div>
           <div>
-            <label class="block text-sm mb-1" for="password">Password</label>
+            <label class="block text-sm font-medium mb-2 text-indigo-100/90" for="password">Password</label>
             <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
                    class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="••••••••" />
-            <p class="text-xs text-gray-500 mt-1">${CONFIG.MIN_PASS}+ characters. Your email will be your login on DreamCore.</p>
+            <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. Your email will be your login on DreamCore.</p>
           </div>
           <div class="mt-4" id="cf-box">
             <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
           </div>
-          <button class="w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold shadow-lg shadow-indigo-900/40" type="submit">Create account</button>
+          <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold shadow-lg shadow-indigo-900/40" type="submit">Create account</button>
         </form>
-        <pre id="msg" class="mt-5 text-sm whitespace-pre-wrap text-gray-200 bg-gray-900/70 border border-gray-800 rounded-2xl p-3 min-h-[3rem] transition"></pre>
-        <div class="mt-8 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
-          <h2 class="text-base font-semibold text-indigo-300 mb-1">Need the custom launcher?</h2>
-          <p class="text-sm text-indigo-100/90">Download the Arctium launcher to connect to ${CONFIG.BRAND_NAME}.</p>
-          <a class="inline-flex items-center mt-3 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
+        <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-gray-200 bg-gray-900/70 border border-gray-800 rounded-2xl p-3 min-h-[3rem] transition"></pre>
+        <div class="mt-10 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-6 text-sm text-indigo-100 space-y-3">
+          <div>
+            <h2 class="text-base font-semibold text-indigo-300">Need the DreamCore launcher?</h2>
+            <p class="mt-1 text-sm text-indigo-100/90">Download the latest build to connect instantly once your account is verified.</p>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 transition" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Download DreamCore Launcher</a>
         </div>
       </div>
     </div>
-    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare Turnstile · No public SOAP exposure</p>
+    <p class="text-center text-xs text-gray-500 mt-6">Protected by Cloudflare Turnstile · No public SOAP exposure</p>
   </div>
 </body>
 </html>`;
