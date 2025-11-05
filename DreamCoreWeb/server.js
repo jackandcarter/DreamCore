@@ -309,16 +309,34 @@ function extractSoapReturn(text) {
 }
 
 async function tcSetPassword(identifier, newPassword) {
-  return callSoap(`bnetaccount set password ${identifier} ${newPassword} ${newPassword}`);
+  // Try master-style first; fall back to classic-style if not available.
+  // Always quote args to survive @ and special characters.
+  const tryCmds = [
+    `bnetaccount set password "${identifier}" "${newPassword}" "${newPassword}"`,
+    `account set password "${identifier}" "${newPassword}" "${newPassword}"`,
+  ];
+  let last = '';
+  for (const cmd of tryCmds) {
+    const raw = await callSoap(cmd);
+    const msg = extractSoapReturn(raw);
+    last = raw;
+    // Heuristics: treat these as success signals
+    if (!/no such command|unknown command|invalid syntax|usage:/i.test(msg)) {
+      return raw; // success on this variant
+    }
+  }
+  // If we got here, both variants looked like errors: return the last raw response.
+  return last;
 }
 
 async function tcEnsureAccount(email, password) {
   // TrinityCore master (Battle.net): login is an email address
-  const out = await callSoap(`bnetaccount create ${email} ${password}`);
+  const out = await callSoap(`bnetaccount create "${email}" "${password}"`);
   const message = extractSoapReturn(out);
   if (/already exists/i.test(message)) {
     console.info('Account already exists; issuing password reset via SOAP');
-    await tcSetPassword(email, password);
+    const resetOut = await tcSetPassword(email, password);
+    return resetOut; // <-- return the reset result, not the original error
   }
   return out;
 }
