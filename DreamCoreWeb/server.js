@@ -230,6 +230,10 @@ const REG_PAGE = () => `<!doctype html>
             </div>
             <a class="mt-5 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-5 py-3.5 text-[15px] font-semibold text-white shadow-xl shadow-indigo-900/40 hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400 transition" href="https://www.the-demiurge.com/DreamCore.rar" target="_blank" rel="noopener">Download DreamCore Shortcut</a>
             <p class="mt-3 text-[15px] text-indigo-200/80">Launching with this shortcut ensures your client passes our automated flag check every time.</p>
+            <div class="mt-6 rounded-2xl border border-amber-400/50 bg-amber-500/10 p-4 text-amber-100 shadow-inner shadow-amber-900/20">
+              <p class="text-sm font-semibold uppercase tracking-[0.25em] text-amber-200">Mac update</p>
+              <p class="mt-1 text-[15px] text-amber-100/90">Native Mac client support is actively being built. Our team is testing it now, and we'll publish the download as soon as it's ready—your Mac is absolutely on our roadmap.</p>
+            </div>
           </section>
         </div>
       </div>
