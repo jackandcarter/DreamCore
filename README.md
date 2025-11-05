@@ -1,6 +1,6 @@
 # DreamCore
 
-Modernized BFA-core targeting Ubuntu 24.04+ (GCC 13 / Clang 16), Boost ≥1.74, OpenSSL 3.
+Modernized MaNGOS+ TrinityCore targeting Ubuntu 24.04+ (GCC 13 / Clang 16), Boost ≥1.74, OpenSSL 3.
 
 ## Build (Linux)
 ```bash
