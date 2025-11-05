@@ -189,12 +189,12 @@ const REG_PAGE = () => `<!doctype html>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="email">Email</label>
                 <input id="email" type="email" name="email" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] transition placeholder-gray-500" placeholder="you@example.com" />
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
                 <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] transition placeholder-gray-500" placeholder="••••••••" />
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
                 <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. Your email becomes your DreamCore login.</p>
               </div>
               <div class="pt-2" id="cf-box">
