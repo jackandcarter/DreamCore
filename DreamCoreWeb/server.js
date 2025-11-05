@@ -171,32 +171,66 @@ const REG_PAGE = () => `<!doctype html>
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">${CONFIG.BRAND_NAME}</h1>
+          <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to DreamCore</h1>
           <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
         </div>
-        <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span></p>
-        <form id="regForm" class="mt-6 space-y-4">
-          <div>
-            <label class="block text-sm mb-1" for="email">Email</label>
-            <input id="email" type="email" name="email" required
-                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="you@example.com" />
-          </div>
-          <div>
-            <label class="block text-sm mb-1" for="password">Password</label>
-            <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
-                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="••••••••" />
-            <p class="text-xs text-gray-500 mt-1">${CONFIG.MIN_PASS}+ characters. Your email will be your login on DreamCore.</p>
-          </div>
-          <div class="mt-4" id="cf-box">
-            <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
-          </div>
-          <button class="w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold shadow-lg shadow-indigo-900/40" type="submit">Create account</button>
-        </form>
-        <pre id="msg" class="mt-5 text-sm whitespace-pre-wrap text-gray-200 bg-gray-900/70 border border-gray-800 rounded-2xl p-3 min-h-[3rem] transition"></pre>
-        <div class="mt-8 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
-          <h2 class="text-base font-semibold text-indigo-300 mb-1">Need the custom launcher?</h2>
-          <p class="text-sm text-indigo-100/90">Download the Arctium launcher to connect to ${CONFIG.BRAND_NAME}.</p>
-          <a class="inline-flex items-center mt-3 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
+        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> and get in-game fast.</p>
+
+        <div class="mt-8 space-y-8">
+          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Step 1 · Create your account</h2>
+                <p class="text-[15px] text-indigo-100/90">Fill out the secure form below. Verification arrives instantly.</p>
+              </div>
+            </div>
+            <form id="regForm" class="mt-6 space-y-5">
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="email">Email</label>
+                <input id="email" type="email" name="email" required
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] transition placeholder-gray-500" placeholder="you@example.com" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
+                <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] transition placeholder-gray-500" placeholder="••••••••" />
+                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. Your email becomes your DreamCore login.</p>
+              </div>
+              <div class="pt-2" id="cf-box">
+                <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
+              </div>
+              <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Create account</button>
+            </form>
+            <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+          </section>
+
+          <div class="h-px bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500/80 opacity-70"></div>
+
+          <section class="rounded-3xl border border-purple-500/40 bg-indigo-500/10 p-6 backdrop-blur-sm">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">2</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Step 2 · Install the launcher</h2>
+                <p class="text-[15px] text-indigo-100/90">Download the Arctium launcher to connect to ${CONFIG.BRAND_NAME} realms.</p>
+              </div>
+            </div>
+            <a class="mt-5 inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-200 hover:bg-indigo-500/20 hover:text-white transition shadow-lg shadow-indigo-900/40" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
+          </section>
+
+          <div class="h-px bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500/80 opacity-70"></div>
+
+          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">3</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Step 3 · Grab the DreamCore shortcut</h2>
+                <p class="text-[15px] text-indigo-100/90">Use our pre-built shortcut to auto-flag your install so you can skip manual config.</p>
+              </div>
+            </div>
+            <a class="mt-5 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-5 py-3.5 text-[15px] font-semibold text-white shadow-xl shadow-indigo-900/40 hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400 transition" href="https://www.the-demiurge.com/DreamCore.rar" target="_blank" rel="noopener">Download DreamCore Shortcut</a>
+            <p class="mt-3 text-[15px] text-indigo-200/80">Launching with this shortcut ensures your client passes our automated flag check every time.</p>
+          </section>
         </div>
       </div>
     </div>
