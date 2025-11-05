@@ -288,7 +288,7 @@ async function callSoap(command) {
   return text;
 }
 
-async function tcCreateAccount(_username, password, email) {
+async function tcCreateAccount(email, password) {
   // TrinityCore master (Battle.net): login is an email address
   const out = await callSoap(`bnetaccount create ${email} ${password}`);
   return out;
@@ -308,7 +308,7 @@ app.post('/api/register', limiter, async (req, res) => {
     // Create a pending token, send email
     const token = crypto.randomBytes(24).toString('hex');
     const now = Date.now();
-    const safeUser = email.split('@')[0].slice(0, CONFIG.MAX_USER) || 'player';
+    const safeUser = email.split('@')[0].slice(0, CONFIG.MAX_USER) || 'player'; // pending bookkeeping only
     await pool.execute(
       'INSERT INTO pending (token, username, password, email, created_at) VALUES (?, ?, ?, ?, ?)',
       [token, safeUser, password, email, now]
@@ -357,7 +357,7 @@ app.get('/verify', async (req, res) => {
     // Create real TC account now
     let resultText = '';
     try {
-      resultText = await tcCreateAccount(row.username, row.password, row.email);
+      resultText = await tcCreateAccount(row.email, row.password);
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res.status(502).type('text/html').send('<pre>Account creation failed via SOAP. Please try again later.</pre>');
