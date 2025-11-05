@@ -209,7 +209,7 @@ const REG_PAGE = () => `<!doctype html>
             <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <div class="mt-6 rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4 text-indigo-100 shadow-inner shadow-indigo-900/20">
               <p class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-200">What happens next?</p>
-              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, the success page will walk you through installing the Arctium launcher and Azar's DreamCore shortcut in order so everything works the first time.</p>
+              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, the success page will walk you through the remaining steps.</p>
             </div>
           </section>
         </div>
