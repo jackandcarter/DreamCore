@@ -131,39 +131,75 @@ const REG_PAGE = () => `<!doctype html>
   </script>
   <script src="/client.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% {
+        transform: rotate(0deg) scale(1.1);
+      }
+      50% {
+        transform: rotate(180deg) scale(1.2);
+      }
+      100% {
+        transform: rotate(360deg) scale(1.1);
+      }
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
-  <div class="w-full max-w-md">
-    <div class="bg-gray-900/70 backdrop-blur rounded-2xl shadow-xl border border-gray-800">
-      <div class="p-6 sm:p-8">
-        <h1 class="text-2xl font-semibold tracking-tight">Create your account</h1>
-        <p class="text-sm text-gray-400 mt-1">for <span class="font-medium">${CONFIG.BRAND_NAME}</span></p>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">DemiDevUnit</div>
+  <div class="w-full max-w-xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <div class="flex items-baseline justify-between">
+          <h1 class="text-4xl font-semibold tracking-tight text-white">DreamCore</h1>
+          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
+        </div>
+        <p class="text-sm text-gray-400 mt-2">Create your account for <span class="font-medium text-indigo-300">DreamCore</span></p>
         <form id="regForm" class="mt-6 space-y-4">
           <div>
             <label class="block text-sm mb-1" for="username">Username</label>
             <input id="username" name="username" required minlength="${CONFIG.MIN_USER}" maxlength="${CONFIG.MAX_USER}"
-                   class="w-full rounded-xl bg-gray-800/70 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 p-3" placeholder="Your username" />
+                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="Your username" />
           </div>
           <div>
             <label class="block text-sm mb-1" for="email">Email</label>
             <input id="email" type="email" name="email" required
-                   class="w-full rounded-xl bg-gray-800/70 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 p-3" placeholder="you@example.com" />
+                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="you@example.com" />
           </div>
           <div>
             <label class="block text-sm mb-1" for="password">Password</label>
             <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
-                   class="w-full rounded-xl bg-gray-800/70 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 p-3" placeholder="••••••••" />
-            <p class="text-xs text-gray-500 mt-1">${CONFIG.MIN_PASS}+ characters.</p>
+                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="••••••••" />
+            <p class="text-xs text-gray-500 mt-2">${CONFIG.MIN_PASS}+ characters.</p>
           </div>
-          <div class="mt-2" id="cf-box">
+          <div class="mt-4" id="cf-box">
             <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
           </div>
-          <button class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 focus:ring-2 focus:ring-indigo-400 active:bg-indigo-700 transition font-medium" type="submit">Create account</button>
+          <button class="w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold shadow-lg shadow-indigo-900/40" type="submit">Create account</button>
         </form>
-        <pre id="msg" class="mt-4 text-sm whitespace-pre-wrap text-gray-300"></pre>
+        <pre id="msg" class="mt-5 text-sm whitespace-pre-wrap text-gray-200 bg-gray-900/70 border border-gray-800 rounded-2xl p-3 min-h-[3rem] transition"></pre>
+        <div class="mt-8 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
+          <h2 class="text-base font-semibold text-indigo-300 mb-1">Need the custom launcher?</h2>
+          <p class="text-sm text-indigo-100/90">Download the Arctium launcher to connect to DreamCore.</p>
+          <a class="inline-flex items-center mt-3 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition" href="https://arctium.io/wow/" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
+        </div>
       </div>
     </div>
-    <p class="text-center text-xs text-gray-500 mt-4">Protected by Cloudflare Turnstile · No public SOAP exposure</p>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare Turnstile · No public SOAP exposure</p>
   </div>
 </body>
 </html>`;
