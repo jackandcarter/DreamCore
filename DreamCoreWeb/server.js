@@ -59,6 +59,7 @@ const CONFIG = {
   HEADER_TITLE: process.env.HEADER_TITLE || 'DreamCore.WoW',
   CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
   LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
+  SHORTCUT_URL: process.env.SHORTCUT_URL || 'https://www.the-demiurge.com/DreamCore.rar',
 
   // Registration constraints
   MIN_PASS: Number(process.env.MIN_PASS || 8),
@@ -203,36 +204,9 @@ const REG_PAGE = () => `<!doctype html>
               <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Create account</button>
             </form>
             <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
-          </section>
-
-          <div class="h-px bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500/80 opacity-70"></div>
-
-          <section class="rounded-3xl border border-purple-500/40 bg-indigo-500/10 p-6 backdrop-blur-sm">
-            <div class="flex items-center gap-4">
-              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">2</span>
-              <div>
-                <h2 class="text-lg font-semibold text-white">Step 2 · Install the launcher</h2>
-                <p class="text-[15px] text-indigo-100/90">Download the Arctium launcher to connect to ${CONFIG.BRAND_NAME} realms.</p>
-              </div>
-            </div>
-            <a class="mt-5 inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-200 hover:bg-indigo-500/20 hover:text-white transition shadow-lg shadow-indigo-900/40" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
-          </section>
-
-          <div class="h-px bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500/80 opacity-70"></div>
-
-          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex items-center gap-4">
-              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">3</span>
-              <div>
-                <h2 class="text-lg font-semibold text-white">Step 3 · Grab the DreamCore shortcut</h2>
-                <p class="text-[15px] text-indigo-100/90">Use our pre-built shortcut to auto-flag your install so you can skip manual config.</p>
-              </div>
-            </div>
-            <a class="mt-5 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-5 py-3.5 text-[15px] font-semibold text-white shadow-xl shadow-indigo-900/40 hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400 transition" href="https://www.the-demiurge.com/DreamCore.rar" target="_blank" rel="noopener">Download DreamCore Shortcut</a>
-            <p class="mt-3 text-[15px] text-indigo-200/80">Launching with this shortcut ensures your client passes our automated flag check every time.</p>
-            <div class="mt-6 rounded-2xl border border-amber-400/50 bg-amber-500/10 p-4 text-amber-100 shadow-inner shadow-amber-900/20">
-              <p class="text-sm font-semibold uppercase tracking-[0.25em] text-amber-200">Mac update</p>
-              <p class="mt-1 text-[15px] text-amber-100/90">Native Mac client support is actively being built. Our team is testing it now, and we'll publish the download as soon as it's ready—your Mac is absolutely on our roadmap.</p>
+            <div class="mt-6 rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4 text-indigo-100 shadow-inner shadow-indigo-900/20">
+              <p class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-200">What happens next?</p>
+              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, the success page will walk you through installing the Arctium launcher and Azar's DreamCore shortcut in order so everything works the first time.</p>
             </div>
           </section>
         </div>
@@ -468,10 +442,39 @@ app.get('/verify', async (req, res) => {
           state: 'success',
           title: 'Account verified!',
           message: `Your DreamCore login <strong>${escapeHtml(row.email)}</strong> is now active.`,
-          steps: [
-            `Download or launch the DreamCore client${CONFIG.LAUNCHER_URL ? ` from <a class="underline" href="${escapeHtml(CONFIG.LAUNCHER_URL)}" target="_blank" rel="noopener">our launcher</a>` : ''}.`,
-            'Sign in using your email and the password you chose during registration.',
-            'Need help later? Keep this email handy or contact support any time.',
+          successSteps: [
+            {
+              number: 2,
+              title: 'Install and prepare the Arctium launcher',
+              body: [
+                'Download the latest Arctium launcher package and extract it directly into your World of Warcraft folder (the one that contains the _retail_ directory).',
+                'Launch the Arctium executable, point it at your WoW install if prompted, and keep it open—this patches the client and must stay running whenever you hop into DreamCore.',
+              ],
+              cta: CONFIG.LAUNCHER_URL
+                ? {
+                    href: CONFIG.LAUNCHER_URL,
+                    label: 'Download Arctium Launcher',
+                  }
+                : null,
+            },
+            {
+              number: 3,
+              title: 'Run Azar\'s DreamCore shortcut',
+              body: [
+                'Grab the DreamCore shortcut bundle and extract it somewhere convenient after the launcher is set up.',
+                'Use the DreamCore shortcut to start playing—it automatically sets the launcher flags and relaunches Arctium for you, so the order matters.',
+                'Keep Arctium open while the shortcut finishes launching the game. If you close it early, the client will not connect to DreamCore.',
+                'When you reach the login screen, sign in with this verified email and the password you created in Step 1.',
+              ],
+              cta: CONFIG.SHORTCUT_URL
+                ? {
+                    href: CONFIG.SHORTCUT_URL,
+                    label: 'Download DreamCore Shortcut',
+                  }
+                : null,
+              note:
+                'Native Mac client support is in active testing. We\'ll publish the Mac-ready shortcut as soon as it passes QA.',
+            },
           ],
         })
       );
@@ -496,7 +499,7 @@ app.get('/verify', async (req, res) => {
 
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 
-function VERIFY_PAGE({ state, title, message, steps }) {
+function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
   const tone = {
     success: {
       badge: 'Verified',
@@ -531,17 +534,55 @@ function VERIFY_PAGE({ state, title, message, steps }) {
     icon: 'ℹ',
   };
 
-  const stepsList = Array.isArray(steps) && steps.length
-    ? `<ol class="mt-6 space-y-3 text-sm text-indigo-100/90 list-decimal list-inside">${steps
-        .map(
-          (step) =>
-            `<li class="leading-relaxed">${step.replace(
-              /<(?!\/?(a|strong)\b)[^>]*>/gi,
-              ''
-            )}</li>`
-        )
-        .join('')}</ol>`
-    : '';
+  const stepsList =
+    state !== 'success' && Array.isArray(steps) && steps.length
+      ? `<ol class="mt-6 space-y-3 text-sm text-indigo-100/90 list-decimal list-inside">${steps
+          .map(
+            (step) =>
+              `<li class="leading-relaxed">${step.replace(
+                /<(?!\/?(a|strong)\b)[^>]*>/gi,
+                ''
+              )}</li>`
+          )
+          .join('')}</ol>`
+      : '';
+
+  const successGuide =
+    state === 'success' && Array.isArray(successSteps) && successSteps.length
+      ? `<div class="mt-8 space-y-6">${successSteps
+          .map((step, idx) => {
+            const number = escapeHtml(String(step.number ?? idx + 1));
+            const title = escapeHtml(String(step.title || 'Step'));
+            const bodyArr = Array.isArray(step.body) ? step.body : [];
+            const bodyHtml = bodyArr
+              .map((paragraph, pIdx) => {
+                const spacing = pIdx === 0 ? 'mt-4' : 'mt-3';
+                return `<p class="${spacing} text-[15px] text-indigo-100/90">${escapeHtml(
+                  String(paragraph || '')
+                )}</p>`;
+              })
+              .join('');
+            const cta = step.cta && step.cta.href
+              ? `<a class="mt-5 inline-flex items-center justify-center rounded-2xl ${
+                  idx === 0
+                    ? 'border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-200 hover:bg-indigo-500/20 hover:text-white shadow-lg shadow-indigo-900/40'
+                    : 'bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-5 py-3.5 text-[15px] font-semibold text-white shadow-xl shadow-indigo-900/40 hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400'
+                }" href="${escapeHtml(String(step.cta.href))}" target="_blank" rel="noopener">${escapeHtml(
+                  String(step.cta.label || 'Learn more')
+                )}</a>`
+              : '';
+            const note = step.note
+              ? `<div class="mt-5 rounded-2xl border border-amber-400/50 bg-amber-500/10 p-4 text-amber-100 shadow-inner shadow-amber-900/20"><p class="text-sm font-semibold uppercase tracking-[0.25em] text-amber-200">Heads up</p><p class="mt-1 text-[15px] text-amber-100/90">${escapeHtml(
+                  String(step.note)
+                )}</p></div>`
+              : '';
+            const wrapperClasses = idx === 0
+              ? 'rounded-3xl border border-purple-500/40 bg-indigo-500/10 p-6 backdrop-blur-sm'
+              : 'rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30';
+            return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${cta}${note}</section>`;
+          })
+          .join('')}</div>`
+      : '';
 
   const safeMessage = message.replace(/<(?!\/?(a|strong)\b)[^>]*>/gi, '');
 
@@ -589,6 +630,7 @@ function VERIFY_PAGE({ state, title, message, steps }) {
         <h1 class="mt-6 text-3xl font-semibold tracking-tight text-white">${title}</h1>
         <p class="mt-3 text-[15px] text-indigo-100/90">${safeMessage}</p>
         ${stepsList}
+        ${successGuide}
       </div>
       <div class="bg-gray-900/70 border-t ${tone.border} px-6 py-5 sm:px-10">
         <p class="text-xs text-indigo-200/80">Need a hand? Contact the DreamCore team and mention this verification message for quicker help.</p>
