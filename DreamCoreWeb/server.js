@@ -238,7 +238,7 @@ const REG_PAGE = () => `<!doctype html>
         </div>
       </div>
     </div>
-    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare Turnstile · No public SOAP exposure</p>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar </p>
   </div>
 </body>
 </html>`;
