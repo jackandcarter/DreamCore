@@ -58,8 +58,6 @@ const CONFIG = {
   BRAND_NAME: process.env.BRAND_NAME || 'DreamCore',
   HEADER_TITLE: process.env.HEADER_TITLE || 'DreamCore.WoW',
   CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
-  LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
-  SHORTCUT_URL: process.env.SHORTCUT_URL || 'https://www.the-demiurge.com/DreamCore.rar',
   GUIDE_URL:
     process.env.GUIDE_URL ||
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
