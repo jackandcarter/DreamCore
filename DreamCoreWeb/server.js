@@ -60,6 +60,9 @@ const CONFIG = {
   CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
   LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
   SHORTCUT_URL: process.env.SHORTCUT_URL || 'https://www.the-demiurge.com/DreamCore.rar',
+  GUIDE_URL:
+    process.env.GUIDE_URL ||
+    'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
 
   // Registration constraints
   MIN_PASS: Number(process.env.MIN_PASS || 8),
@@ -474,6 +477,20 @@ app.get('/verify', async (req, res) => {
                 : null,
               note:
                 'Native Mac client support is in active testing. We\'ll publish the Mac-ready shortcut as soon as it passes QA.',
+            },
+            {
+              number: 4,
+              title: 'Review the DreamCore guide & latest updates',
+              body: [
+                'Before you dive in, read through the DreamCore guide that covers launcher tips, shortcut setup, and any hotfixes we\'ve published.',
+                'Bookmark the page so you always have the newest client download links, bug fixes, and community news in one place.',
+              ],
+              cta: CONFIG.GUIDE_URL
+                ? {
+                    href: CONFIG.GUIDE_URL,
+                    label: 'Open DreamCore Guide & Updates',
+                  }
+                : null,
             },
           ],
         })
