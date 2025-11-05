@@ -34,15 +34,18 @@ import mysql from 'mysql2/promise';
 // ----- CONFIG (read from env or inline defaults for dev) -----
 const CONFIG = {
   PORT: Number(process.env.PORT || 8787),
-  BASE_URL: process.env.BASE_URL || 'https://your-bridge.example.com', // public URL for verify links
+  BASE_URL: process.env.BASE_URL || 'https://wow.the-demiurge.com', // public URL for verify links
+
   // TrinityCore SOAP creds (use a dedicated non-playing GM account)
   TC_SOAP_HOST: process.env.TC_SOAP_HOST || '127.0.0.1',
   TC_SOAP_PORT: Number(process.env.TC_SOAP_PORT || 7878),
   TC_SOAP_USER: process.env.TC_SOAP_USER || 'gm_account_name',
   TC_SOAP_PASS: process.env.TC_SOAP_PASS || 'gm_account_password',
+
   // Cloudflare Turnstile
   TURNSTILE_SITEKEY: process.env.TURNSTILE_SITEKEY || '1x00000000000000000000AA',
   TURNSTILE_SECRET: process.env.TURNSTILE_SECRET || '1x0000000000000000000000000000000AA',
+
   // SMTP for email verification links
   SMTP_HOST: process.env.SMTP_HOST || 'smtp.example.com',
   SMTP_PORT: Number(process.env.SMTP_PORT || 587),
@@ -50,12 +53,17 @@ const CONFIG = {
   SMTP_USER: process.env.SMTP_USER || 'apikey',
   SMTP_PASS: process.env.SMTP_PASS || 'secret',
   FROM_EMAIL: process.env.FROM_EMAIL || 'no-reply@example.com',
-  BRAND_NAME: process.env.BRAND_NAME || 'Your Realm',
+
+  // Branding
+  BRAND_NAME: process.env.BRAND_NAME || 'DreamCore',
+  HEADER_TITLE: process.env.HEADER_TITLE || 'DreamCore.WoW',
+  CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
+  LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
+
   // Registration constraints
-  MIN_LOGIN: Number(process.env.MIN_LOGIN || process.env.MIN_USER || 3),
-  MAX_LOGIN: Number(process.env.MAX_LOGIN || process.env.MAX_USER || 20),
   MIN_PASS: Number(process.env.MIN_PASS || 8),
   MAX_PASS: Number(process.env.MAX_PASS || 72),
+  MAX_USER: Number(process.env.MAX_USER || 20), // used to clip a derived username for DB storage
   TOKEN_TTL_MIN: Number(process.env.TOKEN_TTL_MIN || 30), // minutes
 };
 
@@ -87,19 +95,13 @@ await pool.query(`USE \`${DB.NAME}\`;`);
 await pool.query(`
   CREATE TABLE IF NOT EXISTS pending (
     token VARCHAR(64) PRIMARY KEY,
-    login_email VARCHAR(254) NOT NULL,
+    username VARCHAR(32) NOT NULL,
     password VARCHAR(128) NOT NULL,
+    email VARCHAR(254) NOT NULL,
     created_at BIGINT NOT NULL,
     KEY idx_created_at (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
-
-try {
-  await pool.query('ALTER TABLE pending CHANGE username login_email VARCHAR(254) NOT NULL');
-} catch {}
-try {
-  await pool.query('ALTER TABLE pending DROP COLUMN email');
-} catch {}
 
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
@@ -128,7 +130,7 @@ const REG_PAGE = () => `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${CONFIG.BRAND_NAME} — Create Account</title>
+  <title>${CONFIG.HEADER_TITLE} — Create Account</title>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
   <script>
     window.TURNSTILE_SITEKEY = ${JSON.stringify(CONFIG.TURNSTILE_SITEKEY)};
@@ -164,26 +166,26 @@ const REG_PAGE = () => `<!doctype html>
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">DemiDevUnit</div>
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">DreamCore</h1>
+          <h1 class="text-4xl font-semibold tracking-tight text-white">${CONFIG.BRAND_NAME}</h1>
           <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
         </div>
-        <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">DreamCore</span></p>
+        <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span></p>
         <form id="regForm" class="mt-6 space-y-4">
           <div>
-            <label class="block text-sm mb-1" for="loginEmail">Login Email</label>
-            <input id="loginEmail" type="email" name="loginEmail" required minlength="${CONFIG.MIN_LOGIN}" maxlength="${CONFIG.MAX_LOGIN}"
+            <label class="block text-sm mb-1" for="email">Email</label>
+            <input id="email" type="email" name="email" required
                    class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="you@example.com" />
           </div>
           <div>
             <label class="block text-sm mb-1" for="password">Password</label>
             <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
                    class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="••••••••" />
-            <p class="text-xs text-gray-500 mt-2">${CONFIG.MIN_PASS}+ characters.</p>
+            <p class="text-xs text-gray-500 mt-1">${CONFIG.MIN_PASS}+ characters. Your email will be your login on DreamCore.</p>
           </div>
           <div class="mt-4" id="cf-box">
             <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
@@ -193,8 +195,8 @@ const REG_PAGE = () => `<!doctype html>
         <pre id="msg" class="mt-5 text-sm whitespace-pre-wrap text-gray-200 bg-gray-900/70 border border-gray-800 rounded-2xl p-3 min-h-[3rem] transition"></pre>
         <div class="mt-8 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
           <h2 class="text-base font-semibold text-indigo-300 mb-1">Need the custom launcher?</h2>
-          <p class="text-sm text-indigo-100/90">Download the Arctium launcher to connect to DreamCore.</p>
-          <a class="inline-flex items-center mt-3 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition" href="https://arctium.io/wow/" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
+          <p class="text-sm text-indigo-100/90">Download the Arctium launcher to connect to ${CONFIG.BRAND_NAME}.</p>
+          <a class="inline-flex items-center mt-3 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition" href="${CONFIG.LAUNCHER_URL}" target="_blank" rel="noopener">Get the Arctium Launcher →</a>
         </div>
       </div>
     </div>
@@ -215,7 +217,7 @@ const CLIENT_JS = `(() => {
     const cfToken = tokenEl ? tokenEl.value : '';
 
     const payload = {
-      loginEmail: document.getElementById('loginEmail').value.trim(),
+      email: document.getElementById('email').value.trim(),
       password: document.getElementById('password').value,
       cfToken
     };
@@ -239,12 +241,6 @@ app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIE
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
-function isValidLoginEmail(v) {
-  if (typeof v !== 'string') return false;
-  if (v.length < CONFIG.MIN_LOGIN || v.length > CONFIG.MAX_LOGIN) return false;
-  // Allow TrinityCore-safe characters plus '@'. Simplistic email check handled later.
-  return /^[A-Za-z0-9@_.-]+$/.test(v);
-}
 function isValidPassword(p) {
   return typeof p === 'string' && p.length >= CONFIG.MIN_PASS && p.length <= CONFIG.MAX_PASS;
 }
@@ -292,31 +288,19 @@ async function callSoap(command) {
   return text;
 }
 
-async function tcCreateAccount(loginEmail, password) {
-  // TrinityCore console command: bnetaccount create <email> <pass>
-  const out = await callSoap(`bnetaccount create ${loginEmail} ${password}`);
-  if (/(error|usage:)/i.test(out)) {
-    throw new Error(`SOAP error: ${out.trim().slice(0, 200)}`);
-  }
-
-  let gameAccountName = '';
-  const match = out.match(/Game[ \-]?Account[^'"\n]*['"]?([A-Za-z0-9_#\-]+)/i);
-  if (match) {
-    gameAccountName = match[1];
-  }
-
-  return { raw: out, gameAccountName };
+async function tcCreateAccount(email, password) {
+  // TrinityCore master (Battle.net): login is an email address
+  const out = await callSoap(`bnetaccount create ${email} ${password}`);
+  return out;
 }
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
   try {
-    const { loginEmail, password, cfToken } = req.body || {};
+    const { password, email, cfToken } = req.body || {};
 
-    if (!isValidLoginEmail(loginEmail) || !isValidEmail(loginEmail)) {
-      return badRequest(res, 'Invalid login email');
-    }
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
+    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
 
     const ok = await verifyTurnstile(cfToken, req.ip);
     if (!ok) return badRequest(res, 'CAPTCHA failed');
@@ -324,23 +308,24 @@ app.post('/api/register', limiter, async (req, res) => {
     // Create a pending token, send email
     const token = crypto.randomBytes(24).toString('hex');
     const now = Date.now();
+    const safeUser = email.split('@')[0].slice(0, CONFIG.MAX_USER) || 'player'; // pending bookkeeping only
     await pool.execute(
-      'INSERT INTO pending (token, login_email, password, created_at) VALUES (?, ?, ?, ?)',
-      [token, loginEmail, password, now]
+      'INSERT INTO pending (token, username, password, email, created_at) VALUES (?, ?, ?, ?, ?)',
+      [token, safeUser, password, email, now]
     );
 
     const verifyUrl = `${CONFIG.BASE_URL}/verify?token=${token}`;
-    const safeLogin = escapeHtml(loginEmail);
+    const safeEmail = escapeHtml(email);
     const html = `
       <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
         <h2>${CONFIG.BRAND_NAME} — Verify your email</h2>
-        <p>Click to complete your account creation for <b>${safeLogin}</b>:</p>
+        <p>Click to complete your account creation for <b>${safeEmail}</b>:</p>
         <p><a href="${verifyUrl}">Finish registration</a></p>
         <p>This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.</p>
       </div>`;
 
     await transporter.sendMail({
-      to: loginEmail,
+      to: email,
       from: CONFIG.FROM_EMAIL,
       subject: `${CONFIG.BRAND_NAME}: confirm your account`,
       html,
@@ -371,11 +356,8 @@ app.get('/verify', async (req, res) => {
 
     // Create real TC account now
     let resultText = '';
-    let gameAccountName = '';
     try {
-      const result = await tcCreateAccount(row.login_email, row.password);
-      resultText = result.raw;
-      gameAccountName = result.gameAccountName || '';
+      resultText = await tcCreateAccount(row.email, row.password);
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res.status(502).type('text/html').send('<pre>Account creation failed via SOAP. Please try again later.</pre>');
@@ -383,13 +365,11 @@ app.get('/verify', async (req, res) => {
 
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
-    const details = gameAccountName
-      ? `<p>Your Battle.net login email is <b>${escapeHtml(row.login_email)}</b> and your game account is <b>${escapeHtml(gameAccountName)}</b>.</p>`
-      : `<p>Your Battle.net login email is <b>${escapeHtml(row.login_email)}</b>.</p>`;
-
-    return res
-      .type('text/html')
-      .send(`<!doctype html><html><body style="font-family:system-ui"><h2>Success!</h2>${details}<details><summary>Details</summary><pre>${escapeHtml(resultText).slice(0,4000)}</pre></details></body></html>`);
+    return res.type('text/html').send(`<!doctype html><html><body style="font-family:system-ui">
+  <h2>Success!</h2>
+  <p>Your account (login) <b>${escapeHtml(row.email)}</b> has been created. You can now log in.</p>
+  <details><summary>Details</summary><pre>${escapeHtml(resultText).slice(0,4000)}</pre></details>
+</body></html>`);
   } catch (e) {
     console.error(e);
     return res.status(500).type('text/html').send('<pre>Server error</pre>');
