@@ -54,8 +54,8 @@ const CONFIG = {
   FROM_EMAIL: process.env.FROM_EMAIL || 'no-reply@example.com',
   BRAND_NAME: process.env.BRAND_NAME || 'Your Realm',
   // Registration constraints
-  MIN_USER: Number(process.env.MIN_USER || 3),
-  MAX_USER: Number(process.env.MAX_USER || 20),
+  MIN_LOGIN: Number(process.env.MIN_LOGIN || process.env.MIN_USER || 3),
+  MAX_LOGIN: Number(process.env.MAX_LOGIN || process.env.MAX_USER || 20),
   MIN_PASS: Number(process.env.MIN_PASS || 8),
   MAX_PASS: Number(process.env.MAX_PASS || 72),
   TOKEN_TTL_MIN: Number(process.env.TOKEN_TTL_MIN || 30), // minutes
@@ -89,13 +89,19 @@ await pool.query(`USE \`${DB.NAME}\`;`);
 await pool.query(`
   CREATE TABLE IF NOT EXISTS pending (
     token VARCHAR(64) PRIMARY KEY,
-    username VARCHAR(32) NOT NULL,
+    login_email VARCHAR(254) NOT NULL,
     password VARCHAR(128) NOT NULL,
-    email VARCHAR(254) NOT NULL,
     created_at BIGINT NOT NULL,
     KEY idx_created_at (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
+
+try {
+  await pool.query('ALTER TABLE pending CHANGE username login_email VARCHAR(254) NOT NULL');
+} catch {}
+try {
+  await pool.query('ALTER TABLE pending DROP COLUMN email');
+} catch {}
 
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
@@ -171,13 +177,8 @@ const REG_PAGE = () => `<!doctype html>
         <p class="mt-3 text-sm text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">DreamCore</span></p>
         <form id="regForm" class="mt-6 space-y-4">
           <div>
-            <label class="block text-sm mb-1" for="username">Username</label>
-            <input id="username" name="username" required minlength="${CONFIG.MIN_USER}" maxlength="${CONFIG.MAX_USER}"
-                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="Your username" />
-          </div>
-          <div>
-            <label class="block text-sm mb-1" for="email">Email</label>
-            <input id="email" type="email" name="email" required
+            <label class="block text-sm mb-1" for="loginEmail">Login Email</label>
+            <input id="loginEmail" type="email" name="loginEmail" required minlength="${CONFIG.MIN_LOGIN}" maxlength="${CONFIG.MAX_LOGIN}"
                    class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 transition" placeholder="you@example.com" />
           </div>
           <div>
@@ -216,8 +217,7 @@ const CLIENT_JS = `(() => {
     const cfToken = tokenEl ? tokenEl.value : '';
 
     const payload = {
-      username: document.getElementById('username').value.trim(),
-      email: document.getElementById('email').value.trim(),
+      loginEmail: document.getElementById('loginEmail').value.trim(),
       password: document.getElementById('password').value,
       cfToken
     };
@@ -241,11 +241,11 @@ app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIE
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
-function isValidUsername(u) {
-  if (typeof u !== 'string') return false;
-  if (u.length < CONFIG.MIN_USER || u.length > CONFIG.MAX_USER) return false;
-  // Alnum + _ - . only (adjust if your realm allows spaces etc.)
-  return /^[A-Za-z0-9_.-]+$/.test(u);
+function isValidLoginEmail(v) {
+  if (typeof v !== 'string') return false;
+  if (v.length < CONFIG.MIN_LOGIN || v.length > CONFIG.MAX_LOGIN) return false;
+  // Allow TrinityCore-safe characters plus '@'. Simplistic email check handled later.
+  return /^[A-Za-z0-9@_.-]+$/.test(v);
 }
 function isValidPassword(p) {
   return typeof p === 'string' && p.length >= CONFIG.MIN_PASS && p.length <= CONFIG.MAX_PASS;
@@ -294,24 +294,35 @@ async function callSoap(command) {
   return text;
 }
 
-async function tcCreateAccount(username, password) {
-  // TrinityCore console command: account create <user> <pass>
-  const out = await callSoap(`account create ${username} ${password}`);
-  // Optional: set expansion if configured
-  if (Number.isInteger(CONFIG.DEFAULT_EXPANSION)) {
-    try { await callSoap(`account set expansion ${username} ${CONFIG.DEFAULT_EXPANSION}`); } catch {}
+async function tcCreateAccount(loginEmail, password) {
+  // TrinityCore console command: bnetaccount create <email> <pass>
+  const out = await callSoap(`bnetaccount create ${loginEmail} ${password}`);
+  if (/(error|usage:)/i.test(out)) {
+    throw new Error(`SOAP error: ${out.trim().slice(0, 200)}`);
   }
-  return out;
+
+  let gameAccountName = '';
+  const match = out.match(/Game[ \-]?Account[^'"\n]*['"]?([A-Za-z0-9_#\-]+)/i);
+  if (match) {
+    gameAccountName = match[1];
+  }
+
+  if (Number.isInteger(CONFIG.DEFAULT_EXPANSION) && gameAccountName) {
+    try { await callSoap(`account set expansion ${gameAccountName} ${CONFIG.DEFAULT_EXPANSION}`); } catch {}
+  }
+
+  return { raw: out, gameAccountName };
 }
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
   try {
-    const { username, password, email, cfToken } = req.body || {};
+    const { loginEmail, password, cfToken } = req.body || {};
 
-    if (!isValidUsername(username)) return badRequest(res, 'Invalid username');
+    if (!isValidLoginEmail(loginEmail) || !isValidEmail(loginEmail)) {
+      return badRequest(res, 'Invalid login email');
+    }
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
-    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
 
     const ok = await verifyTurnstile(cfToken, req.ip);
     if (!ok) return badRequest(res, 'CAPTCHA failed');
@@ -320,21 +331,22 @@ app.post('/api/register', limiter, async (req, res) => {
     const token = crypto.randomBytes(24).toString('hex');
     const now = Date.now();
     await pool.execute(
-      'INSERT INTO pending (token, username, password, email, created_at) VALUES (?, ?, ?, ?, ?)',
-      [token, username, password, email, now]
+      'INSERT INTO pending (token, login_email, password, created_at) VALUES (?, ?, ?, ?)',
+      [token, loginEmail, password, now]
     );
 
     const verifyUrl = `${CONFIG.BASE_URL}/verify?token=${token}`;
+    const safeLogin = escapeHtml(loginEmail);
     const html = `
       <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
         <h2>${CONFIG.BRAND_NAME} — Verify your email</h2>
-        <p>Click to complete your account creation for <b>${username}</b>:</p>
+        <p>Click to complete your account creation for <b>${safeLogin}</b>:</p>
         <p><a href="${verifyUrl}">Finish registration</a></p>
         <p>This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.</p>
       </div>`;
 
     await transporter.sendMail({
-      to: email,
+      to: loginEmail,
       from: CONFIG.FROM_EMAIL,
       subject: `${CONFIG.BRAND_NAME}: confirm your account`,
       html,
@@ -365,8 +377,11 @@ app.get('/verify', async (req, res) => {
 
     // Create real TC account now
     let resultText = '';
+    let gameAccountName = '';
     try {
-      resultText = await tcCreateAccount(row.username, row.password);
+      const result = await tcCreateAccount(row.login_email, row.password);
+      resultText = result.raw;
+      gameAccountName = result.gameAccountName || '';
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res.status(502).type('text/html').send('<pre>Account creation failed via SOAP. Please try again later.</pre>');
@@ -374,7 +389,13 @@ app.get('/verify', async (req, res) => {
 
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
-    return res.type('text/html').send(`<!doctype html><html><body style="font-family:system-ui"><h2>Success!</h2><p>Your account <b>${row.username}</b> has been created. You can now log in.</p><details><summary>Details</summary><pre>${escapeHtml(resultText).slice(0,4000)}</pre></details></body></html>`);
+    const details = gameAccountName
+      ? `<p>Your Battle.net login email is <b>${escapeHtml(row.login_email)}</b> and your game account is <b>${escapeHtml(gameAccountName)}</b>.</p>`
+      : `<p>Your Battle.net login email is <b>${escapeHtml(row.login_email)}</b>.</p>`;
+
+    return res
+      .type('text/html')
+      .send(`<!doctype html><html><body style="font-family:system-ui"><h2>Success!</h2>${details}<details><summary>Details</summary><pre>${escapeHtml(resultText).slice(0,4000)}</pre></details></body></html>`);
   } catch (e) {
     console.error(e);
     return res.status(500).type('text/html').send('<pre>Server error</pre>');
