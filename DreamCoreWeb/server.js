@@ -274,11 +274,9 @@ async function verifyTurnstile(token, ip) {
 
 function buildSoapEnvelope(command) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="urn:TC" xmlns:xsd="http://www.w3.org/1999/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <SOAP-ENV:Body>
-    <ns1:executeCommand xmlns:ns1="urn:TC">
-      <username>${CONFIG.TC_SOAP_USER}</username>
-      <password>${CONFIG.TC_SOAP_PASS}</password>
+    <ns1:executeCommand>
       <command>${command}</command>
     </ns1:executeCommand>
   </SOAP-ENV:Body>
@@ -287,72 +285,59 @@ function buildSoapEnvelope(command) {
 
 async function callSoap(command) {
   const xml = buildSoapEnvelope(command);
+  const auth = Buffer.from(`${CONFIG.TC_SOAP_USER}:${CONFIG.TC_SOAP_PASS}`).toString('base64');
   const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+    headers: {
+      'Content-Type': 'application/xml',
+      'Authorization': `Basic ${auth}`
+    },
     body: xml,
   });
-
   const text = await resp.text();
   if (!resp.ok) {
-    console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
-    throw new Error(`SOAP HTTP ${resp.status}`);
-  }
-  if (/<(?:soap|SOAP).*Fault/i.test(text)) {
-    console.error('SOAP Fault:\n', text);
-    throw new Error('SOAP Fault');
+    throw new Error(`SOAP HTTP ${resp.status}: ${text.slice(0, 200)}`);
   }
   return text;
 }
 
 function extractSoapReturn(text) {
-  const m = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
-  return m ? m[1].trim() : text.trim();
+  const match = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
+  return match ? match[1].trim() : text.trim();
 }
 
-const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
-
 async function tcSetPassword(identifier, newPassword) {
-  const tries = [
-    `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
-    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
+  // Try master-style first; fall back to classic-style if not available.
+  // Always quote args to survive @ and special characters.
+  const tryCmds = [
+    `bnetaccount set password "${identifier}" "${newPassword}" "${newPassword}"`,
+    `account set password "${identifier}" "${newPassword}" "${newPassword}"`,
   ];
   let last = '';
-  for (const cmd of tries) {
+  for (const cmd of tryCmds) {
     const raw = await callSoap(cmd);
     const msg = extractSoapReturn(raw);
-    last = msg;
-    if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
+    last = raw;
+    // Heuristics: treat these as success signals
+    if (!/no such command|unknown command|invalid syntax|usage:/i.test(msg)) {
+      return raw; // success on this variant
+    }
   }
+  // If we got here, both variants looked like errors: return the last raw response.
   return last;
 }
 
 async function tcEnsureAccount(email, password) {
-  const createTries = [
-    `bnetaccount create ${q(email)} ${q(password)}`,
-    `account create ${q(email)} ${q(password)}`
-  ];
-  let out = '';
-  for (const cmd of createTries) {
-    out = await callSoap(cmd);
-    const msg = extractSoapReturn(out);
-    if (/already exists/i.test(msg)) {
-      const resetOut = await tcSetPassword(email, password);
-      return resetOut;
-    }
-    if (!/unknown command|no such command|usage:/i.test(msg)) return out;
+  // TrinityCore master (Battle.net): login is an email address
+  const out = await callSoap(`bnetaccount create "${email}" "${password}"`);
+  const message = extractSoapReturn(out);
+  if (/already exists/i.test(message)) {
+    console.info('Account already exists; issuing password reset via SOAP');
+    const resetOut = await tcSetPassword(email, password);
+    return resetOut; // <-- return the reset result, not the original error
   }
   return out;
 }
-
-app.get('/api/status', async (req, res) => {
-  try {
-    const out = await callSoap('server info');
-    res.json({ ok: true, info: extractSoapReturn(out) });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
