@@ -380,41 +380,224 @@ app.post('/api/register', limiter, async (req, res) => {
 app.get('/verify', async (req, res) => {
   try {
     const token = String(req.query.token || '');
-    if (!token) return res.status(400).type('text/html').send('<pre>Invalid token</pre>');
+    if (!token) {
+      return res
+        .status(400)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            state: 'error',
+            title: 'Invalid verification link',
+            message:
+              'The verification link is missing a token or was formatted incorrectly.',
+            steps: [
+              'Return to the registration page and request a new verification email.',
+              'If you continue to see this message, contact support so we can assist you manually.',
+            ],
+          })
+        );
+    }
 
     const [rows] = await pool.execute('SELECT * FROM pending WHERE token = ?', [token]);
     const row = Array.isArray(rows) ? rows[0] : undefined;
-    if (!row) return res.status(400).type('text/html').send('<pre>Link is invalid or already used.</pre>');
+    if (!row) {
+      return res
+        .status(400)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            state: 'expired',
+            title: 'Verification link not found',
+            message:
+              'This verification link has already been used or does not match any pending registration.',
+            steps: [
+              'Head back to the registration page to start a new signup.',
+              'Use the most recent verification email—older links immediately deactivate once a new one is issued.',
+            ],
+          })
+        );
+    }
 
     const ageMin = (Date.now() - row.created_at) / 60000;
     if (ageMin > CONFIG.TOKEN_TTL_MIN) {
       await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
-      return res.status(400).type('text/html').send('<pre>Link expired. Please register again.</pre>');
+      return res
+        .status(400)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            state: 'expired',
+            title: 'Verification link expired',
+            message: `This link expired after ${CONFIG.TOKEN_TTL_MIN} minutes for your security.`,
+            steps: [
+              'Revisit the registration page and submit the form again to receive a fresh email.',
+              'Complete verification promptly to finalize your DreamCore account.',
+            ],
+          })
+        );
     }
 
     // Create real TC account now
-    let resultText = '';
     try {
-      resultText = await tcCreateAccount(row.email, row.password);
+      await tcCreateAccount(row.email, row.password);
     } catch (e) {
       console.error('SOAP create failed:', e);
-      return res.status(502).type('text/html').send('<pre>Account creation failed via SOAP. Please try again later.</pre>');
+      return res
+        .status(502)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            state: 'error',
+            title: 'Unable to finalize your account',
+            message:
+              'Our account service had trouble completing the setup. No worries—your email is still reserved.',
+            steps: [
+              'Wait a moment and try the verification link again.',
+              'If the issue persists, open a support ticket so we can complete the registration for you.',
+            ],
+          })
+        );
     }
 
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
-    return res.type('text/html').send(`<!doctype html><html><body style="font-family:system-ui">
-  <h2>Success!</h2>
-  <p>Your account (login) <b>${escapeHtml(row.email)}</b> has been created. You can now log in.</p>
-  <details><summary>Details</summary><pre>${escapeHtml(resultText).slice(0,4000)}</pre></details>
-</body></html>`);
+    return res
+      .type('text/html')
+      .send(
+        VERIFY_PAGE({
+          state: 'success',
+          title: 'Account verified!',
+          message: `Your DreamCore login <strong>${escapeHtml(row.email)}</strong> is now active.`,
+          steps: [
+            `Download or launch the DreamCore client${CONFIG.LAUNCHER_URL ? ` from <a class="underline" href="${escapeHtml(CONFIG.LAUNCHER_URL)}" target="_blank" rel="noopener">our launcher</a>` : ''}.`,
+            'Sign in using your email and the password you chose during registration.',
+            'Need help later? Keep this email handy or contact support any time.',
+          ],
+        })
+      );
   } catch (e) {
     console.error(e);
-    return res.status(500).type('text/html').send('<pre>Server error</pre>');
+    return res
+      .status(500)
+      .type('text/html')
+      .send(
+        VERIFY_PAGE({
+          state: 'error',
+          title: 'Something went wrong',
+          message: 'An unexpected error occurred while checking your verification link.',
+          steps: [
+            'Wait a minute and refresh this page.',
+            'If the problem continues, please open a support ticket so we can finish creating your account.',
+          ],
+        })
+      );
   }
 });
 
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+
+function VERIFY_PAGE({ state, title, message, steps }) {
+  const tone = {
+    success: {
+      badge: 'Verified',
+      badgeGradient: 'from-emerald-400 via-green-400 to-teal-400',
+      border: 'border-emerald-400/40',
+      glow: 'shadow-emerald-900/30',
+      highlight: 'text-emerald-300',
+      icon: '✓',
+    },
+    expired: {
+      badge: 'Link expired',
+      badgeGradient: 'from-amber-400 via-orange-400 to-rose-400',
+      border: 'border-amber-400/40',
+      glow: 'shadow-amber-900/30',
+      highlight: 'text-amber-300',
+      icon: '⌛',
+    },
+    error: {
+      badge: 'Action needed',
+      badgeGradient: 'from-rose-500 via-red-500 to-pink-500',
+      border: 'border-rose-400/40',
+      glow: 'shadow-rose-900/30',
+      highlight: 'text-rose-300',
+      icon: '⚠',
+    },
+  }[state] || {
+    badge: 'Update',
+    badgeGradient: 'from-indigo-400 via-purple-400 to-blue-400',
+    border: 'border-indigo-400/40',
+    glow: 'shadow-indigo-900/30',
+    highlight: 'text-indigo-300',
+    icon: 'ℹ',
+  };
+
+  const stepsList = Array.isArray(steps) && steps.length
+    ? `<ol class="mt-6 space-y-3 text-sm text-indigo-100/90 list-decimal list-inside">${steps
+        .map(
+          (step) =>
+            `<li class="leading-relaxed">${step.replace(
+              /<(?!\/?(a|strong)\b)[^>]*>/gi,
+              ''
+            )}</li>`
+        )
+        .join('')}</ol>`
+    : '';
+
+  const safeMessage = message.replace(/<(?!\/?(a|strong)\b)[^>]*>/gi, '');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${CONFIG.HEADER_TITLE} — Verification</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% {
+        transform: rotate(0deg) scale(1.1);
+      }
+      50% {
+        transform: rotate(180deg) scale(1.2);
+      }
+      100% {
+        transform: rotate(360deg) scale(1.1);
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border ${tone.border} overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r ${tone.badgeGradient} px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-indigo-900/30">${tone.icon} ${tone.badge}</span>
+        <h1 class="mt-6 text-3xl font-semibold tracking-tight text-white">${title}</h1>
+        <p class="mt-3 text-[15px] text-indigo-100/90">${safeMessage}</p>
+        ${stepsList}
+      </div>
+      <div class="bg-gray-900/70 border-t ${tone.border} px-6 py-5 sm:px-10">
+        <p class="text-xs text-indigo-200/80">Need a hand? Contact the DreamCore team and mention this verification message for quicker help.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
 
 // ----- Housekeeping: cleanup expired tokens hourly -----
 setInterval(async () => {
