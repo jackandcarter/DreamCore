@@ -293,7 +293,10 @@ const REG_PAGE = () => `<!doctype html>
               <div class="pt-2" id="cf-box">
                 <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
               </div>
-              <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Create account</button>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Create account</button>
+                <a class="inline-flex w-full items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3.5 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] shadow-lg shadow-indigo-900/40" href="/login">Log in</a>
+              </div>
             </form>
             <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <div class="mt-6 rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4 text-indigo-100 shadow-inner shadow-indigo-900/20">
@@ -340,8 +343,576 @@ const CLIENT_JS = `(() => {
   });
 })();`;
 
+const LOGIN_PAGE = () => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${CONFIG.HEADER_TITLE} — Login</title>
+  <script src="/login.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% { transform: rotate(0deg) scale(1.1); }
+      50% { transform: rotate(180deg) scale(1.2); }
+      100% { transform: rotate(360deg) scale(1.1); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <div class="flex items-baseline justify-between">
+          <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome back</h1>
+          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Login</span>
+        </div>
+        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Sign in to manage your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> account and view your characters.</p>
+
+        <div class="mt-8 space-y-8">
+          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Log in to your account</h2>
+                <p class="text-[15px] text-indigo-100/90">Use the email and password you verified during registration.</p>
+              </div>
+            </div>
+            <form id="loginForm" class="mt-6 space-y-5">
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginEmail">Email</label>
+                <input id="loginEmail" type="email" name="email" autocomplete="username" required
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" name="password" autocomplete="current-password" required
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
+              </div>
+              <button id="loginSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Sign in</button>
+            </form>
+            <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <a class="text-sm font-medium text-indigo-200 hover:text-white transition" href="/reset-password">Forgot your password?</a>
+              <a class="text-sm text-indigo-200/80 hover:text-white transition" href="/">Need an account? Create one</a>
+            </div>
+            <pre id="loginMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
+  </div>
+</body>
+</html>`;
+
+const LOGIN_JS = `(() => {
+  const form = document.getElementById('loginForm');
+  const msg = document.getElementById('loginMsg');
+  const submit = document.getElementById('loginSubmit');
+
+  async function checkSession() {
+    try {
+      const res = await fetch('/api/session', { credentials: 'same-origin' });
+      if (res.ok) {
+        window.location.href = '/characters';
+      }
+    } catch (err) {
+      console.error('Session check failed', err);
+    }
+  }
+
+  function setLoading(state) {
+    if (!submit) return;
+    submit.disabled = state;
+    submit.classList.toggle('opacity-60', state);
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = document.getElementById('loginEmail')?.value.trim();
+    const password = document.getElementById('loginPassword')?.value || '';
+
+    if (!email || !password) {
+      msg.textContent = 'Email and password are required.';
+      return;
+    }
+
+    setLoading(true);
+    msg.textContent = 'Signing in…';
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to login.';
+        return;
+      }
+      msg.textContent = 'Login successful. Redirecting…';
+      setTimeout(() => { window.location.href = '/characters'; }, 600);
+    } catch (err) {
+      console.error('Login request failed', err);
+      msg.textContent = 'Network error. Please try again.';
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  checkSession();
+})();`;
+
+const RESET_PAGE = () => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${CONFIG.HEADER_TITLE} — Reset Password</title>
+  <script src="/reset.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% { transform: rotate(0deg) scale(1.1); }
+      50% { transform: rotate(180deg) scale(1.2); }
+      100% { transform: rotate(360deg) scale(1.1); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <div class="flex items-baseline justify-between">
+          <h1 class="text-4xl font-semibold tracking-tight text-white">Reset your password</h1>
+          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Security</span>
+        </div>
+        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Request a reset link or set a new password for your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> account.</p>
+
+        <div class="mt-8 space-y-8">
+          <section id="resetRequest" class="hidden rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Send reset link</h2>
+                <p class="text-[15px] text-indigo-100/90">We'll email you a secure link that expires in ${CONFIG.RESET_TOKEN_TTL_MIN} minutes.</p>
+              </div>
+            </div>
+            <form id="requestForm" class="mt-6 space-y-5">
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="resetEmail">Email</label>
+                <input id="resetEmail" type="email" name="email" required
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
+              </div>
+              <button id="requestSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Email me a reset link</button>
+            </form>
+            <pre id="requestMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <p class="mt-4 text-xs text-indigo-200/80">Need an account instead? <a class="font-semibold text-indigo-200 hover:text-white" href="/">Start registration</a>.</p>
+          </section>
+
+          <section id="resetConfirm" class="hidden rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">2</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Set a new password</h2>
+                <p class="text-[15px] text-indigo-100/90">Choose a strong password to secure your account.</p>
+              </div>
+            </div>
+            <form id="confirmForm" class="mt-6 space-y-5">
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="confirmPassword">New password</label>
+                <input id="confirmPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="confirmPasswordAgain">Confirm password</label>
+                <input id="confirmPasswordAgain" type="password" name="passwordConfirm" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="Repeat password" />
+              </div>
+              <button id="confirmSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Update password</button>
+            </form>
+            <pre id="confirmMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-xs text-indigo-200/80">Reset link token: <span id="tokenDisplay" class="font-semibold text-indigo-100"></span></p>
+              <a class="text-sm font-medium text-indigo-200 hover:text-white transition" href="/login">Return to login</a>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
+  </div>
+</body>
+</html>`;
+
+const RESET_JS = `(() => {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token') || '';
+  const requestSection = document.getElementById('resetRequest');
+  const confirmSection = document.getElementById('resetConfirm');
+  const tokenDisplay = document.getElementById('tokenDisplay');
+
+  const requestForm = document.getElementById('requestForm');
+  const requestMsg = document.getElementById('requestMsg');
+  const requestSubmit = document.getElementById('requestSubmit');
+
+  const confirmForm = document.getElementById('confirmForm');
+  const confirmMsg = document.getElementById('confirmMsg');
+  const confirmSubmit = document.getElementById('confirmSubmit');
+
+  function show(section) {
+    if (requestSection) requestSection.classList.toggle('hidden', section !== 'request');
+    if (confirmSection) confirmSection.classList.toggle('hidden', section !== 'confirm');
+  }
+
+  function setLoading(button, state) {
+    if (!button) return;
+    button.disabled = state;
+    button.classList.toggle('opacity-60', state);
+  }
+
+  if (token) {
+    show('confirm');
+    if (tokenDisplay) tokenDisplay.textContent = token;
+  } else {
+    show('request');
+  }
+
+  requestForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = document.getElementById('resetEmail')?.value.trim();
+    if (!email) {
+      requestMsg.textContent = 'Enter your account email to continue.';
+      return;
+    }
+    setLoading(requestSubmit, true);
+    requestMsg.textContent = 'Submitting request…';
+    try {
+      const res = await fetch('/api/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        requestMsg.textContent = 'If that email is registered, a reset link is on the way. Check your inbox!';
+      } else {
+        const data = await res.json().catch(() => ({}));
+        requestMsg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to submit reset request.';
+      }
+    } catch (err) {
+      console.error('Reset request failed', err);
+      requestMsg.textContent = 'Network error. Please try again.';
+    } finally {
+      setLoading(requestSubmit, false);
+    }
+  });
+
+  confirmForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const password = document.getElementById('confirmPassword')?.value || '';
+    const confirm = document.getElementById('confirmPasswordAgain')?.value || '';
+
+    if (!token) {
+      confirmMsg.textContent = 'Missing or invalid reset token.';
+      return;
+    }
+    if (!password || password !== confirm) {
+      confirmMsg.textContent = 'Passwords must match.';
+      return;
+    }
+
+    setLoading(confirmSubmit, true);
+    confirmMsg.textContent = 'Updating password…';
+
+    try {
+      const res = await fetch('/api/password-reset/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ token, password })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        confirmMsg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to reset password.';
+        return;
+      }
+      confirmMsg.textContent = 'Password updated! You can now log in with your new credentials.';
+    } catch (err) {
+      console.error('Reset confirm failed', err);
+      confirmMsg.textContent = 'Network error. Please try again.';
+    } finally {
+      setLoading(confirmSubmit, false);
+    }
+  });
+})();`;
+
+const CHARACTERS_PAGE = () => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${CONFIG.HEADER_TITLE} — My Characters</title>
+  <script src="/characters.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% { transform: rotate(0deg) scale(1.1); }
+      50% { transform: rotate(180deg) scale(1.2); }
+      100% { transform: rotate(360deg) scale(1.1); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-4xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-indigo-900/30">Roster</span>
+            <h1 class="mt-4 text-4xl font-semibold tracking-tight text-white">My Characters</h1>
+            <p class="mt-3 text-[15px] text-indigo-100/90">Welcome back, <span id="sessionEmail" class="font-semibold text-indigo-200">loading…</span>. Here's your latest roster across DreamCore realms.</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-2.5 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/reset-password">Reset password</a>
+            <button id="logoutBtn" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
+          </div>
+        </div>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-sm text-indigo-200/90">Total characters: <span id="totalCharacters" class="font-semibold text-indigo-100">0</span> · Realms: <span id="totalRealms" class="font-semibold text-indigo-100">0</span></div>
+          <button id="refreshRoster" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
+        </div>
+        <pre id="rosterStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition">Loading characters…</pre>
+        <div id="characterGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+      </div>
+    </div>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
+  </div>
+</body>
+</html>`;
+
+const CHARACTERS_JS = `(() => {
+  const rosterStatus = document.getElementById('rosterStatus');
+  const characterGrid = document.getElementById('characterGrid');
+  const totalCharacters = document.getElementById('totalCharacters');
+  const totalRealms = document.getElementById('totalRealms');
+  const sessionEmail = document.getElementById('sessionEmail');
+  const refreshButton = document.getElementById('refreshRoster');
+  const logoutButton = document.getElementById('logoutBtn');
+
+  const CLASS_NAMES = {
+    1: 'Warrior',
+    2: 'Paladin',
+    3: 'Hunter',
+    4: 'Rogue',
+    5: 'Priest',
+    6: 'Death Knight',
+    7: 'Shaman',
+    8: 'Mage',
+    9: 'Warlock',
+    10: 'Monk',
+    11: 'Druid',
+    12: 'Demon Hunter',
+    13: 'Evoker',
+  };
+
+  const RACE_NAMES = {
+    1: 'Human',
+    2: 'Orc',
+    3: 'Dwarf',
+    4: 'Night Elf',
+    5: 'Undead',
+    6: 'Tauren',
+    7: 'Gnome',
+    8: 'Troll',
+    9: 'Goblin',
+    10: 'Blood Elf',
+    11: 'Draenei',
+    22: 'Worgen',
+    24: 'Pandaren',
+  };
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
+  }
+
+  function formatDate(value) {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return date.toLocaleString();
+  }
+
+  function renderCharacters(payload) {
+    if (!payload) {
+      rosterStatus.textContent = 'Unable to load characters.';
+      characterGrid.innerHTML = '';
+      return;
+    }
+
+    const { characters = [], summary = {}, message } = payload;
+    totalCharacters.textContent = summary?.totalCharacters ?? characters.length;
+    totalRealms.textContent = summary?.totalRealms ?? 0;
+
+    if (message) {
+      rosterStatus.textContent = message;
+    } else {
+      rosterStatus.textContent = characters.length ? 'Roster loaded.' : 'No characters found for this account.';
+    }
+
+    if (!characters.length) {
+      characterGrid.innerHTML = '<p class="text-sm text-indigo-200/90">Create a character in-game and refresh to see it here.</p>';
+      return;
+    }
+
+    const cards = characters.map((character) => {
+      const className = CLASS_NAMES[character.class] || `Class #${character.class}`;
+      const raceName = RACE_NAMES[character.race] || `Race #${character.race}`;
+      const realmName = character.realm?.name || 'Unknown realm';
+      const lastPlayed = formatDate(character.lastLogin);
+      return `
+        <article class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
+          <div class="flex items-baseline justify-between">
+            <h3 class="text-xl font-semibold text-white">${escapeHtml(character.name)}</h3>
+            <span class="text-sm font-semibold text-indigo-300">Lvl ${escapeHtml(character.level)}</span>
+          </div>
+          <p class="mt-2 text-[15px] text-indigo-100/90">${escapeHtml(raceName)} · ${escapeHtml(className)}</p>
+          <p class="mt-2 text-sm text-indigo-200/80">Realm: <span class="font-semibold text-indigo-100">${escapeHtml(realmName)}</span></p>
+          <p class="mt-2 text-xs text-indigo-200/70">Last seen: ${escapeHtml(lastPlayed)}</p>
+        </article>
+      `;
+    });
+
+    characterGrid.innerHTML = cards.join('');
+  }
+
+  async function loadSessionAndRoster() {
+    try {
+      const sessionRes = await fetch('/api/session', { credentials: 'same-origin' });
+      if (sessionRes.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const sessionData = await sessionRes.json();
+      if (sessionEmail && sessionData?.session?.email) {
+        sessionEmail.textContent = sessionData.session.email;
+      }
+      await loadCharacters();
+    } catch (err) {
+      console.error('Session lookup failed', err);
+      rosterStatus.textContent = 'Unable to confirm your session. Redirecting to login…';
+      setTimeout(() => { window.location.href = '/login'; }, 1200);
+    }
+  }
+
+  async function loadCharacters(forceRefresh = false) {
+    try {
+      rosterStatus.textContent = forceRefresh ? 'Refreshing roster…' : 'Loading characters…';
+      const url = forceRefresh ? '/api/characters?refresh=1' : '/api/characters';
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        rosterStatus.textContent = data?.error ? `Error: ${data.error}` : 'Unable to load characters.';
+        characterGrid.innerHTML = '';
+        return;
+      }
+      renderCharacters(data);
+    } catch (err) {
+      console.error('Character fetch failed', err);
+      rosterStatus.textContent = 'Network error while loading characters.';
+      characterGrid.innerHTML = '';
+    }
+  }
+
+  refreshButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    loadCharacters(true);
+  });
+
+  logoutButton?.addEventListener('click', async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (err) {
+      console.error('Logout failed', err);
+    } finally {
+      window.location.href = '/login';
+    }
+  });
+
+  loadSessionAndRoster();
+})();`;
+
 app.get('/', (req, res) => res.type('html').send(REG_PAGE()));
 app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIENT_JS));
+app.get('/login', async (req, res) => {
+  const session = await loadSession(req).catch(() => null);
+  if (session) {
+    return res.redirect('/characters');
+  }
+  return res.type('text/html').send(LOGIN_PAGE());
+});
+app.get('/login.js', (req, res) => res.type('application/javascript').send(LOGIN_JS));
+app.get('/reset-password', (req, res) => res.type('text/html').send(RESET_PAGE()));
+app.get('/reset.js', (req, res) => res.type('application/javascript').send(RESET_JS));
+app.get('/characters', async (req, res) => {
+  const session = await loadSession(req).catch(() => null);
+  if (!session) {
+    return res.redirect('/login');
+  }
+  return res.type('text/html').send(CHARACTERS_PAGE());
+});
+app.get('/characters.js', (req, res) => res.type('application/javascript').send(CHARACTERS_JS));
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
@@ -1229,6 +1800,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       httpOnly: true,
       sameSite: 'lax',
       secure: CONFIG.COOKIE_SECURE,
+      path: '/',
       maxAge,
     });
 
@@ -1246,6 +1818,30 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   }
 });
 
+app.post('/api/logout', async (req, res) => {
+  try {
+    const token = getSessionToken(req);
+    if (token) {
+      const hashed = hashSessionToken(token);
+      try {
+        await pool.execute('DELETE FROM sessions WHERE id = ?', [hashed]);
+      } catch (err) {
+        console.error('Failed to delete session during logout', err);
+      }
+    }
+    res.clearCookie(CONFIG.SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: CONFIG.COOKIE_SECURE,
+      path: '/',
+    });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Logout error', e);
+    return res.status(500).json({ error: 'Unable to logout' });
+  }
+});
+
 app.get('/api/session', requireSession, (req, res) => {
   res.json({ ok: true, session: { accountId: req.session.account_id, email: req.session.email, expiresAt: req.session.expires_at } });
 });
@@ -1254,11 +1850,18 @@ app.get('/api/characters', requireSession, async (req, res) => {
   try {
     const accountId = req.session?.account_id;
     const cacheKey = accountId != null ? String(accountId) : null;
-    if (cacheKey) {
+    const refreshFlag = String(req.query?.refresh ?? req.query?.force ?? req.query?.nocache ?? '').toLowerCase();
+    const bypassCache = ['1', 'true', 'yes'].includes(refreshFlag);
+
+    if (cacheKey && !bypassCache) {
       const cached = CHARACTER_CACHE.get(cacheKey);
       if (cached && cached.expiresAt > Date.now()) {
         return res.json(cached.payload);
       }
+    }
+
+    if (cacheKey && bypassCache) {
+      CHARACTER_CACHE.delete(cacheKey);
     }
 
     const payload = await buildCharactersResponse(accountId);
