@@ -30,6 +30,12 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import mysql from 'mysql2/promise';
+import {
+  makeSoapConfig,
+  ensureRetailAccount,
+  retailPasswordReset,
+  executeRetailCommand,
+} from './lib/trinitySoap.js';
 
 // ----- CONFIG (read from env or inline defaults for dev) -----
 const CONFIG = {
@@ -73,6 +79,13 @@ const CONFIG = {
   COOKIE_SECURE: (process.env.COOKIE_SECURE || 'true').toLowerCase() === 'true',
   CHARACTER_CACHE_TTL_MS: Number(process.env.CHARACTER_CACHE_TTL_MS || 30 * 1000),
 };
+
+const SOAP = makeSoapConfig({
+  host: CONFIG.TC_SOAP_HOST,
+  port: CONFIG.TC_SOAP_PORT,
+  user: CONFIG.TC_SOAP_USER,
+  pass: CONFIG.TC_SOAP_PASS,
+});
 
 // ----- DB (MariaDB for pending verifications) -----
 const DB = {
@@ -1606,154 +1619,10 @@ async function verifyTurnstile(token, ip) {
   return !!data.success;
 }
 
-function escapeXml(s) {
-  return String(s).replace(/[<>&'\"]/g, c => (
-    { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]
-  ));
-}
-function buildSoapEnvelope(command) {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-  <SOAP-ENV:Body>
-    <ns1:executeCommand xmlns:ns1="urn:TC">
-      <command>${escapeXml(command)}</command>
-    </ns1:executeCommand>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>`;
-}
-
-function buildSoapFaultError(xml) {
-  const m = xml.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
-  if (!m) return null;
-  const msg = m[1].trim();
-  const err = new Error(msg);
-  err.name = 'SOAPFault';
-  return err;
-}
-
-async function callSoap(command) {
-  const xml = buildSoapEnvelope(command);
-  const auth = Buffer.from(`${CONFIG.TC_SOAP_USER}:${CONFIG.TC_SOAP_PASS}`).toString('base64');
-  const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      'Authorization': `Basic ${auth}`,
-    },
-    body: xml,
-  });
-  const text = await resp.text();
-  const fault = buildSoapFaultError(text);
-  if (fault) throw fault; // prefer SOAP-level semantics
-  if (!resp.ok) {
-    console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
-    throw new Error(`SOAP HTTP ${resp.status}`);
-  }
-  return text;
-}
-
-function extractSoapReturn(text) {
-  const m = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
-  return m ? m[1].trim() : text.trim();
-}
-
-const q = (s) => `"${String(s).replace(/(["\\])/g, '\\$1')}"`;
-
-function stripEntities(s) {
-  return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function looksUnknownOrUsage(msg) {
-  return /unknown command|no such command|usage:|syntax:/i.test(msg);
-}
-
-// ------ TrinityCore ops (idempotent) ------
-async function tcSetPassword(identifier, newPassword) {
-  const tries = [];
-  if (await tcSupportsBNET()) {
-    tries.push(
-      `bnetaccount set password ${q(identifier)} ${q(newPassword)}`,
-      `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
-    );
-  }
-  if (!/@/.test(identifier)) {
-    tries.push(`account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`);
-  }
-  let last = '';
-  for (const cmd of tries) {
-    const raw = await callSoap(cmd).catch(e => e);
-    if (raw instanceof Error) { last = String(raw.message||''); continue; }
-    const msg = extractSoapReturn(raw);
-    last = msg;
-    if (!looksUnknownOrUsage(msg)) return raw; // success path
-  }
-  return last;
-}
-
-async function tcBnetLookup(email) {
-  const raw = await callSoap(`bnetaccount lookup ${q(email)}`).catch(e => e);
-  if (raw instanceof Error) return { exists: false, message: String(raw.message||'') };
-  const msg = stripEntities(extractSoapReturn(raw)).toLowerCase();
-  if (/not found|no account|0 results/.test(msg)) return { exists: false, message: msg };
-  return { exists: true, message: msg };
-}
-
-}
-
-async function tcCreateOrReset_BNET(email, password) {
-  // 1) If exists -> reset pw; else create
-  const look = await tcBnetLookup(email);
-  if (look.exists) {
-    await tcSetPassword(email, password);
-  } else {
-    const out = await callSoap(`bnetaccount create ${q(email)} ${q(password)}`);
-    const msg = stripEntities(extractSoapReturn(out));
-    if (/already exists/i.test(msg)) {
-      await tcSetPassword(email, password);
-    }
-  }
-  // 2) Ensure at least one retail game account exists
-  // first WoW game account (#1) is created automatically by `bnetaccount create` on master
-}
-
-async function tcCreateOrReset_CLASSIC(email, password) {
-  // Classic auth (no Battle.net)
-  try {
-    const out = await callSoap(`account create ${q(email)} ${q(password)}`);
-    const msg = stripEntities(extractSoapReturn(out));
-    if (/already exists/i.test(msg)) {
-      await tcSetPassword(email, password);
-    }
-  } catch (e) {
-    if (e?.name === 'SOAPFault' && /already exists/i.test(String(e.message||''))) {
-      await tcSetPassword(email, password);
-    } else {
-      throw e;
-    }
-  }
-}
-
-let _supportsBNET;
-async function tcSupportsBNET() {
-  if (_supportsBNET !== undefined) return _supportsBNET;
-  const raw = await callSoap('bnetaccount help').catch(() => null);
-  const msg = raw ? extractSoapReturn(raw) : '';
-  _supportsBNET = !!raw && !looksUnknownOrUsage(msg);
-  return _supportsBNET;
-}
-
-async function tcEnsureAccount(email, password) {
-  if (await tcSupportsBNET()) {
-    return await tcCreateOrReset_BNET(email, password);
-  } else {
-    return await tcCreateOrReset_CLASSIC(email, password);
-  }
-}
-
 app.get('/api/status', async (req, res) => {
   try {
-    const out = await callSoap('server info');
-    res.json({ ok: true, info: extractSoapReturn(out) });
+    const { ret } = await executeRetailCommand({ soap: SOAP, command: 'server info' });
+    res.json({ ok: true, info: ret });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
@@ -2030,13 +1899,7 @@ app.post('/api/password-reset/confirm', async (req, res) => {
       return badRequest(res, 'Invalid or expired token');
     }
 
-    const soapResponse = await tcSetPassword(entry.email, password);
-    const message = typeof soapResponse === 'string' ? stripEntities(extractSoapReturn(soapResponse)) : '';
-    const normalized = message.toLowerCase();
-    if (!message || /unknown command|usage:|no such command|not found|no account|invalid|syntax:/i.test(normalized)) {
-      console.error('SOAP password reset returned unexpected response', { message, email: maskEmail(entry.email) });
-      return res.status(502).json({ error: 'Unable to reset password' });
-    }
+    await retailPasswordReset({ soap: SOAP, authPool, email: entry.email, newPassword: password });
 
     await pool.execute('DELETE FROM password_resets WHERE email = ?', [entry.email]);
 
@@ -2108,7 +1971,12 @@ app.get('/verify', async (req, res) => {
 
     // Create/reset TC account now (idempotent) + ensure gameaccount
     try {
-      await tcEnsureAccount(row.email, row.password);
+      await ensureRetailAccount({
+        soap: SOAP,
+        authPool,
+        email: row.email,
+        password: row.password,
+      });
     } catch (e) {
       console.error('SOAP create/reset failed:', e);
       return res

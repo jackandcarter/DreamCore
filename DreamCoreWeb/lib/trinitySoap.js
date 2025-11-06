@@ -1,444 +1,222 @@
-import crypto from 'crypto';
-import mysql from 'mysql2/promise';
+// Retail-only TrinityCore SOAP helpers with DB confirmation (no command probing)
+// Requires: mysql2/promise
 
-function escapeXml(s) {
-  return String(s).replace(/[<>&'\"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+import crypto from "crypto";
+import mysql from "mysql2/promise";
+
+// ---------- Config plumbing ----------
+export function makeAuthPool({ host, port, user, password, database }) {
+  return mysql.createPool({
+    host,
+    port,
+    user,
+    password,
+    database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    namedPlaceholders: true,
+  });
 }
 
-function buildSoapEnvelope(command) {
+export function makeSoapConfig({ host, port = 7878, user, pass }) {
+  return { host, port, user, pass };
+}
+
+// ---------- SOAP ----------
+function escapeXml(s) {
+  return String(s).replace(/[<>&'"\\]/g, (c) => (
+    { "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;", "\\": "&#92;" }[c]
+  ));
+}
+
+function envelope(cmd) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
   <SOAP-ENV:Body>
-    <ns1:executeCommand xmlns:ns1="urn:TC">
-      <command>${escapeXml(command)}</command>
-    </ns1:executeCommand>
+    <ns1:executeCommand xmlns:ns1="urn:TC"><command>${escapeXml(cmd)}</command></ns1:executeCommand>
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>`;
 }
 
-function buildSoapFaultError(xml) {
-  const m = xml.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
-  if (!m) return null;
-  const msg = m[1].trim();
-  const err = new Error(msg);
-  err.name = 'SOAPFault';
-  return err;
+function extractReturn(xml) {
+  const m = xml.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
+  return m ? m[1].trim() : xml.trim();
 }
 
-async function callSoap(soapConfig, command) {
-  const { host, port, user, pass } = soapConfig;
-  if (!host || !user || !pass) {
-    throw new Error('Missing SOAP configuration');
-  }
-  const xml = buildSoapEnvelope(command);
-  const auth = Buffer.from(`${user}:${pass}`).toString('base64');
+const q = (s) => `"${String(s).replace(/(["\\])/g, "\\$1" )}"`;
 
+async function callSoap(soap, command) {
+  const { host, port, user, pass } = soap;
+  if (!host || !user || !pass) throw new Error("Missing SOAP configuration");
+  const auth = Buffer.from(`${user}:${pass}`).toString("base64");
   const resp = await fetch(`http://${host}:${port}/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      Authorization: `Basic ${auth}`,
-    },
-    body: xml,
+    method: "POST",
+    headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${auth}` },
+    body: envelope(command),
   });
-
   const text = await resp.text();
-  const fault = buildSoapFaultError(text);
-  if (fault) throw fault;
-
+  const fault = text.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
+  if (fault) {
+    const e = new Error(fault[1].trim());
+    e.name = "SOAPFault";
+    e.soapBody = text;
+    throw e;
+  }
   if (!resp.ok) {
-    const err = new Error(`SOAP HTTP ${resp.status}`);
-    err.responseBody = text;
-    throw err;
+    const e = new Error(`SOAP HTTP ${resp.status}`);
+    e.soapBody = text;
+    throw e;
   }
-
-  return text;
+  return { raw: text, ret: extractReturn(text) };
 }
 
-export function createSoapExecutor(soapConfig) {
-  return {
-    execute: (command) => callSoap(soapConfig, command),
-  };
+// ---------- Deterministic naming ----------
+export function wowAccountNameForEmail(email) {
+  const norm = String(email || "").trim().toLowerCase();
+  const h = crypto.createHash("sha1").update(norm).digest("hex").slice(0, 8);
+  return `w_${h}`;
 }
 
-export async function executeSoapCommand(soapConfig, command) {
-  return callSoap(soapConfig, command);
+// ---------- DB reads (auth) ----------
+async function row(authPool, sql, params) {
+  const [rows] = await authPool.query(sql, params);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
-function extractSoapReturn(text) {
-  const m = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
-  return m ? m[1].trim() : text.trim();
+async function rows(authPool, sql, params) {
+  const [r] = await authPool.query(sql, params);
+  return Array.isArray(r) ? r : [];
 }
 
-export function parseSoapReturn(text) {
-  return extractSoapReturn(text);
-}
-
-const q = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
-
-const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
-
-function wowAccountNameForEmail(email) {
-  const normalized = normalizeEmail(email);
-  const hash = crypto.createHash('sha1').update(normalized).digest('hex').slice(0, 8);
-  return `w_${hash}`;
-}
-
-function stripEntities(s) {
-  return String(s)
-    // Remove TrinityCore color codes (e.g. |cffff0000 ... |r) and ANSI escapes.
-    .replace(/\|c[0-9a-f]{8}/gi, '')
-    .replace(/\|r/gi, '')
-    .replace(/\u001B\[[0-9;]*m/gi, '')
-    // Replace common XML/HTML entities with spaces so words stay separated.
-    .replace(/&[a-z]+;|&#\d+;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function messageIncludes(msg, patterns) {
-  if (!msg) return false;
-  const normalized = stripEntities(msg).toLowerCase();
-  return patterns.some((phrase) => normalized.includes(phrase));
-}
-
-function isAlreadyExistsMessage(msg) {
-  return messageIncludes(msg, [
-    'already exists',
-    'already linked',
-    'already assigned',
-    'already in use',
-    'account exists',
-    'account already created',
-    'account already linked',
-  ]);
-}
-
-export async function setPassword(soapConfig, identifier, newPassword) {
-  const tries = [
-    `bnetaccount set password ${q(identifier)} ${q(newPassword)}`,
-    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
-  ];
-  let last;
-  for (const cmd of tries) {
-    try {
-      const raw = await callSoap(soapConfig, cmd);
-      const msg = stripEntities(extractSoapReturn(raw)).toLowerCase();
-      last = raw;
-      if (!/unknown command|no such command|usage:/.test(msg)) return raw;
-    } catch (err) {
-      if (err?.name === 'SOAPFault' && isAlreadyExistsMessage(String(err.message || ''))) {
-        return 'ok';
-      }
-      last = err;
-    }
-  }
-  if (last instanceof Error) throw last;
-  return last ?? 'ok';
-}
-
-async function setBnetPassword(soapConfig, email, password) {
-  return callSoap(soapConfig, `bnetaccount set password ${q(email)} ${q(password)}`);
-}
-
-async function setWowAccountPassword(soapConfig, accountName, password) {
-  return callSoap(
-    soapConfig,
-    `account set password ${q(accountName)} ${q(password)} ${q(password)}`
+async function getBattlenet(authPool, email) {
+  return await row(
+    authPool,
+    "SELECT id, email FROM battlenet_accounts WHERE email = ? LIMIT 1",
+    [email.toLowerCase()]
   );
 }
 
-async function createWowAccount(soapConfig, accountName, password) {
-  const cmd = `account create ${q(accountName)} ${q(password)}`;
-  try {
-    const raw = await callSoap(soapConfig, cmd);
-    const msg = stripEntities(extractSoapReturn(raw));
-    if (messageIncludes(msg, [
-      'already exists',
-      'account exists',
-      'account already created',
-    ])) {
-      return 'exists';
-    }
-    if (messageIncludes(msg, ['account created', 'created', 'successfully created'])) {
-      return 'created';
-    }
-    return 'created';
-  } catch (err) {
-    if (err?.name === 'SOAPFault' && isAlreadyExistsMessage(String(err.message || ''))) {
-      return 'exists';
-    }
-    throw err;
-  }
-}
-
-async function ensureNamedGameAccount(soapConfig, accountName, password) {
-  const result = await createWowAccount(soapConfig, accountName, password);
-  if (result === 'exists') {
-    await setWowAccountPassword(soapConfig, accountName, password);
-    return 'exists';
-  }
-  return 'created';
-}
-
-export async function ensureGameAccount(soapConfig, emailOrOptions, maybePassword) {
-  let email = emailOrOptions;
-  let password = maybePassword;
-  let accountName;
-
-  if (emailOrOptions && typeof emailOrOptions === 'object' && !Array.isArray(emailOrOptions)) {
-    email = emailOrOptions.email;
-    password = emailOrOptions.password;
-    accountName = emailOrOptions.accountName;
-  }
-
-  if (!password) {
-    throw new Error('Password is required to ensure game account');
-  }
-
-  const normalizedEmail = normalizeEmail(email);
-  const name = accountName || wowAccountNameForEmail(normalizedEmail);
-  return ensureNamedGameAccount(soapConfig, name, password);
-}
-
-export async function linkGameAccount(soapConfig, email, accountName) {
-  if (!accountName) return 'skipped';
-  const normalizedEmail = normalizeEmail(email);
-  const cmd = `bnetaccount link ${q(normalizedEmail)} ${q(accountName)}`;
-  try {
-    const raw = await callSoap(soapConfig, cmd);
-    const msg = stripEntities(extractSoapReturn(raw));
-    if (messageIncludes(msg, [
-      'already linked',
-      'link already established',
-      'already assigned',
-    ])) {
-      return 'already-linked';
-    }
-    if (messageIncludes(msg, ['linked', 'successfully linked'])) {
-      return 'linked';
-    }
-    return 'linked';
-  } catch (err) {
-    if (err?.name === 'SOAPFault' && messageIncludes(err?.message || '', [
-      'already linked',
-      'already assigned',
-      'link already established',
-    ])) {
-      return 'already-linked';
-    }
-    throw err;
-  }
-}
-
-export async function createBnetAccount(soapConfig, email, password) {
-  const normalizedEmail = normalizeEmail(email);
-  const commands = [
-    `bnetaccount create ${q(normalizedEmail)} ${q(password)}`,
-    `account create ${q(normalizedEmail)} ${q(password)}`,
-  ];
-  let lastError = null;
-  for (const cmd of commands) {
-    try {
-      const raw = await callSoap(soapConfig, cmd);
-      const msg = stripEntities(extractSoapReturn(raw));
-      if (messageIncludes(msg, [
-        'already exists',
-        'account exists',
-        'account already created',
-      ])) {
-        return 'exists';
-      }
-      if (/unknown command|no such command|usage:/i.test(msg)) {
-        continue;
-      }
-      return 'created';
-    } catch (err) {
-      if (err?.name === 'SOAPFault' && isAlreadyExistsMessage(String(err.message || ''))) {
-        return 'exists';
-      }
-      lastError = err;
-    }
-  }
-  if (lastError) throw lastError;
-  return 'exists';
-}
-
-async function safeQuery(pool, sql, params) {
-  if (!pool) return [];
-  try {
-    const [rows] = await pool.query(sql, params);
-    return Array.isArray(rows) ? rows : [];
-  } catch (err) {
-    if (err && err.code === 'ER_NO_SUCH_TABLE') {
-      return [];
-    }
-    err.query = sql;
-    throw err;
-  }
-}
-
-async function findAccountByUsername(authPool, username) {
-  const rows = await safeQuery(
+async function getAccountByUsername(authPool, username) {
+  return await row(
     authPool,
-    'SELECT id, username, battlenet_account FROM account WHERE username = ? LIMIT 1',
+    "SELECT id, username, battlenet_account FROM account WHERE username = ? LIMIT 1",
     [username]
   );
-  return rows.length ? rows[0] : null;
 }
 
-export async function getAccountSummary(authPool, email) {
-  const normalizedEmail = normalizeEmail(email);
-  const summary = {
-    email: normalizedEmail,
-    requestedEmail: email,
-    wowAccountName: wowAccountNameForEmail(normalizedEmail),
-    bnetAccount: null,
-    linkedAccounts: [],
-    legacyAccount: null,
-  };
-
-  const battlenet = await safeQuery(
+async function getLinkedGameAccounts(authPool, bnetId) {
+  return await rows(
     authPool,
-    'SELECT id, email FROM battlenet_accounts WHERE email = ? LIMIT 1',
-    [normalizedEmail]
+    "SELECT id, username, battlenet_account FROM account WHERE battlenet_account = ? ORDER BY id ASC",
+    [bnetId]
   );
-  if (battlenet.length) {
-    summary.bnetAccount = { id: battlenet[0].id, table: 'battlenet_accounts' };
-  } else {
-    const bnetAccount = await safeQuery(
-      authPool,
-      'SELECT id, email FROM bnetaccount WHERE email = ? LIMIT 1',
-      [normalizedEmail]
-    );
-    if (bnetAccount.length) {
-      summary.bnetAccount = { id: bnetAccount[0].id, table: 'bnetaccount' };
-    }
-  }
-
-  if (summary.bnetAccount) {
-    const linked = await safeQuery(
-      authPool,
-      'SELECT id, username, email FROM account WHERE battlenet_account = ? OR email = ? ORDER BY id ASC',
-      [summary.bnetAccount.id, normalizedEmail]
-    );
-    summary.linkedAccounts = linked.map((row) => ({ id: row.id, username: row.username, email: row.email }));
-  } else {
-    const legacy = await safeQuery(
-      authPool,
-      'SELECT id, username, email FROM account WHERE email = ? OR username = ? LIMIT 1',
-      [normalizedEmail, normalizedEmail]
-    );
-    if (legacy.length) {
-      summary.legacyAccount = {
-        id: legacy[0].id,
-        username: legacy[0].username,
-        email: legacy[0].email,
-      };
-    }
-  }
-
-  return summary;
 }
 
-export async function resolveAccountForEmail({ soapConfig, authPool, email, password }) {
-  if (!email || !password) throw new Error('Email and password are required');
+// ---------- Retail-only commands ----------
+async function bnetCreate(soap, email, pass) {
+  return callSoap(soap, `bnetaccount create ${q(email)} ${q(pass)}`);
+}
 
-  const normalizedEmail = normalizeEmail(email);
-  const wowAccountName = wowAccountNameForEmail(normalizedEmail);
+async function bnetSetPassword(soap, email, pass) {
+  return callSoap(soap, `bnetaccount set password ${q(email)} ${q(pass)}`);
+}
 
-  const before = await getAccountSummary(authPool, normalizedEmail);
-  const actions = {
-    createdBnet: false,
-    linkedAccount: false,
-    createdGameAccount: false,
-    passwordUpdated: false,
-  };
+async function gameCreate(soap, username, pass) {
+  return callSoap(soap, `account create ${q(username)} ${q(pass)}`);
+}
 
-  if (!before.bnetAccount) {
-    const created = await createBnetAccount(soapConfig, normalizedEmail, password);
-    if (created === 'exists') {
-      await setBnetPassword(soapConfig, normalizedEmail, password);
-      actions.passwordUpdated = true;
-    } else {
-      actions.createdBnet = true;
-    }
-  } else {
-    await setBnetPassword(soapConfig, normalizedEmail, password);
-    actions.passwordUpdated = true;
-  }
+async function gameSetPassword(soap, username, pass) {
+  return callSoap(soap, `account set password ${q(username)} ${q(pass)} ${q(pass)}`);
+}
 
-  const existingGameAccount = await findAccountByUsername(authPool, wowAccountName);
-  if (!existingGameAccount) {
-    const ensured = await ensureNamedGameAccount(soapConfig, wowAccountName, password);
-    if (ensured === 'created') {
-      actions.createdGameAccount = true;
-    } else {
-      actions.passwordUpdated = true;
-    }
-  } else {
-    await setWowAccountPassword(soapConfig, wowAccountName, password);
-    actions.passwordUpdated = true;
-  }
+async function linkBnetToGame(soap, email, username) {
+  return callSoap(soap, `bnetaccount link ${q(email)} ${q(username)}`);
+}
 
-  const linkResult = await linkGameAccount(soapConfig, normalizedEmail, wowAccountName);
-  if (linkResult === 'linked') {
-    actions.linkedAccount = true;
-  }
+// ---------- High-level flows (confirm via DB, not text) ----------
+export async function ensureRetailAccount({ soap, authPool, email, password }) {
+  if (!soap || !authPool) throw new Error("Missing soap/authPool");
+  const normEmail = String(email || "").trim().toLowerCase();
+  const wowName = wowAccountNameForEmail(normEmail);
 
-  const after = await getAccountSummary(authPool, normalizedEmail);
-  let status;
-  if (actions.createdBnet) {
-    status = 'created';
-  } else if (actions.linkedAccount || actions.createdGameAccount) {
-    status = 'linked';
-  } else if (actions.passwordUpdated) {
-    status = 'password-reset';
-  } else {
-    status = 'linked';
-  }
-
-  return {
-    status,
-    wowAccountName,
-    summary: {
-      before,
-      after,
+  const result = {
+    email: normEmail,
+    wowName,
+    actions: {
+      bnetCreated: false,
+      bnetPasswordSet: false,
+      gameCreated: false,
+      gamePasswordSet: false,
+      linked: false,
     },
+    ids: { bnetId: null, gameId: null },
   };
+
+  let bnet = await getBattlenet(authPool, normEmail);
+  if (!bnet) {
+    await bnetCreate(soap, normEmail, password);
+    bnet = await getBattlenet(authPool, normEmail);
+    if (!bnet) throw new Error("BNet create did not appear in DB");
+    result.actions.bnetCreated = true;
+  }
+  result.ids.bnetId = Number(bnet.id);
+
+  await bnetSetPassword(soap, normEmail, password);
+  result.actions.bnetPasswordSet = true;
+
+  let ga = await getAccountByUsername(authPool, wowName);
+  if (!ga) {
+    await gameCreate(soap, wowName, password);
+    ga = await getAccountByUsername(authPool, wowName);
+    if (!ga) throw new Error("Game account create did not appear in DB");
+    result.actions.gameCreated = true;
+  }
+  result.ids.gameId = Number(ga.id);
+
+  await gameSetPassword(soap, wowName, password);
+  result.actions.gamePasswordSet = true;
+
+  const beforeLink = await getLinkedGameAccounts(authPool, result.ids.bnetId);
+  const alreadyLinked = beforeLink.some((a) => Number(a.id) === result.ids.gameId);
+  if (!alreadyLinked) {
+    await linkBnetToGame(soap, normEmail, wowName);
+    const afterLink = await getLinkedGameAccounts(authPool, result.ids.bnetId);
+    const linked = afterLink.some((a) => Number(a.id) === result.ids.gameId);
+    if (!linked) throw new Error("Link did not appear in DB");
+    result.actions.linked = true;
+  } else {
+    result.actions.linked = true;
+  }
+
+  return result;
 }
 
-export function createTrinitySoap(options) {
-  const {
-    soapConfig,
-    authDb,
-  } = options;
+export async function retailPasswordReset({ soap, authPool, email, newPassword }) {
+  if (!soap || !authPool) throw new Error("Missing soap/authPool");
+  const normEmail = String(email || "").trim().toLowerCase();
+  const wowName = wowAccountNameForEmail(normEmail);
 
-  let authPool = options.authPool;
-  if (!authPool && authDb) {
-    authPool = mysql.createPool({
-      host: authDb.host,
-      port: authDb.port,
-      user: authDb.user,
-      password: authDb.password,
-      database: authDb.database,
-      waitForConnections: true,
-      connectionLimit: 10,
-      namedPlaceholders: true,
-    });
+  const bnet = await getBattlenet(authPool, normEmail);
+  if (!bnet) throw new Error("Battle.net account not found for password reset");
+
+  await bnetSetPassword(soap, normEmail, newPassword);
+
+  const ga = await getAccountByUsername(authPool, wowName);
+  if (ga) {
+    await gameSetPassword(soap, wowName, newPassword);
   }
 
   return {
-    createBnetAccount: (email, password) => createBnetAccount(soapConfig, email, password),
-    ensureGameAccount: (emailOrOptions, password) => ensureGameAccount(soapConfig, emailOrOptions, password),
-    linkGameAccount: (email, accountName) => linkGameAccount(soapConfig, email, accountName),
-    setPassword: (identifier, password) => setPassword(soapConfig, identifier, password),
-    getAccountSummary: (email) => getAccountSummary(authPool, email),
-    resolveAccountForEmail: (email, password) => resolveAccountForEmail({ soapConfig, authPool, email, password }),
-    execute: (command) => callSoap(soapConfig, command),
-    wowAccountNameForEmail: (value) => wowAccountNameForEmail(value),
-    normalizeEmail: (value) => normalizeEmail(value),
-    authPool,
+    ok: true,
+    email: normEmail,
+    wowName,
+    bnetId: Number(bnet.id),
+    gameId: ga ? Number(ga.id) : null,
   };
+}
+
+export async function executeRetailCommand({ soap, command }) {
+  if (!soap || !command) throw new Error("Missing soap/command");
+  return callSoap(soap, command);
 }
 
