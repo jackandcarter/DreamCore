@@ -370,6 +370,24 @@ async function tcSetPassword(identifier, newPassword) {
   return last;
 }
 
+
+// Ensure at least one Retail game account exists under the Battle.net email.
+// Safe to call repeatedly; "already exists" is treated as success.
+async function tcEnsureGameAccount(email) {
+  const cmd = `bnetaccount gameaccountcreate "${email.replace(/"/g, '\\"')}"`;
+  try {
+    return await callSoap(cmd);
+  } catch (e) {
+    const msg = String(e?.message || '').toLowerCase();
+    if (e?.name === 'SOAPFault' && /already exists|exists/.test(msg)) return 'ok';
+    throw e;
+  }
+}
+
+
+
+
+
 async function tcEnsureAccount(email, password) {
   const createTries = [
     `bnetaccount create ${q(email)} ${q(password)}`,
@@ -509,6 +527,9 @@ app.get('/verify', async (req, res) => {
     // Create real TC account now
     try {
       await tcEnsureAccount(row.email, row.password);
+
+      // NEW: Ensure game account exists
+      await tcEnsureGameAccount(row.email);
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res
@@ -527,6 +548,7 @@ app.get('/verify', async (req, res) => {
           })
         );
     }
+
 
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
