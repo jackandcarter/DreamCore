@@ -58,8 +58,6 @@ const CONFIG = {
   BRAND_NAME: process.env.BRAND_NAME || 'DreamCore',
   HEADER_TITLE: process.env.HEADER_TITLE || 'DreamCore.WoW',
   CORNER_LOGO: process.env.CORNER_LOGO || 'DemiDevUnit',
-  LAUNCHER_URL: process.env.LAUNCHER_URL || 'https://arctium.io/',
-  SHORTCUT_URL: process.env.SHORTCUT_URL || 'https://www.the-demiurge.com/DreamCore.rar',
   GUIDE_URL:
     process.env.GUIDE_URL ||
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
@@ -82,20 +80,30 @@ const DB = {
   NAME: process.env.DB_NAME || 'tc_register',
 };
 
+// Bootstrap: ensure database exists using a one-off connection
+const admin = await mysql.createConnection({
+  host: DB.HOST, port: DB.PORT, user: DB.USER, password: DB.PASS,
+  multipleStatements: true,
+});
+await admin.query(
+  `CREATE DATABASE IF NOT EXISTS \`${DB.NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+);
+await admin.end();
+
+// Main pool — note the "database" option
 const pool = await mysql.createPool({
   host: DB.HOST,
   port: DB.PORT,
   user: DB.USER,
   password: DB.PASS,
+  database: DB.NAME,            // <-- important
   waitForConnections: true,
   connectionLimit: 10,
   namedPlaceholders: true,
   multipleStatements: true,
 });
 
-// Ensure database & table exist
-await pool.query(`CREATE DATABASE IF NOT EXISTS \`${DB.NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-await pool.query(`USE \`${DB.NAME}\`;`);
+// Ensure table exists
 await pool.query(`
   CREATE TABLE IF NOT EXISTS pending (
     token VARCHAR(64) PRIMARY KEY,
@@ -107,6 +115,7 @@ await pool.query(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
   host: CONFIG.SMTP_HOST,
@@ -117,7 +126,7 @@ const transporter = nodemailer.createTransport({
 
 // ----- App -----
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', 1); // one hop (Cloudflare)
 app.use(express.json());
 
 // Rate limit register endpoint (per IP)
@@ -274,14 +283,11 @@ async function verifyTurnstile(token, ip) {
   return !!data.success;
 }
 
-const escapeXml = (value) =>
-  String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
+function escapeXml(s) {
+  return String(s).replace(/[<>&'"]/g, c => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]
+  ));
+}
 function buildSoapEnvelope(command) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
@@ -293,15 +299,14 @@ function buildSoapEnvelope(command) {
 </SOAP-ENV:Envelope>`;
 }
 
-function buildSoapFaultError(text) {
-  const match = text.match(/<faultstring>([\s\S]*?)<\/faultstring>/i);
-  if (!match) return null;
-  const message = match[1].trim();
-  const err = new Error(message || 'SOAP Fault');
-  err.name = 'SoapFaultError';
-  err.isSoapFault = true;
-  err.soapMessage = message;
-  err.raw = text;
+// Add this (you currently call it but it doesn't exist):
+function buildSoapFaultError(xml) {
+  // looks for <faultstring> ... </faultstring>
+  const m = xml.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
+  if (!m) return null;
+  const msg = m[1].trim();
+  const err = new Error(msg);
+  err.name = 'SOAPFault';
   return err;
 }
 
@@ -313,23 +318,26 @@ async function callSoap(command) {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
-      Authorization: `Basic ${auth}`,
+      'Authorization': `Basic ${auth}`,
     },
     body: xml,
   });
 
   const text = await resp.text();
+
+  // 1) Prefer SOAP-level semantics over HTTP code
+  const fault = buildSoapFaultError(text);
+  if (fault) throw fault;             // <-- lets tcEnsureAccount() see "already exists"
+
+  // 2) Only if no SOAP fault, treat non-2xx as transport error
   if (!resp.ok) {
     console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
     throw new Error(`SOAP HTTP ${resp.status}`);
   }
-  const fault = buildSoapFaultError(text);
-  if (fault) {
-    console.error('SOAP Fault:\n', text);
-    throw fault;
-  }
+
   return text;
 }
+
 
 function extractSoapReturn(text) {
   const m = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
@@ -338,54 +346,47 @@ function extractSoapReturn(text) {
 
 const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
 
-const isUnknownCommandMessage = (msg) => /unknown command|no such command|invalid(?: syntax)?|usage:/i.test(msg || '');
-const isAlreadyExistsMessage = (msg) => /already exists/i.test(msg || '');
-const messageFromError = (err) => (err && (err.soapMessage || err.message || '')).toString();
-
 async function tcSetPassword(identifier, newPassword) {
-  const cmd = `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`;
-  try {
+  const tries = [
+    `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
+    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
+  ];
+  let last = '';
+  for (const cmd of tries) {
     const raw = await callSoap(cmd);
     const msg = extractSoapReturn(raw);
-    if (isUnknownCommandMessage(msg)) {
-      throw new Error('Unknown command: bnetaccount set password');
-    }
-    return raw;
-  } catch (err) {
-    if (err.isSoapFault && isUnknownCommandMessage(messageFromError(err))) {
-      throw new Error('Unknown command: bnetaccount set password');
-    }
-    throw err;
+    last = msg;
+    if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
   }
+  return last;
 }
 
 async function tcEnsureAccount(email, password) {
-  const cmd = `bnetaccount create ${q(email)} ${q(password)}`;
-  try {
-    const raw = await callSoap(cmd);
-    const msg = extractSoapReturn(raw);
-    if (isAlreadyExistsMessage(msg)) {
+  const createTries = [
+    `bnetaccount create ${q(email)} ${q(password)}`,
+    `account create ${q(email)} ${q(password)}`
+  ];
+  let out = '';
+  for (const cmd of createTries) {
+    out = await callSoap(cmd);
+    const msg = extractSoapReturn(out);
+    if (/already exists/i.test(msg)) {
       const resetOut = await tcSetPassword(email, password);
       return resetOut;
     }
-    if (isUnknownCommandMessage(msg)) {
-      throw new Error('Unknown command: bnetaccount create');
-    }
-    return raw;
-  } catch (err) {
-    if (err.isSoapFault) {
-      const msg = messageFromError(err);
-      if (isAlreadyExistsMessage(msg)) {
-        const resetOut = await tcSetPassword(email, password);
-        return resetOut;
-      }
-      if (isUnknownCommandMessage(msg)) {
-        throw new Error('Unknown command: bnetaccount create');
-      }
-    }
-    throw err;
+    if (!/unknown command|no such command|usage:/i.test(msg)) return out;
   }
+  return out;
 }
+
+app.get('/api/status', async (req, res) => {
+  try {
+    const out = await callSoap('server info');
+    res.json({ ok: true, info: extractSoapReturn(out) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
