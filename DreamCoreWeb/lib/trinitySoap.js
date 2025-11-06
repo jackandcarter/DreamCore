@@ -76,12 +76,33 @@ export function parseSoapReturn(text) {
 const q = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
 
 function stripEntities(s) {
-  return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
+  return String(s)
+    // Remove TrinityCore color codes (e.g. |cffff0000 ... |r) and ANSI escapes.
+    .replace(/\|c[0-9a-f]{8}/gi, '')
+    .replace(/\|r/gi, '')
+    .replace(/\u001B\[[0-9;]*m/gi, '')
+    // Replace common XML/HTML entities with spaces so words stay separated.
+    .replace(/&[a-z]+;|&#\d+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function messageIncludes(msg, patterns) {
+  if (!msg) return false;
+  const normalized = stripEntities(msg).toLowerCase();
+  return patterns.some((phrase) => normalized.includes(phrase));
 }
 
 function isAlreadyExistsMessage(msg) {
-  const m = stripEntities(msg);
-  return /already exists/i.test(m);
+  return messageIncludes(msg, [
+    'already exists',
+    'already linked',
+    'already assigned',
+    'already in use',
+    'account exists',
+    'account already created',
+    'account already linked',
+  ]);
 }
 
 export async function setPassword(soapConfig, identifier, newPassword) {
@@ -93,9 +114,9 @@ export async function setPassword(soapConfig, identifier, newPassword) {
   for (const cmd of tries) {
     try {
       const raw = await callSoap(soapConfig, cmd);
-      const msg = extractSoapReturn(raw);
+      const msg = stripEntities(extractSoapReturn(raw)).toLowerCase();
       last = raw;
-      if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
+      if (!/unknown command|no such command|usage:/.test(msg)) return raw;
     } catch (err) {
       if (err?.name === 'SOAPFault' && isAlreadyExistsMessage(String(err.message || ''))) {
         return 'ok';
@@ -111,8 +132,13 @@ export async function ensureGameAccount(soapConfig, email) {
   try {
     return await callSoap(soapConfig, cmd);
   } catch (err) {
-    const msg = String(err?.message || '').toLowerCase();
-    if (err?.name === 'SOAPFault' && /already exists|exists/.test(msg)) return 'ok';
+    if (err?.name === 'SOAPFault' && messageIncludes(err?.message || '', [
+      'already exists',
+      'game account exists',
+      'already has game account',
+    ])) {
+      return 'ok';
+    }
     throw err;
   }
 }
@@ -123,8 +149,12 @@ export async function linkGameAccount(soapConfig, email, accountName) {
   try {
     return await callSoap(soapConfig, cmd);
   } catch (err) {
-    const msg = String(err?.message || '').toLowerCase();
-    if (err?.name === 'SOAPFault' && /already linked|already exists|exists/.test(msg)) {
+    if (err?.name === 'SOAPFault' && messageIncludes(err?.message || '', [
+      'already linked',
+      'already exists',
+      'already assigned',
+      'link already established',
+    ])) {
       return 'ok';
     }
     throw err;
@@ -140,8 +170,8 @@ export async function createBnetAccount(soapConfig, email, password) {
   for (const cmd of commands) {
     try {
       const raw = await callSoap(soapConfig, cmd);
-      const msg = extractSoapReturn(raw);
-      if (/unknown command|no such command|usage:/i.test(msg)) {
+      const msg = stripEntities(extractSoapReturn(raw)).toLowerCase();
+      if (/unknown command|no such command|usage:/.test(msg)) {
         continue;
       }
       return raw;
