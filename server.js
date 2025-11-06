@@ -67,6 +67,7 @@ const CONFIG = {
   MAX_PASS: Number(process.env.MAX_PASS || 72),
   MAX_USER: Number(process.env.MAX_USER || 20), // used to clip a derived username for DB storage
   TOKEN_TTL_MIN: Number(process.env.TOKEN_TTL_MIN || 30), // minutes
+  RESET_TOKEN_TTL_MIN: Number(process.env.RESET_TOKEN_TTL_MIN || 20), // minutes
   SESSION_TTL_HOURS: Number(process.env.SESSION_TTL_HOURS || 24),
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || 'dreamcore_session',
   COOKIE_SECURE: (process.env.COOKIE_SECURE || 'true').toLowerCase() === 'true',
@@ -175,6 +176,17 @@ await pool.query(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS password_resets (
+    token VARCHAR(64) PRIMARY KEY,
+    email VARCHAR(254) NOT NULL,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    KEY idx_email (email),
+    KEY idx_expires (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
   host: CONFIG.SMTP_HOST,
@@ -202,6 +214,13 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || 'global',
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // ----- UI (modern, minimal, responsive) -----
@@ -326,6 +345,57 @@ app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIE
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  ));
+}
+function renderTransactionalEmail({ title, intro, paragraphs = [], button, footerLines = [] }) {
+  const brand = escapeHtml(CONFIG.BRAND_NAME || 'DreamCore');
+  const corner = escapeHtml(CONFIG.CORNER_LOGO || brand);
+  const heading = escapeHtml(title || brand);
+  const baseUrl = escapeHtml(CONFIG.BASE_URL || '');
+  const introHtml = intro
+    ? `<p style="margin:0 0 16px;color:#cbd5f5;font-size:15px;line-height:1.6;">${escapeHtml(intro)}</p>`
+    : '';
+  const paragraphsHtml = Array.isArray(paragraphs)
+    ? paragraphs
+        .map((text) =>
+          `<p style="margin:0 0 16px;color:#e0e7ff;font-size:14px;line-height:1.7;">${escapeHtml(text)}</p>`
+        )
+        .join('')
+    : '';
+  const hasButton = button && button.href && button.label;
+  const buttonHref = hasButton ? escapeHtml(button.href) : '';
+  const buttonLabel = hasButton ? escapeHtml(button.label) : '';
+  const buttonHtml = hasButton
+    ? `<p style="margin:24px 0 16px;"><a href="${buttonHref}" style="background:#6366f1;color:#0f172a;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block;">${buttonLabel}</a></p>`
+    : '';
+  const fallbackHtml = hasButton
+    ? `<p style="margin:0 0 16px;color:#94a3b8;font-size:13px;line-height:1.5;">If the button doesn't open, copy and paste this link:<br><a href="${buttonHref}" style="color:#a5b4fc;">${buttonHref}</a></p>`
+    : '';
+  const footerHtml = footerLines.length
+    ? footerLines
+        .map((text) => `<p style="margin:12px 0 0;color:#64748b;font-size:12px;line-height:1.5;">${escapeHtml(text)}</p>`)
+        .join('')
+    : `<p style="margin:12px 0 0;color:#64748b;font-size:12px;line-height:1.5;">${brand} • ${baseUrl}</p>`;
+
+  return `
+    <div style="background-color:#0f172a;padding:32px 16px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <div style="max-width:520px;margin:0 auto;background:#111827;border-radius:18px;padding:32px;border:1px solid rgba(129,140,248,0.25);box-shadow:0 25px 50px -12px rgba(79,70,229,0.35);">
+        <div style="text-transform:uppercase;letter-spacing:0.14em;font-size:12px;font-weight:600;color:#a5b4fc;">${corner}</div>
+        <h1 style="color:#f8fafc;font-size:22px;margin:12px 0 18px;">${heading}</h1>
+        ${introHtml}
+        ${paragraphsHtml}
+        ${buttonHtml}
+        ${fallbackHtml}
+        <hr style="border:none;border-top:1px solid rgba(148,163,184,0.25);margin:28px 0;">
+        <p style="margin:0;color:#94a3b8;font-size:13px;">${brand} Support Team</p>
+        ${footerHtml}
+      </div>
+    </div>
+  `;
+}
 function isValidPassword(p) {
   return typeof p === 'string' && p.length >= CONFIG.MIN_PASS && p.length <= CONFIG.MAX_PASS;
 }
@@ -1229,25 +1299,144 @@ app.post('/api/register', limiter, async (req, res) => {
 
     const verifyUrl = `${CONFIG.BASE_URL}/verify?token=${token}`;
     const safeEmail = escapeHtml(email);
-    const html = `
-      <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-        <h2>${CONFIG.BRAND_NAME} — Verify your email</h2>
-        <p>Click to complete your account creation for <b>${safeEmail}</b>:</p>
-        <p><a href="${verifyUrl}">Finish registration</a></p>
-        <p>This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.</p>
-      </div>`;
+    const html = renderTransactionalEmail({
+      title: `${CONFIG.BRAND_NAME} — Verify your email`,
+      intro: `You're almost ready to enter ${CONFIG.BRAND_NAME}.`,
+      paragraphs: [
+        `Complete the signup for ${safeEmail} within ${CONFIG.TOKEN_TTL_MIN} minutes to activate your login.`,
+        'If you did not start this registration, you can safely ignore this message.',
+      ],
+      button: { href: verifyUrl, label: 'Finish registration' },
+    });
+    const text = [
+      `${CONFIG.BRAND_NAME}: verify your email`,
+      `Finish creating the account for ${email} by visiting: ${verifyUrl}`,
+      `This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.`,
+      '',
+      `If you did not request this, you can ignore this email.`,
+    ].join('\n');
 
     await transporter.sendMail({
       to: email,
       from: CONFIG.FROM_EMAIL,
       subject: `${CONFIG.BRAND_NAME}: confirm your account`,
       html,
+      text,
     });
 
     return res.json({ ok: true });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
+
+    const account = await getAuthAccountByEmail(email).catch((err) => {
+      console.error('Password reset lookup failed', err);
+      throw err;
+    });
+
+    // Always respond success to avoid leaking account existence, but only issue tokens for known users
+    if (!account) {
+      console.warn('Password reset requested for unknown email', {
+        target: maskEmail(email),
+        ip: req.ip,
+      });
+      return res.json({ ok: true });
+    }
+
+    const now = Date.now();
+    await pool.execute('DELETE FROM password_resets WHERE expires_at < ?', [now]);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = now + CONFIG.RESET_TOKEN_TTL_MIN * 60 * 1000;
+
+    await pool.execute('DELETE FROM password_resets WHERE email = ?', [email]);
+    await pool.execute(
+      'INSERT INTO password_resets (token, email, created_at, expires_at) VALUES (?, ?, ?, ?)',
+      [token, email, now, expiresAt]
+    );
+
+    const resetUrl = `${CONFIG.BASE_URL}/reset-password?token=${token}`;
+    const safeEmail = escapeHtml(email);
+    const html = renderTransactionalEmail({
+      title: `${CONFIG.BRAND_NAME} — Reset your password`,
+      intro: `We received a request to reset your ${CONFIG.BRAND_NAME} password.`,
+      paragraphs: [
+        `Set a new password for ${safeEmail} within ${CONFIG.RESET_TOKEN_TTL_MIN} minutes to keep your account secure.`,
+        'If you did not request this change, you can safely ignore this email and your password will stay the same.',
+      ],
+      button: { href: resetUrl, label: 'Set a new password' },
+    });
+    const text = [
+      `${CONFIG.BRAND_NAME}: reset your password`,
+      `Reset the password for ${email} by visiting: ${resetUrl}`,
+      `This link expires in ${CONFIG.RESET_TOKEN_TTL_MIN} minutes.`,
+      '',
+      'If you did not request this, you can ignore this email.',
+    ].join('\n');
+
+    await transporter.sendMail({
+      to: email,
+      from: CONFIG.FROM_EMAIL,
+      subject: `${CONFIG.BRAND_NAME}: reset your password`,
+      html,
+      text,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Password reset request error', e);
+    return res.status(500).json({ error: 'Unable to process request' });
+  }
+});
+
+app.post('/api/password-reset/confirm', async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (typeof token !== 'string' || token.length < 10) return badRequest(res, 'Invalid or expired token');
+    if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
+
+    const now = Date.now();
+    await pool.execute('DELETE FROM password_resets WHERE expires_at < ?', [now]);
+
+    const [rows] = await pool.execute(
+      'SELECT email, expires_at FROM password_resets WHERE token = ? LIMIT 1',
+      [token]
+    );
+    const entry = Array.isArray(rows) ? rows[0] : null;
+
+    if (!entry || now > entry.expires_at) {
+      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
+      return badRequest(res, 'Invalid or expired token');
+    }
+
+    const account = await getAuthAccountByEmail(entry.email);
+    if (!account) {
+      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
+      console.warn('Password reset token has no matching account', { target: maskEmail(entry.email) });
+      return badRequest(res, 'Invalid or expired token');
+    }
+
+    const soapResponse = await tcSetPassword(entry.email, password);
+    const message = typeof soapResponse === 'string' ? stripEntities(extractSoapReturn(soapResponse)) : '';
+    const normalized = message.toLowerCase();
+    if (!message || /unknown command|usage:|no such command|not found|no account|invalid/i.test(normalized)) {
+      console.error('SOAP password reset returned unexpected response', { message, email: maskEmail(entry.email) });
+      return res.status(502).json({ error: 'Unable to reset password' });
+    }
+
+    await pool.execute('DELETE FROM password_resets WHERE email = ?', [entry.email]);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Password reset confirm error', e);
+    return res.status(500).json({ error: 'Unable to reset password' });
   }
 });
 
@@ -1380,8 +1569,6 @@ app.get('/verify', async (req, res) => {
       );
   }
 });
-
-function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 
 function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
   const tone = {
