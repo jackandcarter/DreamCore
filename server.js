@@ -67,6 +67,9 @@ const CONFIG = {
   MAX_PASS: Number(process.env.MAX_PASS || 72),
   MAX_USER: Number(process.env.MAX_USER || 20), // used to clip a derived username for DB storage
   TOKEN_TTL_MIN: Number(process.env.TOKEN_TTL_MIN || 30), // minutes
+  SESSION_TTL_HOURS: Number(process.env.SESSION_TTL_HOURS || 24),
+  SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || 'dreamcore_session',
+  COOKIE_SECURE: (process.env.COOKIE_SECURE || 'true').toLowerCase() === 'true',
 };
 
 // ----- DB (MariaDB for pending verifications) -----
@@ -76,6 +79,22 @@ const DB = {
   USER: process.env.DB_USER || 'trinity',
   PASS: process.env.DB_PASS || 'trinity_password',
   NAME: process.env.DB_NAME || 'tc_register',
+};
+
+const AUTH_DB = {
+  HOST: process.env.AUTH_DB_HOST || '127.0.0.1',
+  PORT: Number(process.env.AUTH_DB_PORT || 3306),
+  USER: process.env.AUTH_DB_USER || 'trinity',
+  PASS: process.env.AUTH_DB_PASS || 'trinity_password',
+  NAME: process.env.AUTH_DB_NAME || 'auth',
+};
+
+const CHAR_DB = {
+  HOST: process.env.CHAR_DB_HOST || '127.0.0.1',
+  PORT: Number(process.env.CHAR_DB_PORT || 3306),
+  USER: process.env.CHAR_DB_USER || 'trinity',
+  PASS: process.env.CHAR_DB_PASS || 'trinity_password',
+  NAME: process.env.CHAR_DB_NAME || 'characters',
 };
 
 // Bootstrap: ensure database exists using a one-off connection
@@ -101,6 +120,29 @@ const pool = await mysql.createPool({
   multipleStatements: true,
 });
 
+const authPool = await mysql.createPool({
+  host: AUTH_DB.HOST,
+  port: AUTH_DB.PORT,
+  user: AUTH_DB.USER,
+  password: AUTH_DB.PASS,
+  database: AUTH_DB.NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+});
+
+// Character DB pool reserved for future character-based endpoints.
+const charPool = await mysql.createPool({
+  host: CHAR_DB.HOST,
+  port: CHAR_DB.PORT,
+  user: CHAR_DB.USER,
+  password: CHAR_DB.PASS,
+  database: CHAR_DB.NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+});
+
 // Ensure table exists (and de-dupe by email)
 await pool.query(`
   CREATE TABLE IF NOT EXISTS pending (
@@ -111,6 +153,20 @@ await pool.query(`
     created_at BIGINT NOT NULL,
     KEY idx_created_at (created_at),
     UNIQUE KEY uniq_email (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id CHAR(64) PRIMARY KEY,
+    account_id BIGINT UNSIGNED NOT NULL,
+    email VARCHAR(254) NOT NULL,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    last_ip VARCHAR(64) DEFAULT NULL,
+    last_user_agent VARCHAR(255) DEFAULT NULL,
+    KEY idx_account (account_id),
+    KEY idx_expires (expires_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
@@ -133,6 +189,14 @@ const limiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || 'global',
 });
 
 // ----- UI (modern, minimal, responsive) -----
@@ -262,6 +326,185 @@ function isValidPassword(p) {
 }
 function isValidEmail(e) {
   return typeof e === 'string' && /.+@.+\..+/.test(e) && e.length <= 254;
+}
+
+function maskEmail(e) {
+  if (typeof e !== 'string') return 'unknown';
+  const [local, domain] = e.split('@');
+  if (!domain) return 'unknown';
+  const prefix = local.slice(0, 2);
+  const suffix = local.length > 2 ? local.slice(-1) : '';
+  return `${prefix || '*'}***${suffix}@${domain}`;
+}
+
+function upperHex(buffer) {
+  return Buffer.from(buffer).toString('hex').toUpperCase();
+}
+
+const SRP_N = BigInt('0xAC6BDB41324A9A9BF166DE5E1389582FAF72B6651987EE07FC3192943DB56050A37329CBB4A099ED8193E0757767A13DD52312AB4B03310DCD7F48A9DA04FD50E8083969EDB767B0CF609F1D0EA29DE2EF7FBE54FF5D6F52ABFDE5479F9DCF3CB31F4CFF55BCCC0A151AF5F0DC8B4BD45BF37DF365C1A65E68CFDA76D4DA708DF1FB26E40EE5B2FADD5B2115BD5A33D3FE3A8ABDF0195995B6D607339C3FD20915C6C1');
+const SRP_G = 2n;
+
+function srpHashIdentity(email, password) {
+  const identity = Buffer.from(String(email || '').trim().toUpperCase());
+  const pass = Buffer.from(String(password || ''));
+  const sha256 = crypto
+    .createHash('sha256')
+    .update(identity)
+    .update(':')
+    .update(pass)
+    .digest();
+  const sha1 = crypto
+    .createHash('sha1')
+    .update(identity)
+    .update(':')
+    .update(pass)
+    .digest();
+  return { sha256, sha1 };
+}
+
+function modExp(base, exponent, modulus) {
+  if (modulus === 1n) return 0n;
+  let result = 1n;
+  let b = base % modulus;
+  let e = exponent;
+  while (e > 0n) {
+    if (e & 1n) result = (result * b) % modulus;
+    e >>= 1n;
+    b = (b * b) % modulus;
+  }
+  return result;
+}
+
+function deriveVerifier(email, password, salt) {
+  if (!salt) return null;
+  const { sha256 } = srpHashIdentity(email, password);
+  const xBytes = crypto.createHash('sha256').update(salt).update(sha256).digest();
+  const x = BigInt('0x' + xBytes.toString('hex'));
+  const v = modExp(SRP_G, x, SRP_N);
+  let hex = v.toString(16);
+  if (hex.length % 2) hex = '0' + hex;
+  return Buffer.from(hex, 'hex');
+}
+
+function matchesSrpHash({ storedHash, salt, verifier }, email, password) {
+  const normalizedHash = typeof storedHash === 'string' ? storedHash.trim().toUpperCase() : null;
+  const { sha256, sha1 } = srpHashIdentity(email, password);
+  const sha256Hex = upperHex(sha256);
+  const sha1Hex = upperHex(sha1);
+  if (normalizedHash && (normalizedHash === sha256Hex || normalizedHash === sha1Hex)) {
+    return true;
+  }
+  if (verifier) {
+    try {
+      const derived = deriveVerifier(email, password, salt);
+      if (derived && Buffer.compare(Buffer.from(verifier), derived) === 0) {
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to derive SRP verifier', e);
+    }
+  }
+  return false;
+}
+
+function hashSessionToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex').toUpperCase();
+}
+
+function getSessionToken(req) {
+  const authHeader = req.headers['authorization'];
+  if (typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  const cookieHeader = req.headers['cookie'];
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(';')) {
+    const [rawName, ...rest] = part.trim().split('=');
+    if (!rawName) continue;
+    if (rawName === CONFIG.SESSION_COOKIE_NAME) {
+      return decodeURIComponent(rest.join('='));
+    }
+  }
+  return null;
+}
+
+async function loadSession(req) {
+  const token = getSessionToken(req);
+  if (!token) return null;
+  const hashed = hashSessionToken(token);
+  const now = Date.now();
+  const [rows] = await pool.execute(
+    'SELECT id, account_id, email, created_at, expires_at FROM sessions WHERE id = ? AND expires_at > ?',
+    [hashed, now]
+  );
+  if (!rows.length) return null;
+  const session = rows[0];
+  session.token = token;
+  return session;
+}
+
+async function persistSession(accountId, email, req) {
+  const token = crypto.randomBytes(48).toString('base64url');
+  const hashed = hashSessionToken(token);
+  const now = Date.now();
+  const expiresAt = now + CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
+  const userAgent = (req.headers['user-agent'] || '').slice(0, 255);
+  const ip = (req.ip || req.headers['x-forwarded-for'] || '').toString().slice(0, 64);
+  await pool.execute(
+    `REPLACE INTO sessions (id, account_id, email, created_at, expires_at, last_ip, last_user_agent)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [hashed, accountId, email, now, expiresAt, ip || null, userAgent || null]
+  );
+  return { token, expiresAt };
+}
+
+async function requireSession(req, res, next) {
+  try {
+    const session = await loadSession(req);
+    if (!session) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    req.session = session;
+    return next();
+  } catch (e) {
+    console.error('Session lookup failed', e);
+    return res.status(500).json({ error: 'Session lookup failed' });
+  }
+}
+
+async function getAuthAccountByEmail(email) {
+  const tables = ['bnetaccount', 'battlenet_accounts'];
+  for (const table of tables) {
+    try {
+      const [rows] = await authPool.execute(
+        `SELECT id, email, sha_pass_hash, salt, verifier FROM \`${table}\` WHERE email = ? LIMIT 1`,
+        [email]
+      );
+      if (rows.length) return rows[0];
+    } catch (err) {
+      if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        try {
+          const [fallbackRows] = await authPool.execute(
+            `SELECT id, email, salt, verifier FROM \`${table}\` WHERE email = ? LIMIT 1`,
+            [email]
+          );
+          if (fallbackRows.length) {
+            const row = fallbackRows[0];
+            row.sha_pass_hash = null;
+            return row;
+          }
+        } catch (inner) {
+          if (inner?.code === 'ER_NO_SUCH_TABLE') continue;
+          throw inner;
+        }
+      } else if (err?.code === 'ER_NO_SUCH_TABLE') {
+        continue;
+      } else {
+        throw err;
+      }
+    }
+  }
+  return null;
 }
 
 async function verifyTurnstile(token, ip) {
@@ -422,6 +665,72 @@ app.get('/api/status', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+app.post('/api/login', loginLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
+    if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
+
+    const account = await getAuthAccountByEmail(email);
+    if (!account) {
+      console.warn('Suspicious login attempt (no account)', {
+        target: maskEmail(email),
+        ip: req.ip,
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    let storedHash = null;
+    if (account.sha_pass_hash != null) {
+      if (typeof account.sha_pass_hash === 'string') {
+        storedHash = account.sha_pass_hash;
+      } else if (Buffer.isBuffer(account.sha_pass_hash)) {
+        const ascii = account.sha_pass_hash.toString('utf8');
+        storedHash = /^[0-9a-fA-F]+$/.test(ascii) ? ascii : account.sha_pass_hash.toString('hex');
+      } else {
+        storedHash = String(account.sha_pass_hash);
+      }
+    }
+
+    const salt = account.salt ? Buffer.from(account.salt) : null;
+    const verifier = account.verifier ? Buffer.from(account.verifier) : null;
+
+    const matches = matchesSrpHash({ storedHash, salt, verifier }, email, password);
+    if (!matches) {
+      console.warn('Suspicious login attempt (hash mismatch)', {
+        target: maskEmail(email),
+        ip: req.ip,
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const session = await persistSession(account.id, email, req);
+    const maxAge = CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
+    res.cookie(CONFIG.SESSION_COOKIE_NAME, session.token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: CONFIG.COOKIE_SECURE,
+      maxAge,
+    });
+
+    return res.json({
+      ok: true,
+      accountId: account.id,
+      session: {
+        token: session.token,
+        expiresAt: session.expiresAt,
+      },
+    });
+  } catch (e) {
+    console.error('Login error', e);
+    return res.status(500).json({ error: 'Unable to login' });
+  }
+});
+
+app.get('/api/session', requireSession, (req, res) => {
+  res.json({ ok: true, session: { accountId: req.session.account_id, email: req.session.email, expiresAt: req.session.expires_at } });
 });
 
 // ----- API: Register -----
@@ -734,7 +1043,13 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
 // ----- Housekeeping: cleanup expired tokens hourly -----
 setInterval(async () => {
   const cutoff = Date.now() - CONFIG.TOKEN_TTL_MIN * 60000;
-  try { await pool.execute('DELETE FROM pending WHERE created_at < ?', [cutoff]); } catch {}
+  const now = Date.now();
+  try { await pool.execute('DELETE FROM pending WHERE created_at < ?', [cutoff]); } catch (e) {
+    console.error('Failed to prune pending tokens', e);
+  }
+  try { await pool.execute('DELETE FROM sessions WHERE expires_at <= ?', [now]); } catch (e) {
+    console.error('Failed to prune sessions', e);
+  }
 }, 60 * 60 * 1000);
 
 // ----- Start -----
@@ -743,5 +1058,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Public URL (BASE_URL): ${CONFIG.BASE_URL}`);
   console.log(`   Turnstile sitekey: ${CONFIG.TURNSTILE_SITEKEY}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
