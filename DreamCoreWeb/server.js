@@ -31,6 +31,8 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import mysql from 'mysql2/promise';
 
+import { createTrinitySoap, parseSoapReturn } from './lib/trinitySoap.js';
+
 // ----- CONFIG (read from env or inline defaults for dev) -----
 const CONFIG = {
   PORT: Number(process.env.PORT || 8787),
@@ -80,6 +82,14 @@ const DB = {
   NAME: process.env.DB_NAME || 'tc_register',
 };
 
+const AUTH_DB = {
+  HOST: process.env.AUTH_DB_HOST || process.env.DB_HOST || '127.0.0.1',
+  PORT: Number(process.env.AUTH_DB_PORT || process.env.DB_PORT || 3306),
+  USER: process.env.AUTH_DB_USER || process.env.DB_USER || 'trinity',
+  PASS: process.env.AUTH_DB_PASS || process.env.DB_PASS || 'trinity_password',
+  NAME: process.env.AUTH_DB_NAME || 'auth',
+};
+
 // Bootstrap: ensure database exists using a one-off connection
 const admin = await mysql.createConnection({
   host: DB.HOST, port: DB.PORT, user: DB.USER, password: DB.PASS,
@@ -103,6 +113,17 @@ const pool = await mysql.createPool({
   multipleStatements: true,
 });
 
+const authPool = await mysql.createPool({
+  host: AUTH_DB.HOST,
+  port: AUTH_DB.PORT,
+  user: AUTH_DB.USER,
+  password: AUTH_DB.PASS,
+  database: AUTH_DB.NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+});
+
 // Ensure table exists
 await pool.query(`
   CREATE TABLE IF NOT EXISTS pending (
@@ -122,6 +143,18 @@ const transporter = nodemailer.createTransport({
   port: CONFIG.SMTP_PORT,
   secure: CONFIG.SMTP_SECURE,
   auth: { user: CONFIG.SMTP_USER, pass: CONFIG.SMTP_PASS },
+});
+
+const SOAP_CONFIG = {
+  host: CONFIG.TC_SOAP_HOST,
+  port: CONFIG.TC_SOAP_PORT,
+  user: CONFIG.TC_SOAP_USER,
+  pass: CONFIG.TC_SOAP_PASS,
+};
+
+const trinitySoap = createTrinitySoap({
+  soapConfig: SOAP_CONFIG,
+  authPool,
 });
 
 // ----- App -----
@@ -283,137 +316,11 @@ async function verifyTurnstile(token, ip) {
   return !!data.success;
 }
 
-function escapeXml(s) {
-  return String(s).replace(/[<>&'"]/g, c => (
-    { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]
-  ));
-}
-function buildSoapEnvelope(command) {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-  <SOAP-ENV:Body>
-    <ns1:executeCommand xmlns:ns1="urn:TC">
-      <command>${escapeXml(command)}</command>
-    </ns1:executeCommand>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>`;
-}
-
-// Add this (you currently call it but it doesn't exist):
-function buildSoapFaultError(xml) {
-  // looks for <faultstring> ... </faultstring>
-  const m = xml.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
-  if (!m) return null;
-  const msg = m[1].trim();
-  const err = new Error(msg);
-  err.name = 'SOAPFault';
-  return err;
-}
-
-async function callSoap(command) {
-  const xml = buildSoapEnvelope(command);
-  const auth = Buffer.from(`${CONFIG.TC_SOAP_USER}:${CONFIG.TC_SOAP_PASS}`).toString('base64');
-
-  const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      'Authorization': `Basic ${auth}`,
-    },
-    body: xml,
-  });
-
-  const text = await resp.text();
-
-  // 1) Prefer SOAP-level semantics over HTTP code
-  const fault = buildSoapFaultError(text);
-  if (fault) throw fault;             // <-- lets tcEnsureAccount() see "already exists"
-
-  // 2) Only if no SOAP fault, treat non-2xx as transport error
-  if (!resp.ok) {
-    console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
-    throw new Error(`SOAP HTTP ${resp.status}`);
-  }
-
-  return text;
-}
-
-
-function extractSoapReturn(text) {
-  const m = text.match(/<return[^>]*>([\s\S]*?)<\/return>/i);
-  return m ? m[1].trim() : text.trim();
-}
-
-const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
-
-function stripEntities(s) {
-  return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function isAlreadyExistsMessage(msg) {
-  const m = stripEntities(msg);
-  return /already exists/i.test(m);
-}
-
-async function tcSetPassword(identifier, newPassword) {
-  const tries = [
-    `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
-    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
-  ];
-  let last = '';
-  for (const cmd of tries) {
-    const raw = await callSoap(cmd);
-    const msg = extractSoapReturn(raw);
-    last = msg;
-    if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
-  }
-  return last;
-}
-
-
-// Ensure at least one Retail game account exists under the Battle.net email.
-// Safe to call repeatedly; "already exists" is treated as success.
-async function tcEnsureGameAccount(email) {
-  const cmd = `bnetaccount gameaccountcreate "${email.replace(/"/g, '\\"')}"`;
-  try {
-    return await callSoap(cmd);
-  } catch (e) {
-    const msg = String(e?.message || '').toLowerCase();
-    if (e?.name === 'SOAPFault' && /already exists|exists/.test(msg)) return 'ok';
-    throw e;
-  }
-}
-
-
-
-
-
-async function tcEnsureAccount(email, password) {
-  const createTries = [
-    `bnetaccount create ${q(email)} ${q(password)}`,
-    `account create ${q(email)} ${q(password)}`
-  ];
-  for (const cmd of createTries) {
-    try {
-      const out = await callSoap(cmd);
-      const msg = extractSoapReturn(out);
-      if (!/unknown command|no such command|usage:/i.test(msg)) return out;
-      continue;
-    } catch (e) {
-      if (e && e.name === 'SOAPFault' && isAlreadyExistsMessage(String(e.message || ''))) {
-        return await tcSetPassword(email, password);
-      }
-      console.error('SOAPFault during create:', e.message);
-      throw e;
-    }
-  }
-  return await tcSetPassword(email, password);
-}
 
 app.get('/api/status', async (req, res) => {
   try {
-    const out = await callSoap('server info');
-    res.json({ ok: true, info: extractSoapReturn(out) });
+    const out = await trinitySoap.execute('server info');
+    res.json({ ok: true, info: parseSoapReturn(out) });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
@@ -464,133 +371,165 @@ app.post('/api/register', limiter, async (req, res) => {
 });
 
 // ----- Verify link -----
-app.get('/verify', async (req, res) => {
-  try {
-    const token = String(req.query.token || '');
-    if (!token) {
-      return res
-        .status(400)
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            state: 'error',
-            title: 'Invalid verification link',
-            message:
-              'The verification link is missing a token or was formatted incorrectly.',
-            steps: [
-              'Return to the registration page and request a new verification email.',
-              'If you continue to see this message, contact support so we can assist you manually.',
-            ],
-          })
-        );
-    }
-
-    const [rows] = await pool.execute('SELECT * FROM pending WHERE token = ?', [token]);
-    const row = Array.isArray(rows) ? rows[0] : undefined;
-    if (!row) {
-      return res
-        .status(400)
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            state: 'expired',
-            title: 'Verification link not found',
-            message:
-              'This verification link has already been used or does not match any pending registration.',
-            steps: [
-              'Head back to the registration page to start a new signup.',
-              'Use the most recent verification email—older links immediately deactivate once a new one is issued.',
-            ],
-          })
-        );
-    }
-
-    const ageMin = (Date.now() - row.created_at) / 60000;
-    if (ageMin > CONFIG.TOKEN_TTL_MIN) {
-      await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
-      return res
-        .status(400)
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            state: 'expired',
-            title: 'Verification link expired',
-            message: `This link expired after ${CONFIG.TOKEN_TTL_MIN} minutes for your security.`,
-            steps: [
-              'Revisit the registration page and submit the form again to receive a fresh email.',
-              'Complete verification promptly to finalize your DreamCore account.',
-            ],
-          })
-        );
-    }
-
-    // Create real TC account now
+  app.get('/verify', async (req, res) => {
     try {
-      await tcEnsureAccount(row.email, row.password);
+      const token = String(req.query.token || '');
+      const wantsJson = /application\/json/i.test(req.headers.accept || '');
+      if (!token) {
+        if (wantsJson) {
+          return res.status(400).json({ ok: false, error: 'invalid-token' });
+        }
+        return res
+          .status(400)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              state: 'error',
+              title: 'Invalid verification link',
+              message:
+                'The verification link is missing a token or was formatted incorrectly.',
+              steps: [
+                'Return to the registration page and request a new verification email.',
+                'If you continue to see this message, contact support so we can assist you manually.',
+              ],
+            })
+          );
+      }
 
-      // NEW: Ensure game account exists
-      await tcEnsureGameAccount(row.email);
+      const [rows] = await pool.execute('SELECT * FROM pending WHERE token = ?', [token]);
+      const row = Array.isArray(rows) ? rows[0] : undefined;
+      if (!row) {
+        if (wantsJson) {
+          return res.status(400).json({ ok: false, error: 'not-found' });
+        }
+        return res
+          .status(400)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              state: 'expired',
+              title: 'Verification link not found',
+              message:
+                'This verification link has already been used or does not match any pending registration.',
+              steps: [
+                'Head back to the registration page to start a new signup.',
+                'Use the most recent verification email—older links immediately deactivate once a new one is issued.',
+              ],
+            })
+          );
+      }
+
+      const ageMin = (Date.now() - row.created_at) / 60000;
+      if (ageMin > CONFIG.TOKEN_TTL_MIN) {
+        await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
+        if (wantsJson) {
+          return res.status(400).json({ ok: false, error: 'expired' });
+        }
+        return res
+          .status(400)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              state: 'expired',
+              title: 'Verification link expired',
+              message: `This link expired after ${CONFIG.TOKEN_TTL_MIN} minutes for your security.`,
+              steps: [
+                'Revisit the registration page and submit the form again to receive a fresh email.',
+                'Complete verification promptly to finalize your DreamCore account.',
+              ],
+            })
+          );
+      }
+
+      // Create real TC account now
+      try {
+        const result = await trinitySoap.resolveAccountForEmail(row.email, row.password);
+        await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
+
+        if (wantsJson) {
+          return res.json({ ok: true, status: result.status, summary: result.summary });
+        }
+
+        const statusMessages = {
+          created:
+            'We created a brand-new DreamCore Battle.net login and attached your first game account.',
+          linked:
+            'We linked your DreamCore login to the correct game account so you are ready to play.',
+          'password-reset':
+            'We refreshed the password on your existing DreamCore login so you can sign in again.',
+        };
+
+        const successMessage = [
+          `Your DreamCore login <strong>${escapeHtml(row.email)}</strong> is now active.`,
+          statusMessages[result.status] || '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        return res
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              state: 'success',
+              title: 'Account verified!',
+              message: successMessage,
+              accountStatus: result.status,
+              successSteps: [
+                {
+                  number: 2,
+                  title: 'Verification completed',
+                  body: [
+                    'Nice work—you\'ve finished Step 2.',
+                    'Your DreamCore account is active and ready for the final client setup steps below.',
+                  ],
+                },
+                {
+                  number: 3,
+                  title: 'Review the DreamCore guide & latest updates',
+                  body: [
+                    'Before you dive in, read through the DreamCore guide that covers launcher tips, shortcut setup, and any hotfixes we\'ve published.',
+                    'Bookmark the page so you always have the newest client download links, bug fixes, and community news in one place.',
+                  ],
+                  cta: CONFIG.GUIDE_URL
+                    ? {
+                        href: CONFIG.GUIDE_URL,
+                        label: 'Open DreamCore Guide & Updates',
+                      }
+                    : null,
+                },
+              ],
+            })
+          );
+      } catch (e) {
+        console.error('SOAP create failed:', e);
+        if (wantsJson) {
+          return res.status(502).json({ ok: false, error: 'soap-error', detail: String(e?.message || e) });
+        }
+        return res
+          .status(502)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              state: 'error',
+              title: 'Unable to finalize your account',
+              message:
+                'Our account service had trouble completing the setup. No worries—your email is still reserved.',
+              steps: [
+                'Wait a moment and try the verification link again.',
+                'If the issue persists, open a support ticket so we can complete the registration for you.',
+              ],
+            })
+          );
+      }
     } catch (e) {
-      console.error('SOAP create failed:', e);
+      console.error(e);
+      if (wantsJson) {
+        return res.status(500).json({ ok: false, error: 'server-error' });
+      }
       return res
-        .status(502)
+        .status(500)
         .type('text/html')
         .send(
-          VERIFY_PAGE({
-            state: 'error',
-            title: 'Unable to finalize your account',
-            message:
-              'Our account service had trouble completing the setup. No worries—your email is still reserved.',
-            steps: [
-              'Wait a moment and try the verification link again.',
-              'If the issue persists, open a support ticket so we can complete the registration for you.',
-            ],
-          })
-        );
-    }
-
-
-    await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
-
-    return res
-      .type('text/html')
-      .send(
-        VERIFY_PAGE({
-          state: 'success',
-          title: 'Account verified!',
-          message: `Your DreamCore login <strong>${escapeHtml(row.email)}</strong> is now active.`,
-          successSteps: [
-            {
-              number: 2,
-              title: 'Verification completed',
-              body: [
-                'Nice work—you\'ve finished Step 2.',
-                'Your DreamCore account is active and ready for the final client setup steps below.',
-              ],
-            },
-            {
-              number: 3,
-              title: 'Review the DreamCore guide & latest updates',
-              body: [
-                'Before you dive in, read through the DreamCore guide that covers launcher tips, shortcut setup, and any hotfixes we\'ve published.',
-                'Bookmark the page so you always have the newest client download links, bug fixes, and community news in one place.',
-              ],
-              cta: CONFIG.GUIDE_URL
-                ? {
-                    href: CONFIG.GUIDE_URL,
-                    label: 'Open DreamCore Guide & Updates',
-                  }
-                : null,
-            },
-          ],
-        })
-      );
-  } catch (e) {
-    console.error(e);
-    return res
-      .status(500)
-      .type('text/html')
-      .send(
         VERIFY_PAGE({
           state: 'error',
           title: 'Something went wrong',
@@ -606,7 +545,7 @@ app.get('/verify', async (req, res) => {
 
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 
-function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
+function VERIFY_PAGE({ state, title, message, steps, successSteps, accountStatus }) {
   const tone = {
     success: {
       badge: 'Verified',
@@ -692,6 +631,12 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
       : '';
 
   const safeMessage = message.replace(/<(?!\/?(a|strong)\b)[^>]*>/gi, '');
+  const statusBadge =
+    state === 'success' && accountStatus
+      ? `<div class="mt-4"><span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-100">${escapeHtml(
+          String(accountStatus).replace(/-/g, ' ')
+        )}</span></div>`
+      : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -735,6 +680,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r ${tone.badgeGradient} px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-indigo-900/30">${tone.icon} ${tone.badge}</span>
         <h1 class="mt-6 text-3xl font-semibold tracking-tight text-white">${title}</h1>
+        ${statusBadge}
         <p class="mt-3 text-[15px] text-indigo-100/90">${safeMessage}</p>
         ${stepsList}
         ${successGuide}
