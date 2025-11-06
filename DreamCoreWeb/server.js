@@ -287,6 +287,18 @@ function buildSoapEnvelope(command) {
 </SOAP-ENV:Envelope>`;
 }
 
+function buildSoapFaultError(text) {
+  const match = text.match(/<faultstring>([\s\S]*?)<\/faultstring>/i);
+  if (!match) return null;
+  const message = match[1].trim();
+  const err = new Error(message || 'SOAP Fault');
+  err.name = 'SoapFaultError';
+  err.isSoapFault = true;
+  err.soapMessage = message;
+  err.raw = text;
+  return err;
+}
+
 async function callSoap(command) {
   const xml = buildSoapEnvelope(command);
   const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
@@ -300,9 +312,10 @@ async function callSoap(command) {
     console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
     throw new Error(`SOAP HTTP ${resp.status}`);
   }
-  if (/<(?:soap|SOAP).*Fault/i.test(text)) {
+  const fault = buildSoapFaultError(text);
+  if (fault) {
     console.error('SOAP Fault:\n', text);
-    throw new Error('SOAP Fault');
+    throw fault;
   }
   return text;
 }
@@ -314,47 +327,54 @@ function extractSoapReturn(text) {
 
 const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
 
+const isUnknownCommandMessage = (msg) => /unknown command|no such command|invalid(?: syntax)?|usage:/i.test(msg || '');
+const isAlreadyExistsMessage = (msg) => /already exists/i.test(msg || '');
+const messageFromError = (err) => (err && (err.soapMessage || err.message || '')).toString();
+
 async function tcSetPassword(identifier, newPassword) {
-  const tries = [
-    `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
-    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
-  ];
-  let last = '';
-  for (const cmd of tries) {
+  const cmd = `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`;
+  try {
     const raw = await callSoap(cmd);
     const msg = extractSoapReturn(raw);
-    last = msg;
-    if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
+    if (isUnknownCommandMessage(msg)) {
+      throw new Error('Unknown command: bnetaccount set password');
+    }
+    return raw;
+  } catch (err) {
+    if (err.isSoapFault && isUnknownCommandMessage(messageFromError(err))) {
+      throw new Error('Unknown command: bnetaccount set password');
+    }
+    throw err;
   }
-  return last;
 }
 
 async function tcEnsureAccount(email, password) {
-  const createTries = [
-    `bnetaccount create ${q(email)} ${q(password)}`,
-    `account create ${q(email)} ${q(password)}`
-  ];
-  let out = '';
-  for (const cmd of createTries) {
-    out = await callSoap(cmd);
-    const msg = extractSoapReturn(out);
-    if (/already exists/i.test(msg)) {
+  const cmd = `bnetaccount create ${q(email)} ${q(password)}`;
+  try {
+    const raw = await callSoap(cmd);
+    const msg = extractSoapReturn(raw);
+    if (isAlreadyExistsMessage(msg)) {
       const resetOut = await tcSetPassword(email, password);
       return resetOut;
     }
-    if (!/unknown command|no such command|usage:/i.test(msg)) return out;
+    if (isUnknownCommandMessage(msg)) {
+      throw new Error('Unknown command: bnetaccount create');
+    }
+    return raw;
+  } catch (err) {
+    if (err.isSoapFault) {
+      const msg = messageFromError(err);
+      if (isAlreadyExistsMessage(msg)) {
+        const resetOut = await tcSetPassword(email, password);
+        return resetOut;
+      }
+      if (isUnknownCommandMessage(msg)) {
+        throw new Error('Unknown command: bnetaccount create');
+      }
+    }
+    throw err;
   }
-  return out;
 }
-
-app.get('/api/status', async (req, res) => {
-  try {
-    const out = await callSoap('server info');
-    res.json({ ok: true, info: extractSoapReturn(out) });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
