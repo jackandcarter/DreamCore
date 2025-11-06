@@ -298,11 +298,16 @@ app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIE
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
+function normalizeEmail(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
 function isValidPassword(p) {
   return typeof p === 'string' && p.length >= CONFIG.MIN_PASS && p.length <= CONFIG.MAX_PASS;
 }
 function isValidEmail(e) {
-  return typeof e === 'string' && /.+@.+\..+/.test(e) && e.length <= 254;
+  if (typeof e !== 'string') return false;
+  const normalized = normalizeEmail(e);
+  return /.+@.+\..+/.test(normalized) && normalized.length <= 254;
 }
 
 async function verifyTurnstile(token, ip) {
@@ -329,7 +334,8 @@ app.get('/api/status', async (req, res) => {
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
   try {
-    const { password, email, cfToken } = req.body || {};
+    const { password, email: emailInput, cfToken } = req.body || {};
+    const email = normalizeEmail(emailInput);
 
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
