@@ -85,8 +85,8 @@ const DB = {
 const AUTH_DB = {
   HOST: process.env.AUTH_DB_HOST || process.env.DB_HOST || '127.0.0.1',
   PORT: Number(process.env.AUTH_DB_PORT || process.env.DB_PORT || 3306),
-  USER: process.env.AUTH_DB_USER || process.env.DB_USER || 'trinity',
-  PASS: process.env.AUTH_DB_PASS || process.env.DB_PASS || 'trinity_password',
+  USER: process.env.AUTH_DB_USER || 'trinity',
+  PASS: process.env.AUTH_DB_PASS || 'trinity_password',
   NAME: process.env.AUTH_DB_NAME || 'auth',
 };
 
