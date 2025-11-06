@@ -346,15 +346,6 @@ function extractSoapReturn(text) {
 
 const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
 
-function stripEntities(s) {
-  return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function isAlreadyExistsMessage(msg) {
-  const m = stripEntities(msg);
-  return /already exists/i.test(m);
-}
-
 async function tcSetPassword(identifier, newPassword) {
   const tries = [
     `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
@@ -370,26 +361,61 @@ async function tcSetPassword(identifier, newPassword) {
   return last;
 }
 
+// Create 1 game account under the Battle.net email (Retail/master)
+// Safe to call multiple times; treats "already exists" as success.
+async function tcEnsureGameAccount(email) {
+  const cmd = `bnetaccount gameaccountcreate "${email.replace(/"/g, '\\"')}"`;
+  try {
+    const raw = await callSoap(cmd);
+    return raw;
+  } catch (e) {
+    const msg = String(e?.message || '').toLowerCase();
+    if (e?.name === 'SOAPFault' && /already exists|exists/.test(msg)) return 'ok';
+    throw e;
+  }
+}
+
 async function tcEnsureAccount(email, password) {
   const createTries = [
-    `bnetaccount create ${q(email)} ${q(password)}`,
-    `account create ${q(email)} ${q(password)}`
+    `bnetaccount create "${email.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}"`, // Retail
+    `account create "${email.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}"`      // 3.3.5 fallback
   ];
+
+  let createdOrExists = false;
+
   for (const cmd of createTries) {
     try {
       const out = await callSoap(cmd);
       const msg = extractSoapReturn(out);
-      if (!/unknown command|no such command|usage:/i.test(msg)) return out;
-      continue;
-    } catch (e) {
-      if (e && e.name === 'SOAPFault' && isAlreadyExistsMessage(String(e.message || ''))) {
-        return await tcSetPassword(email, password);
+      if (!/unknown command|no such command|usage:/i.test(msg)) {
+        createdOrExists = true;
+        break;
       }
-      console.error('SOAPFault during create:', e.message);
-      throw e;
+      // unknown → try next style
+    } catch (e) {
+      // Retail duplicate comes back as SOAPFault/500 with "already exists"
+      if (e?.name === 'SOAPFault' && /already exists/i.test(String(e.message||''))) {
+        createdOrExists = true;
+        break;
+      }
+      throw e; // real error
     }
   }
-  return await tcSetPassword(email, password);
+
+  // Always set Battle.net password (guarantees SRP salt/verifier are set)
+  await callSoap(
+    `bnetaccount set password "${email.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}"`
+  ).catch(async (e) => {
+    // On 3.3.5, fall back silently
+    await callSoap(
+      `account set password "${email.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}" "${password.replace(/"/g,'\\"')}"`
+    );
+  });
+
+  // Always ensure at least one game account exists
+  await tcEnsureGameAccount(email);
+
+  return createdOrExists ? 'created-or-existed' : 'existed';
 }
 
 app.get('/api/status', async (req, res) => {
