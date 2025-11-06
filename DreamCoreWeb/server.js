@@ -287,6 +287,18 @@ function buildSoapEnvelope(command) {
 </SOAP-ENV:Envelope>`;
 }
 
+function buildSoapFaultError(text) {
+  const match = text.match(/<faultstring>([\s\S]*?)<\/faultstring>/i);
+  if (!match) return null;
+  const message = match[1].trim();
+  const err = new Error(message || 'SOAP Fault');
+  err.name = 'SoapFaultError';
+  err.isSoapFault = true;
+  err.soapMessage = message;
+  err.raw = text;
+  return err;
+}
+
 async function callSoap(command) {
   const xml = buildSoapEnvelope(command);
   const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
@@ -300,9 +312,10 @@ async function callSoap(command) {
     console.error('SOAP HTTP error', resp.status, resp.statusText, '\nBody:\n', text);
     throw new Error(`SOAP HTTP ${resp.status}`);
   }
-  if (/<(?:soap|SOAP).*Fault/i.test(text)) {
+  const fault = buildSoapFaultError(text);
+  if (fault) {
     console.error('SOAP Fault:\n', text);
-    throw new Error('SOAP Fault');
+    throw fault;
   }
   return text;
 }
@@ -314,6 +327,10 @@ function extractSoapReturn(text) {
 
 const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
 
+const isUnknownCommandMessage = (msg) => /unknown command|no such command|usage:/i.test(msg || '');
+const isAlreadyExistsMessage = (msg) => /already exists/i.test(msg || '');
+const messageFromError = (err) => (err && (err.soapMessage || err.message || '')).toString();
+
 async function tcSetPassword(identifier, newPassword) {
   const tries = [
     `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
@@ -321,10 +338,19 @@ async function tcSetPassword(identifier, newPassword) {
   ];
   let last = '';
   for (const cmd of tries) {
-    const raw = await callSoap(cmd);
-    const msg = extractSoapReturn(raw);
-    last = msg;
-    if (!/unknown command|no such command|usage:/i.test(msg)) return raw;
+    try {
+      const raw = await callSoap(cmd);
+      const msg = extractSoapReturn(raw);
+      last = msg;
+      if (!isUnknownCommandMessage(msg)) return raw;
+    } catch (err) {
+      if (err.isSoapFault) {
+        const msg = messageFromError(err);
+        last = msg;
+        if (isUnknownCommandMessage(msg)) continue;
+      }
+      throw err;
+    }
   }
   return last;
 }
@@ -336,13 +362,26 @@ async function tcEnsureAccount(email, password) {
   ];
   let out = '';
   for (const cmd of createTries) {
-    out = await callSoap(cmd);
-    const msg = extractSoapReturn(out);
-    if (/already exists/i.test(msg)) {
-      const resetOut = await tcSetPassword(email, password);
-      return resetOut;
+    try {
+      out = await callSoap(cmd);
+      const msg = extractSoapReturn(out);
+      if (isAlreadyExistsMessage(msg)) {
+        const resetOut = await tcSetPassword(email, password);
+        return resetOut;
+      }
+      if (!isUnknownCommandMessage(msg)) return out;
+    } catch (err) {
+      if (err.isSoapFault) {
+        const msg = messageFromError(err);
+        out = msg;
+        if (isAlreadyExistsMessage(msg)) {
+          const resetOut = await tcSetPassword(email, password);
+          return resetOut;
+        }
+        if (isUnknownCommandMessage(msg)) continue;
+      }
+      throw err;
     }
-    if (!/unknown command|no such command|usage:/i.test(msg)) return out;
   }
   return out;
 }
