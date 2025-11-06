@@ -70,6 +70,7 @@ const CONFIG = {
   SESSION_TTL_HOURS: Number(process.env.SESSION_TTL_HOURS || 24),
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || 'dreamcore_session',
   COOKIE_SECURE: (process.env.COOKIE_SECURE || 'true').toLowerCase() === 'true',
+  CHARACTER_CACHE_TTL_MS: Number(process.env.CHARACTER_CACHE_TTL_MS || 30 * 1000),
 };
 
 // ----- DB (MariaDB for pending verifications) -----
@@ -142,6 +143,10 @@ const charPool = await mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
+
+const REALM_DB_CONFIGS = loadRealmDbConfigs();
+const REALM_POOL_ENTRIES = buildRealmPoolEntries(REALM_DB_CONFIGS);
+const REALM_LOOKUP = createRealmLookup(REALM_POOL_ENTRIES);
 
 // Ensure table exists (and de-dupe by email)
 await pool.query(`
@@ -405,6 +410,448 @@ function matchesSrpHash({ storedHash, salt, verifier }, email, password) {
     }
   }
   return false;
+}
+
+const CHARACTER_CACHE_TTL = (() => {
+  const ms = Number(CONFIG.CHARACTER_CACHE_TTL_MS);
+  if (Number.isFinite(ms) && ms >= 1000) return ms;
+  return 30 * 1000;
+})();
+
+const CHARACTER_CACHE = new Map();
+
+function pruneCharacterCache() {
+  if (!CHARACTER_CACHE.size) return;
+  const now = Date.now();
+  for (const [key, entry] of CHARACTER_CACHE.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      CHARACTER_CACHE.delete(key);
+    }
+  }
+}
+
+if (CHARACTER_CACHE_TTL > 0) {
+  const sweepInterval = setInterval(pruneCharacterCache, Math.max(CHARACTER_CACHE_TTL * 2, 60 * 1000));
+  sweepInterval.unref?.();
+}
+
+function loadRealmDbConfigs() {
+  const fallbackName = process.env.DEFAULT_REALM_NAME || `${CONFIG.BRAND_NAME || 'DreamCore'} Realm`;
+  const fallback = [
+    {
+      key: 'default',
+      realmId: null,
+      name: fallbackName,
+      host: CHAR_DB.HOST,
+      port: CHAR_DB.PORT,
+      user: CHAR_DB.USER,
+      password: CHAR_DB.PASS,
+      database: CHAR_DB.NAME,
+      charactersTable: 'characters',
+      charDbLabel: CHAR_DB.NAME,
+      useDefaultPool: true,
+    },
+  ];
+  const raw = process.env.REALM_DATABASES;
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) {
+      return fallback;
+    }
+    return parsed.map((item, idx) => {
+      const cfg = {
+        key: String(item.key || item.name || item.realmId || idx),
+        realmId: item.realmId ?? item.realmID ?? null,
+        name: item.name || fallbackName,
+        host: item.host || CHAR_DB.HOST,
+        port: Number(item.port || CHAR_DB.PORT),
+        user: item.user || item.username || CHAR_DB.USER,
+        password: item.password || item.pass || CHAR_DB.PASS,
+        database: item.database || item.db || CHAR_DB.NAME,
+        charactersTable: item.charactersTable || item.table || 'characters',
+        charDbLabel: item.charDb || item.char_db || null,
+        useDefaultPool: false,
+      };
+      if (!Number.isFinite(cfg.port) || cfg.port <= 0) cfg.port = CHAR_DB.PORT;
+      if (cfg.charDbLabel == null || cfg.charDbLabel === '') {
+        cfg.charDbLabel = cfg.database;
+      }
+      return cfg;
+    });
+  } catch (err) {
+    console.warn('Failed to parse REALM_DATABASES', err?.message || err);
+    return fallback;
+  }
+}
+
+function buildRealmPoolEntries(configs) {
+  return configs.map((cfg, idx) => {
+    const key = cfg.key || `realm-${idx}`;
+    const reuseDefault =
+      cfg.useDefaultPool ||
+      (idx === 0 &&
+        cfg.host === CHAR_DB.HOST &&
+        cfg.port === CHAR_DB.PORT &&
+        cfg.user === CHAR_DB.USER &&
+        cfg.password === CHAR_DB.PASS &&
+        cfg.database === CHAR_DB.NAME);
+    const pool = reuseDefault
+      ? charPool
+      : mysql.createPool({
+          host: cfg.host,
+          port: cfg.port,
+          user: cfg.user,
+          password: cfg.password,
+          database: cfg.database,
+          waitForConnections: true,
+          connectionLimit: 10,
+          namedPlaceholders: true,
+        });
+    const normalizedCharDb = String(cfg.charDbLabel || cfg.database || '').toLowerCase();
+    return {
+      key,
+      pool,
+      config: {
+        ...cfg,
+        key,
+        charactersTable: String(cfg.charactersTable || 'characters'),
+        charDbLabel: normalizedCharDb,
+      },
+    };
+  });
+}
+
+function createRealmLookup(entries) {
+  const lookup = {
+    default: entries[0] || null,
+    byId: new Map(),
+    byCharDb: new Map(),
+    entries,
+  };
+  for (const entry of entries) {
+    const { config } = entry;
+    const realmIdNum = toSafeNumber(config.realmId);
+    if (realmIdNum != null && !lookup.byId.has(realmIdNum)) {
+      lookup.byId.set(realmIdNum, entry);
+    }
+    const dbLabel = (config.charDbLabel || config.database || '').toLowerCase();
+    if (dbLabel) lookup.byCharDb.set(dbLabel, entry);
+  }
+  return lookup;
+}
+
+function resolveRealmEntry({ realmId, realmCharDb }) {
+  const numericRealmId = toSafeNumber(realmId);
+  if (numericRealmId != null && REALM_LOOKUP.byId?.has(numericRealmId)) {
+    return REALM_LOOKUP.byId.get(numericRealmId);
+  }
+  if (realmCharDb) {
+    const key = String(realmCharDb).toLowerCase();
+    const byCharDb = REALM_LOOKUP.byCharDb?.get(key);
+    if (byCharDb) return byCharDb;
+  }
+  return REALM_LOOKUP.default || null;
+}
+
+function toSafeNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function safeIdentifier(value, fallback) {
+  const str = String(value || '').trim();
+  if (!str) return fallback;
+  if (!/^[0-9A-Za-z_]+$/.test(str)) return fallback;
+  return str;
+}
+
+function normalizeTimestamp(value) {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString();
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  const millis = num < 1e11 ? num * 1000 : num;
+  const date = new Date(millis);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+let REALM_DIRECTORY_CACHE = null;
+
+async function ensureRealmDirectory() {
+  if (REALM_DIRECTORY_CACHE) return REALM_DIRECTORY_CACHE;
+  try {
+    const [rows] = await authPool.query('SELECT id, name, char_db FROM `realmlist`');
+    REALM_DIRECTORY_CACHE = rows.map((row) => ({
+      id: toSafeNumber(row.id),
+      name: row.name || null,
+      charDb: row.char_db || row.charDb || null,
+    }));
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      REALM_DIRECTORY_CACHE = [];
+    } else {
+      console.error('Failed to load realm directory', err);
+      REALM_DIRECTORY_CACHE = [];
+    }
+  }
+  return REALM_DIRECTORY_CACHE;
+}
+
+async function fetchGameAccountsForBnet(bnetAccountId) {
+  if (bnetAccountId == null) return [];
+  const accounts = [];
+  let missingLinkTable = false;
+  let missingGameAccountTable = false;
+  try {
+    const [rows] = await authPool.query(
+      `SELECT link.gameaccountid AS gameAccountId,
+              ga.id AS gaId,
+              ga.username AS username,
+              ga.realmID AS realmId,
+              r.name AS realmName,
+              r.char_db AS realmCharDb
+         FROM \`bnetaccount_gameaccount\` AS link
+         JOIN \`gameaccount\` AS ga ON ga.id = link.gameaccountid
+         LEFT JOIN \`realmlist\` AS r ON r.id = ga.realmID
+        WHERE link.bnetaccountid = ?`,
+      [bnetAccountId]
+    );
+    for (const row of rows) {
+      accounts.push({
+        gameAccountId: toSafeNumber(row.gameAccountId ?? row.gaId ?? row.id),
+        username: row.username || null,
+        realmId: toSafeNumber(row.realmId ?? row.realmID),
+        realmName: row.realmName || null,
+        realmCharDb: row.realmCharDb || row.char_db || null,
+      });
+    }
+    if (accounts.length) {
+      return accounts;
+    }
+  } catch (err) {
+    const message = String(err?.message || '').toLowerCase();
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      if (message.includes('bnetaccount_gameaccount')) {
+        missingLinkTable = true;
+      } else {
+        missingGameAccountTable = true;
+      }
+    } else if (err?.code !== 'ER_BAD_FIELD_ERROR') {
+      throw err;
+    }
+  }
+
+  if (missingLinkTable) {
+    return accounts;
+  }
+
+  if (!accounts.length) {
+    try {
+      const [rows] = await authPool.query(
+        `SELECT link.gameaccountid AS gameAccountId,
+                acc.id AS accountId,
+                acc.username AS username,
+                acc.realmID AS realmId
+           FROM \`bnetaccount_gameaccount\` AS link
+           JOIN \`account\` AS acc ON acc.id = link.gameaccountid
+          WHERE link.bnetaccountid = ?`,
+        [bnetAccountId]
+      );
+      const realms = await ensureRealmDirectory();
+      for (const row of rows) {
+        const realmId = toSafeNumber(row.realmId ?? row.realmID);
+        const realmInfo = realms.find((r) => r.id === realmId) || null;
+        accounts.push({
+          gameAccountId: toSafeNumber(row.gameAccountId ?? row.accountId),
+          username: row.username || null,
+          realmId,
+          realmName: realmInfo?.name || null,
+          realmCharDb: realmInfo?.charDb || null,
+        });
+      }
+    } catch (err) {
+      if (err?.code === 'ER_NO_SUCH_TABLE' && missingGameAccountTable) {
+        return accounts;
+      }
+      if (err?.code !== 'ER_NO_SUCH_TABLE') {
+        throw err;
+      }
+    }
+  }
+
+  return accounts;
+}
+
+function entryCharactersTable(entry) {
+  return safeIdentifier(entry?.config?.charactersTable, 'characters');
+}
+
+async function loadBattleNetCharacters(bnetAccountId) {
+  const gameAccounts = await fetchGameAccountsForBnet(bnetAccountId);
+  if (!gameAccounts.length) {
+    return { characters: [], realms: [] };
+  }
+
+  const characters = [];
+  const realmMetaMap = new Map();
+  const groups = new Map();
+
+  for (const account of gameAccounts) {
+    const realmEntry = resolveRealmEntry(account);
+    if (!realmEntry) continue;
+    const realmId = toSafeNumber(account.realmId);
+    const realmName = account.realmName || realmEntry.config.name || 'Realm';
+    const groupKey = `${realmEntry.key}#${realmId ?? 'null'}`;
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = {
+        entry: realmEntry,
+        accountIds: [],
+        realmId,
+        realmName,
+      };
+      groups.set(groupKey, group);
+    }
+    if (account.gameAccountId != null) {
+      group.accountIds.push(account.gameAccountId);
+    }
+    let realmMeta = realmMetaMap.get(groupKey);
+    if (!realmMeta) {
+      realmMeta = {
+        id: realmId,
+        name: realmName,
+        accounts: [],
+        hasCharacters: false,
+      };
+      realmMetaMap.set(groupKey, realmMeta);
+    }
+    if (account.gameAccountId != null) {
+      const id = toSafeNumber(account.gameAccountId);
+      if (id != null) {
+        realmMeta.accounts.push({
+          id,
+          username: account.username || null,
+        });
+      }
+    }
+  }
+
+  for (const group of groups.values()) {
+    if (!group.accountIds.length) continue;
+    const placeholders = group.accountIds.map(() => '?').join(', ');
+    const tableName = entryCharactersTable(group.entry);
+    try {
+      const [rows] = await group.entry.pool.query(
+        `SELECT account, name, level, class, race, logout_time FROM \`${tableName}\` WHERE account IN (${placeholders})`,
+        group.accountIds
+      );
+      const realmMeta = realmMetaMap.get(`${group.entry.key}#${group.realmId ?? 'null'}`);
+      for (const row of rows) {
+        const accountId = toSafeNumber(row.account ?? row.accountId ?? row.id);
+        const lastLogin = normalizeTimestamp(
+          row.logout_time ?? row.logoutTime ?? row.last_login ?? row.lastLogin
+        );
+        const character = {
+          name: row.name,
+          level: Number(row.level),
+          class: Number(row.class),
+          race: Number(row.race),
+          realm: {
+            id: group.realmId,
+            name: group.realmName,
+          },
+          lastLogin,
+        };
+        if (accountId != null) {
+          character.gameAccountId = accountId;
+        }
+        characters.push(character);
+        if (realmMeta) {
+          realmMeta.hasCharacters = true;
+        }
+      }
+    } catch (err) {
+      console.error('Character lookup failed for realm', group.realmId ?? 'unknown', err);
+      const realmMeta = realmMetaMap.get(`${group.entry.key}#${group.realmId ?? 'null'}`);
+      if (realmMeta) {
+        realmMeta.error = 'Character lookup failed';
+      }
+    }
+  }
+
+  characters.sort((a, b) => {
+    const realmA = a.realm?.name || '';
+    const realmB = b.realm?.name || '';
+    const realmCompare = realmA.localeCompare(realmB, undefined, { sensitivity: 'base' });
+    if (realmCompare !== 0) return realmCompare;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  const realms = Array.from(realmMetaMap.values()).map((realm) => {
+    const seen = new Set();
+    const accounts = [];
+    for (const acc of realm.accounts) {
+      if (acc?.id == null) continue;
+      if (seen.has(acc.id)) continue;
+      seen.add(acc.id);
+      accounts.push({
+        id: acc.id,
+        username: acc.username || null,
+      });
+    }
+    return {
+      id: realm.id,
+      name: realm.name,
+      accounts,
+      hasCharacters: !!realm.hasCharacters,
+      error: realm.error || null,
+    };
+  });
+
+  return { characters, realms };
+}
+
+function createEmptyCharacterResponse() {
+  const refreshedAt = new Date().toISOString();
+  return {
+    ok: true,
+    characters: [],
+    realms: [],
+    summary: { totalCharacters: 0, totalRealms: 0 },
+    message: 'No characters found for this account.',
+    refreshedAt,
+  };
+}
+
+async function buildCharactersResponse(accountId) {
+  const normalizedId = toSafeNumber(accountId);
+  if (normalizedId == null) {
+    return createEmptyCharacterResponse();
+  }
+  const roster = await loadBattleNetCharacters(normalizedId);
+  const refreshedAt = new Date().toISOString();
+  const payload = {
+    ok: true,
+    characters: roster.characters,
+    realms: roster.realms,
+    summary: {
+      totalCharacters: roster.characters.length,
+      totalRealms: roster.realms.length,
+    },
+    refreshedAt,
+  };
+  if (!roster.characters.length) {
+    payload.message = 'No characters found for this account.';
+  }
+  return payload;
 }
 
 function hashSessionToken(token) {
@@ -731,6 +1178,33 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
 app.get('/api/session', requireSession, (req, res) => {
   res.json({ ok: true, session: { accountId: req.session.account_id, email: req.session.email, expiresAt: req.session.expires_at } });
+});
+
+app.get('/api/characters', requireSession, async (req, res) => {
+  try {
+    const accountId = req.session?.account_id;
+    const cacheKey = accountId != null ? String(accountId) : null;
+    if (cacheKey) {
+      const cached = CHARACTER_CACHE.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return res.json(cached.payload);
+      }
+    }
+
+    const payload = await buildCharactersResponse(accountId);
+
+    if (cacheKey) {
+      CHARACTER_CACHE.set(cacheKey, {
+        expiresAt: Date.now() + CHARACTER_CACHE_TTL,
+        payload,
+      });
+    }
+
+    return res.json(payload);
+  } catch (e) {
+    console.error('Character roster lookup failed', e);
+    return res.status(500).json({ error: 'Unable to load characters' });
+  }
 });
 
 // ----- API: Register -----
