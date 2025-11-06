@@ -1657,7 +1657,7 @@ function extractSoapReturn(text) {
   return m ? m[1].trim() : text.trim();
 }
 
-const q = s => String(s);
+const q = (s) => `"${String(s).replace(/(["\\])/g, '\\$1')}"`;
 
 function stripEntities(s) {
   return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -1676,7 +1676,9 @@ async function tcSetPassword(identifier, newPassword) {
       `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
     );
   }
-  tries.push(`account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`);
+  if (!/@/.test(identifier)) {
+    tries.push(`account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`);
+  }
   let last = '';
   for (const cmd of tries) {
     const raw = await callSoap(cmd).catch(e => e);
@@ -1731,15 +1733,13 @@ async function tcCreateOrReset_CLASSIC(email, password) {
   }
 }
 
-let CAP_CACHE = { checked: false, bnet: false };
+let _supportsBNET;
 async function tcSupportsBNET() {
-  if (CAP_CACHE.checked) return CAP_CACHE.bnet;
-  const probe = await callSoap('bnetaccount help').catch(e => e);
-  CAP_CACHE.checked = true;
-  if (probe instanceof Error) { CAP_CACHE.bnet = false; return false; }
-  const msg = stripEntities(extractSoapReturn(probe));
-  CAP_CACHE.bnet = !/unknown command|no such command/i.test(msg);
-  return CAP_CACHE.bnet;
+  if (_supportsBNET !== undefined) return _supportsBNET;
+  const raw = await callSoap('bnetaccount help').catch(() => null);
+  const msg = raw ? extractSoapReturn(raw) : '';
+  _supportsBNET = !!raw && !looksUnknownOrUsage(msg);
+  return _supportsBNET;
 }
 
 async function tcEnsureAccount(email, password) {
