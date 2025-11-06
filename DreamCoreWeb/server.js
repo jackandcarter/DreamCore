@@ -274,14 +274,20 @@ async function verifyTurnstile(token, ip) {
   return !!data.success;
 }
 
+const escapeXml = (value) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
 function buildSoapEnvelope(command) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
   <SOAP-ENV:Body>
     <ns1:executeCommand xmlns:ns1="urn:TC">
-      <username>${CONFIG.TC_SOAP_USER}</username>
-      <password>${CONFIG.TC_SOAP_PASS}</password>
-      <command>${command}</command>
+      <command>${escapeXml(command)}</command>
     </ns1:executeCommand>
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>`;
@@ -301,9 +307,14 @@ function buildSoapFaultError(text) {
 
 async function callSoap(command) {
   const xml = buildSoapEnvelope(command);
+  const auth = Buffer.from(`${CONFIG.TC_SOAP_USER}:${CONFIG.TC_SOAP_PASS}`).toString('base64');
+
   const resp = await fetch(`http://${CONFIG.TC_SOAP_HOST}:${CONFIG.TC_SOAP_PORT}/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      Authorization: `Basic ${auth}`,
+    },
     body: xml,
   });
 
