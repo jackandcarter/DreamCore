@@ -61,6 +61,7 @@ const CONFIG = {
   GUIDE_URL:
     process.env.GUIDE_URL ||
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
+USE_BNET: (process.env.USE_BNET || 'true').toLowerCase() === 'true',
 
   // Registration constraints
   MIN_PASS: Number(process.env.MIN_PASS || 8),
@@ -337,6 +338,24 @@ function looksUnknownOrUsage(msg) {
 }
 
 // ------ TrinityCore ops (idempotent) ------
+let CAP_CACHE = { checked: false, bnet: false };
+
+async function tcSupportsBNET() {
+  // Honor explicit config first — no probing if the operator set the flag.
+  if (typeof CONFIG.USE_BNET === 'boolean') {
+    CAP_CACHE.checked = true;
+    CAP_CACHE.bnet = CONFIG.USE_BNET;
+    return CAP_CACHE.bnet;
+  }
+  if (CAP_CACHE.checked) return CAP_CACHE.bnet;
+  const probe = await callSoap('bnetaccount help').catch(e => e);
+  CAP_CACHE.checked = true;
+  if (probe instanceof Error) { CAP_CACHE.bnet = false; return false; }
+  const msg = stripEntities(extractSoapReturn(probe));
+  CAP_CACHE.bnet = !/unknown command|no such command/i.test(msg);
+  return CAP_CACHE.bnet;
+}
+
 async function tcSetPassword(identifier, newPassword) {
   const tries = [
     `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
@@ -348,7 +367,7 @@ async function tcSetPassword(identifier, newPassword) {
     if (raw instanceof Error) { last = String(raw.message||''); continue; }
     const msg = extractSoapReturn(raw);
     last = msg;
-    if (!looksUnknownOrUsage(msg)) return raw; // success path
+    if (!looksUnknownOrUsage(msg)) return raw;
   }
   return last;
 }
@@ -362,37 +381,33 @@ async function tcBnetLookup(email) {
 }
 
 async function tcEnsureGameAccount(email) {
-  const cmd = `bnetaccount gameaccountcreate ${q(email)}`; // expansions left blank (auto / server default)
+  // Expansion/build omitted — most master builds accept defaults.
   try {
-    const out = await callSoap(cmd);
+    const out = await callSoap(`bnetaccount gameaccountcreate ${q(email)}`);
     const msg = stripEntities(extractSoapReturn(out));
     if (/already exists|exists/i.test(msg)) return 'ok';
     return out;
   } catch (e) {
-    const msg = String(e?.message || '').toLowerCase();
-    if (e?.name === 'SOAPFault' && /already exists|exists/.test(msg)) return 'ok';
+    const m = String(e?.message||'').toLowerCase();
+    if (e?.name === 'SOAPFault' && /already exists|exists/.test(m)) return 'ok';
     throw e;
   }
 }
 
 async function tcCreateOrReset_BNET(email, password) {
-  // 1) If exists -> reset pw; else create
   const look = await tcBnetLookup(email);
   if (look.exists) {
     await tcSetPassword(email, password);
   } else {
     const out = await callSoap(`bnetaccount create ${q(email)} ${q(password)}`);
     const msg = stripEntities(extractSoapReturn(out));
-    if (/already exists/i.test(msg)) {
-      await tcSetPassword(email, password);
-    }
+    if (/already exists/i.test(msg)) await tcSetPassword(email, password);
   }
-  // 2) Ensure at least one retail game account exists
   await tcEnsureGameAccount(email);
 }
 
 async function tcCreateOrReset_CLASSIC(email, password) {
-  // Classic auth (no Battle.net)
+  // classic: email used as username, simple create or reset
   try {
     const out = await callSoap(`account create ${q(email)} ${q(password)}`);
     const msg = stripEntities(extractSoapReturn(out));
@@ -408,33 +423,19 @@ async function tcCreateOrReset_CLASSIC(email, password) {
   }
 }
 
-let CAP_CACHE = { checked: false, bnet: false };
-async function tcSupportsBNET() {
-  if (CAP_CACHE.checked) return CAP_CACHE.bnet;
-  const probe = await callSoap('bnetaccount help').catch(e => e);
-  CAP_CACHE.checked = true;
-  if (probe instanceof Error) { CAP_CACHE.bnet = false; return false; }
-  const msg = stripEntities(extractSoapReturn(probe));
-  CAP_CACHE.bnet = !/unknown command|no such command/i.test(msg);
-  return CAP_CACHE.bnet;
-}
-
 async function tcEnsureAccount(email, password) {
-  if (await tcSupportsBNET()) {
-    return await tcCreateOrReset_BNET(email, password);
-  } else {
-    return await tcCreateOrReset_CLASSIC(email, password);
+  if (CONFIG.USE_BNET === true) {
+    return tcCreateOrReset_BNET(email, password);
   }
+  if (CONFIG.USE_BNET === false) {
+    return tcCreateOrReset_CLASSIC(email, password);
+  }
+  // If operator didn’t force a mode, probe once.
+  return (await tcSupportsBNET())
+    ? tcCreateOrReset_BNET(email, password)
+    : tcCreateOrReset_CLASSIC(email, password);
 }
 
-app.get('/api/status', async (req, res) => {
-  try {
-    const out = await callSoap('server info');
-    res.json({ ok: true, info: extractSoapReturn(out) });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
 
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
