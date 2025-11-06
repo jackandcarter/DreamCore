@@ -346,6 +346,15 @@ function extractSoapReturn(text) {
 
 const q = s => `"${String(s).replace(/"/g, '\\"')}"`;
 
+function stripEntities(s) {
+  return String(s).replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function isAlreadyExistsMessage(msg) {
+  const m = stripEntities(msg);
+  return /already exists/i.test(m);
+}
+
 async function tcSetPassword(identifier, newPassword) {
   const tries = [
     `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
@@ -366,17 +375,21 @@ async function tcEnsureAccount(email, password) {
     `bnetaccount create ${q(email)} ${q(password)}`,
     `account create ${q(email)} ${q(password)}`
   ];
-  let out = '';
   for (const cmd of createTries) {
-    out = await callSoap(cmd);
-    const msg = extractSoapReturn(out);
-    if (/already exists/i.test(msg)) {
-      const resetOut = await tcSetPassword(email, password);
-      return resetOut;
+    try {
+      const out = await callSoap(cmd);
+      const msg = extractSoapReturn(out);
+      if (!/unknown command|no such command|usage:/i.test(msg)) return out;
+      continue;
+    } catch (e) {
+      if (e && e.name === 'SOAPFault' && isAlreadyExistsMessage(String(e.message || ''))) {
+        return await tcSetPassword(email, password);
+      }
+      console.error('SOAPFault during create:', e.message);
+      throw e;
     }
-    if (!/unknown command|no such command|usage:/i.test(msg)) return out;
   }
-  return out;
+  return await tcSetPassword(email, password);
 }
 
 app.get('/api/status', async (req, res) => {
