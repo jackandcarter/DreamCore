@@ -1664,15 +1664,19 @@ function stripEntities(s) {
 }
 
 function looksUnknownOrUsage(msg) {
-  return /unknown command|no such command|usage:/i.test(msg);
+  return /unknown command|no such command|usage:|syntax:/i.test(msg);
 }
 
 // ------ TrinityCore ops (idempotent) ------
 async function tcSetPassword(identifier, newPassword) {
-  const tries = [
-    `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`,
-    `account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
-  ];
+  const tries = [];
+  if (await tcSupportsBNET()) {
+    tries.push(
+      `bnetaccount set password ${q(identifier)} ${q(newPassword)}`,
+      `bnetaccount set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`
+    );
+  }
+  tries.push(`account set password ${q(identifier)} ${q(newPassword)} ${q(newPassword)}`);
   let last = '';
   for (const cmd of tries) {
     const raw = await callSoap(cmd).catch(e => e);
@@ -2029,7 +2033,7 @@ app.post('/api/password-reset/confirm', async (req, res) => {
     const soapResponse = await tcSetPassword(entry.email, password);
     const message = typeof soapResponse === 'string' ? stripEntities(extractSoapReturn(soapResponse)) : '';
     const normalized = message.toLowerCase();
-    if (!message || /unknown command|usage:|no such command|not found|no account|invalid/i.test(normalized)) {
+    if (!message || /unknown command|usage:|no such command|not found|no account|invalid|syntax:/i.test(normalized)) {
       console.error('SOAP password reset returned unexpected response', { message, email: maskEmail(entry.email) });
       return res.status(502).json({ error: 'Unable to reset password' });
     }
