@@ -325,7 +325,7 @@ const REG_PAGE = () => `<!doctype html>
 </body>
 </html>`;
 
-const CLIENT_JS = `(() => {
+const clientScript = () => {
   const form = document.getElementById('regForm');
   const msg = document.getElementById('msg');
   form.addEventListener('submit', async (e) => {
@@ -354,7 +354,8 @@ const CLIENT_JS = `(() => {
     }
     msg.textContent = 'Check your email for a verification link to finish account creation.';
   });
-})();`;
+};
+const CLIENT_JS = `(${clientScript.toString()})();`;
 
 const LOGIN_PAGE = () => `<!doctype html>
 <html lang="en">
@@ -433,7 +434,7 @@ const LOGIN_PAGE = () => `<!doctype html>
 </body>
 </html>`;
 
-const LOGIN_JS = `(() => {
+const loginScript = () => {
   const form = document.getElementById('loginForm');
   const msg = document.getElementById('loginMsg');
   const submit = document.getElementById('loginSubmit');
@@ -477,7 +478,7 @@ const LOGIN_JS = `(() => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        msg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to login.';
+        msg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to login.';
         return;
       }
       msg.textContent = 'Login successful. Redirecting…';
@@ -491,7 +492,8 @@ const LOGIN_JS = `(() => {
   });
 
   checkSession();
-})();`;
+};
+const LOGIN_JS = `(${loginScript.toString()})();`;
 
 const RESET_PAGE = () => `<!doctype html>
 <html lang="en">
@@ -590,7 +592,7 @@ const RESET_PAGE = () => `<!doctype html>
 </body>
 </html>`;
 
-const RESET_JS = `(() => {
+const resetScript = () => {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token') || '';
   const requestSection = document.getElementById('resetRequest');
@@ -643,7 +645,9 @@ const RESET_JS = `(() => {
         requestMsg.textContent = 'If that email is registered, a reset link is on the way. Check your inbox!';
       } else {
         const data = await res.json().catch(() => ({}));
-        requestMsg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to submit reset request.';
+        requestMsg.textContent = data?.error
+          ? 'Error: ' + data.error
+          : 'Unable to submit reset request.';
       }
     } catch (err) {
       console.error('Reset request failed', err);
@@ -679,7 +683,9 @@ const RESET_JS = `(() => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        confirmMsg.textContent = data?.error ? `Error: ${data.error}` : 'Unable to reset password.';
+        confirmMsg.textContent = data?.error
+          ? 'Error: ' + data.error
+          : 'Unable to reset password.';
         return;
       }
       confirmMsg.textContent = 'Password updated! You can now log in with your new credentials.';
@@ -690,7 +696,8 @@ const RESET_JS = `(() => {
       setLoading(confirmSubmit, false);
     }
   });
-})();`;
+};
+const RESET_JS = `(${resetScript.toString()})();`;
 
 const CHARACTERS_PAGE = () => `<!doctype html>
 <html lang="en">
@@ -751,7 +758,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
 </body>
 </html>`;
 
-const CHARACTERS_JS = `(() => {
+const charactersScript = () => {
   const rosterStatus = document.getElementById('rosterStatus');
   const characterGrid = document.getElementById('characterGrid');
   const totalCharacters = document.getElementById('totalCharacters');
@@ -876,7 +883,9 @@ const CHARACTERS_JS = `(() => {
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        rosterStatus.textContent = data?.error ? `Error: ${data.error}` : 'Unable to load characters.';
+        rosterStatus.textContent = data?.error
+          ? 'Error: ' + data.error
+          : 'Unable to load characters.';
         characterGrid.innerHTML = '';
         return;
       }
@@ -904,7 +913,8 @@ const CHARACTERS_JS = `(() => {
   });
 
   loadSessionAndRoster();
-})();`;
+};
+const CHARACTERS_JS = `(${charactersScript.toString()})();`;
 
 app.get('/', (req, res) => res.type('html').send(REG_PAGE()));
 app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIENT_JS));
