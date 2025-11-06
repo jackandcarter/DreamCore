@@ -4,6 +4,7 @@ build-*/
 out/
 bin/
 lib/
+!DreamCoreWeb/lib/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
