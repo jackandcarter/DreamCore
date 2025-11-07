@@ -1942,7 +1942,7 @@ app.post('/api/password-reset/confirm', async (req, res) => {
       return badRequest(res, 'Invalid or expired token');
     }
 
-    await retailPasswordReset({ soap: SOAP, authPool, email: normalizedEmail, newPassword: password });
+    await retailPasswordReset({ soap: SOAP, email: normalizedEmail, newPassword: password });
 
     await pool.execute('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);
 
@@ -2016,7 +2016,6 @@ app.get('/verify', async (req, res) => {
     try {
       ensureResult = await ensureRetailAccount({
         soap: SOAP,
-        authPool,
         email: row.email,
         password: row.password,
         debug: CONFIG.SOAP_DEBUG,
