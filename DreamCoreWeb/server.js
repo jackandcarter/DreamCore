@@ -33,7 +33,6 @@ import mysql from 'mysql2/promise';
 import {
   makeSoapConfig,
   ensureRetailAccount,
-  retailPasswordReset,
   executeRetailCommand,
   normalizeEmail,
 } from './lib/trinitySoap.js';
@@ -1913,13 +1912,12 @@ app.get('/verify', async (req, res) => {
     try {
       ensureResult = await ensureRetailAccount({
         soap: SOAP,
-        authPool,
         email: row.email,
         password: row.password,
         debug: CONFIG.SOAP_DEBUG,
       });
     } catch (e) {
-      console.error('SOAP create/reset failed:', e);
+      console.error('SOAP create failed:', e);
       return res
         .status(502)
         .type('text/html')
@@ -1927,37 +1925,10 @@ app.get('/verify', async (req, res) => {
           VERIFY_PAGE({
             state: 'error',
             title: 'Unable to finalize your account',
-            message: 'Our account service had trouble completing the setup. No worries—your email is still reserved.',
+            message: 'We could not create your Battle.net account. Please try again in a minute.',
             steps: [
-              'Wait a moment and try the verification link again.',
-              'If the issue persists, open a support ticket so we can complete the registration for you.',
-            ],
-          })
-        );
-    }
-
-    const postCheck = await confirmRetailProvisioning(row.email);
-    if (!postCheck.ok) {
-      const logPayload = {
-        target: maskEmail(row.email),
-        reason: postCheck.reason,
-        bnetId: postCheck.bnetId ?? null,
-      };
-      if (ensureResult?.soapLog?.length) {
-        logPayload.soapLog = ensureResult.soapLog;
-      }
-      console.warn('Retail provisioning deferred', logPayload);
-      return res
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            state: 'pending',
-            title: "We'll finish this for you",
-            message:
-              "Your verification is in our queue, but we couldn't confirm the game license just yet. We'll finish linking it for you and email once it's live.",
-            steps: [
-              'No action needed—feel free to close this tab while we complete the setup.',
-              'If you still cannot log in after 15 minutes, open a support ticket and mention this verification message so we can prioritize the fix.',
+              'If it keeps failing, open a support ticket and include this error:',
+              String(e?.message || e),
             ],
           })
         );
@@ -1971,27 +1942,14 @@ app.get('/verify', async (req, res) => {
       .send(
         VERIFY_PAGE({
           state: 'success',
-          title: 'Account verified!',
-          message: `Your DreamCore login <strong>${escapeHtml(row.email)}</strong> is now active.`,
+          title: 'Your account is ready!',
+          message: 'Your Battle.net account for the private server has been created.',
           successSteps: [
-            {
-              number: 2,
-              title: 'Verification completed',
-              body: [
-                "Nice work—you've finished Step 2.",
-                'Your DreamCore account is active and ready for the final client setup steps below.',
-              ],
-            },
-            {
-              number: 3,
-              title: 'Review the DreamCore guide & latest updates',
-              body: [
-                "Before you dive in, read through the DreamCore guide that covers launcher tips, shortcut setup, and any hotfixes we've published.",
-                'Bookmark the page so you always have the newest client download links, bug fixes, and community news in one place.',
-              ],
-              cta: CONFIG.GUIDE_URL ? { href: CONFIG.GUIDE_URL, label: 'Open DreamCore Guide & Updates' } : null,
-            },
+            { title: 'Username (email)', body: [`${escapeHtml(row.email)}`] },
+            { title: 'Password', body: ['Use the password you chose during sign-up.'] },
+            { title: 'Next', body: ['Launch the game and log in with this Battle.net account.'] },
           ],
+          debug: CONFIG.SOAP_DEBUG ? [{ label: 'soapLog', data: ensureResult?.soapLog || [] }] : [],
         })
       );
   } catch (e) {
