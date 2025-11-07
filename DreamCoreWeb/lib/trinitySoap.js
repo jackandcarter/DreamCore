@@ -45,6 +45,10 @@ function extractReturn(xml) {
 
 const q = (s) => `"${String(s).replace(/(["\\])/g, "\\$1" )}"`;
 
+export function normalizeEmail(e) {
+  return String(e ?? "").trim().toLowerCase();
+}
+
 async function callSoap(soap, command) {
   const { host, port, user, pass } = soap;
   if (!host || !user || !pass) throw new Error("Missing SOAP configuration");
@@ -72,7 +76,7 @@ async function callSoap(soap, command) {
 
 // ---------- Deterministic naming ----------
 export function wowAccountNameForEmail(email) {
-  const norm = String(email || "").trim().toLowerCase();
+  const norm = normalizeEmail(email);
   const h = crypto.createHash("sha1").update(norm).digest("hex").slice(0, 8);
   return `w_${h}`;
 }
@@ -88,12 +92,32 @@ async function rows(authPool, sql, params) {
   return Array.isArray(r) ? r : [];
 }
 
+function safeNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 async function getBattlenet(authPool, email) {
-  return await row(
-    authPool,
-    "SELECT id, email FROM battlenet_accounts WHERE email = ? LIMIT 1",
-    [email.toLowerCase()]
-  );
+  const normalized = normalizeEmail(email);
+  const tables = ["bnetaccount", "battlenet_accounts"];
+  for (const table of tables) {
+    try {
+      const result = await row(
+        authPool,
+        `SELECT id, email FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
+        [normalized]
+      );
+      if (result) {
+        return { ...result, id: safeNumber(result.id) };
+      }
+    } catch (err) {
+      if (err?.code === "ER_NO_SUCH_TABLE" || err?.code === "ER_BAD_FIELD_ERROR") {
+        continue;
+      }
+      throw err;
+    }
+  }
+  return null;
 }
 
 async function getAccountByUsername(authPool, username) {
@@ -105,11 +129,47 @@ async function getAccountByUsername(authPool, username) {
 }
 
 async function getLinkedGameAccounts(authPool, bnetId) {
-  return await rows(
-    authPool,
-    "SELECT id, username, battlenet_account FROM account WHERE battlenet_account = ? ORDER BY id ASC",
-    [bnetId]
-  );
+  const queries = [
+    {
+      sql:
+        "SELECT ga.id AS id, ga.username AS username, ga.realmID AS realmID" +
+        " FROM `gameaccount` AS ga" +
+        " JOIN `bnetaccount_gameaccount` AS link ON link.gameaccountid = ga.id" +
+        " WHERE link.bnetaccountid = ? ORDER BY ga.id ASC",
+      mapper: (row) => ({
+        id: safeNumber(row.id),
+        username: row.username || null,
+        realmID: safeNumber(row.realmID ?? row.realmId),
+      }),
+    },
+    {
+      sql:
+        "SELECT acc.id AS id, acc.username AS username, acc.realmID AS realmID" +
+        " FROM `account` AS acc" +
+        " WHERE acc.battlenet_account = ? ORDER BY acc.id ASC",
+      mapper: (row) => ({
+        id: safeNumber(row.id),
+        username: row.username || null,
+        realmID: safeNumber(row.realmID ?? row.realmId),
+      }),
+    },
+  ];
+
+  for (const query of queries) {
+    try {
+      const result = await rows(authPool, query.sql, [bnetId]);
+      if (result.length) {
+        return result.map(query.mapper);
+      }
+    } catch (err) {
+      if (err?.code === "ER_NO_SUCH_TABLE" || err?.code === "ER_BAD_FIELD_ERROR") {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return [];
 }
 
 // ---------- Retail-only commands ----------
@@ -121,79 +181,79 @@ async function bnetSetPassword(soap, email, pass) {
   return callSoap(soap, `bnetaccount set password ${q(email)} ${q(pass)}`);
 }
 
-async function gameCreate(soap, username, pass) {
-  return callSoap(soap, `account create ${q(username)} ${q(pass)}`);
-}
-
-async function gameSetPassword(soap, username, pass) {
-  return callSoap(soap, `account set password ${q(username)} ${q(pass)} ${q(pass)}`);
-}
-
-async function linkBnetToGame(soap, email, username) {
-  return callSoap(soap, `bnetaccount link ${q(email)} ${q(username)}`);
+async function bnetGameAccountCreate(soap, email) {
+  return callSoap(soap, `bnetaccount gameaccount create ${q(email)}`);
 }
 
 // ---------- High-level flows (confirm via DB, not text) ----------
-export async function ensureRetailAccount({ soap, authPool, email, password }) {
+export async function ensureRetailAccount({ soap, authPool, email, password, debug = false }) {
   if (!soap || !authPool) throw new Error("Missing soap/authPool");
-  const normEmail = String(email || "").trim().toLowerCase();
-  const wowName = wowAccountNameForEmail(normEmail);
+  const normEmail = normalizeEmail(email);
 
-  const result = {
-    email: normEmail,
-    wowName,
-    actions: {
-      bnetCreated: false,
-      bnetPasswordSet: false,
-      gameCreated: false,
-      gamePasswordSet: false,
-      linked: false,
-    },
-    ids: { bnetId: null, gameId: null },
+  const soapLog = [];
+  const record = (line) => {
+    if (debug) {
+      soapLog.push(line);
+    }
+  };
+  const run = async (label, fn) => {
+    try {
+      const response = await fn();
+      record(`${label}: ${response?.ret ?? "ok"}`.slice(0, 240));
+      return response;
+    } catch (err) {
+      record(`${label} FAILED: ${String(err?.message || err).slice(0, 200)}`);
+      throw err;
+    }
   };
 
   let bnet = await getBattlenet(authPool, normEmail);
-  if (!bnet) {
-    await bnetCreate(soap, normEmail, password);
+  const hadBnet = !!bnet;
+  if (!hadBnet) {
+    await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
     bnet = await getBattlenet(authPool, normEmail);
-    if (!bnet) throw new Error("BNet create did not appear in DB");
-    result.actions.bnetCreated = true;
-  }
-  result.ids.bnetId = Number(bnet.id);
-
-  await bnetSetPassword(soap, normEmail, password);
-  result.actions.bnetPasswordSet = true;
-
-  let ga = await getAccountByUsername(authPool, wowName);
-  if (!ga) {
-    await gameCreate(soap, wowName, password);
-    ga = await getAccountByUsername(authPool, wowName);
-    if (!ga) throw new Error("Game account create did not appear in DB");
-    result.actions.gameCreated = true;
-  }
-  result.ids.gameId = Number(ga.id);
-
-  await gameSetPassword(soap, wowName, password);
-  result.actions.gamePasswordSet = true;
-
-  const beforeLink = await getLinkedGameAccounts(authPool, result.ids.bnetId);
-  const alreadyLinked = beforeLink.some((a) => Number(a.id) === result.ids.gameId);
-  if (!alreadyLinked) {
-    await linkBnetToGame(soap, normEmail, wowName);
-    const afterLink = await getLinkedGameAccounts(authPool, result.ids.bnetId);
-    const linked = afterLink.some((a) => Number(a.id) === result.ids.gameId);
-    if (!linked) throw new Error("Link did not appear in DB");
-    result.actions.linked = true;
-  } else {
-    result.actions.linked = true;
+    if (!bnet) throw new Error("Battle.net account create did not persist");
   }
 
-  return result;
+  await run("bnetaccount set password", () => bnetSetPassword(soap, normEmail, password));
+
+  const bnetId = safeNumber(bnet.id);
+  if (bnetId == null) {
+    throw new Error("Battle.net account missing numeric id");
+  }
+  let gameAccounts = await getLinkedGameAccounts(authPool, bnetId);
+  const hadGameAccount = gameAccounts.length > 0;
+
+  if (!hadGameAccount) {
+    try {
+      await run("bnetaccount gameaccount create", () => bnetGameAccountCreate(soap, normEmail));
+    } catch (err) {
+      throw err;
+    }
+    gameAccounts = await getLinkedGameAccounts(authPool, bnetId);
+    if (!gameAccounts.length) {
+      throw new Error("Game account create did not persist");
+    }
+  }
+
+  return {
+    ok: true,
+    email: normEmail,
+    bnetId,
+    gameAccounts: gameAccounts.map((entry) => ({
+      id: safeNumber(entry?.id),
+      username: entry?.username || null,
+      realmID: safeNumber(entry?.realmID ?? entry?.realmId),
+    })),
+    hadBnet,
+    hadGameAccount,
+    soapLog,
+  };
 }
 
 export async function retailPasswordReset({ soap, authPool, email, newPassword }) {
   if (!soap || !authPool) throw new Error("Missing soap/authPool");
-  const normEmail = String(email || "").trim().toLowerCase();
+  const normEmail = normalizeEmail(email);
   const wowName = wowAccountNameForEmail(normEmail);
 
   const bnet = await getBattlenet(authPool, normEmail);
@@ -203,15 +263,15 @@ export async function retailPasswordReset({ soap, authPool, email, newPassword }
 
   const ga = await getAccountByUsername(authPool, wowName);
   if (ga) {
-    await gameSetPassword(soap, wowName, newPassword);
+    await callSoap(soap, `account set password ${q(wowName)} ${q(newPassword)} ${q(newPassword)}`);
   }
 
   return {
     ok: true,
     email: normEmail,
     wowName,
-    bnetId: Number(bnet.id),
-    gameId: ga ? Number(ga.id) : null,
+    bnetId: safeNumber(bnet.id),
+    gameId: ga ? safeNumber(ga.id) : null,
   };
 }
 

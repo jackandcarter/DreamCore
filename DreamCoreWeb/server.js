@@ -35,6 +35,7 @@ import {
   ensureRetailAccount,
   retailPasswordReset,
   executeRetailCommand,
+  normalizeEmail,
 } from './lib/trinitySoap.js';
 
 // ----- CONFIG (read from env or inline defaults for dev) -----
@@ -47,6 +48,7 @@ const CONFIG = {
   TC_SOAP_PORT: Number(process.env.TC_SOAP_PORT || 7878),
   TC_SOAP_USER: process.env.TC_SOAP_USER || 'gm_account_name',
   TC_SOAP_PASS: process.env.TC_SOAP_PASS || 'gm_account_password',
+  SOAP_DEBUG: (process.env.SOAP_DEBUG || 'false').toLowerCase() === 'true',
 
   // Cloudflare Turnstile
   TURNSTILE_SITEKEY: process.env.TURNSTILE_SITEKEY || '1x00000000000000000000AA',
@@ -1354,6 +1356,30 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
   return accounts;
 }
 
+async function confirmRetailProvisioning(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    return { ok: false, reason: 'invalidEmail' };
+  }
+
+  const account = await getAuthAccountByEmail(normalized);
+  if (!account) {
+    return { ok: false, reason: 'missingAccount' };
+  }
+
+  const bnetId = toSafeNumber(account.id);
+  if (bnetId == null) {
+    return { ok: false, reason: 'missingBnetId' };
+  }
+
+  const gameAccounts = await fetchGameAccountsForBnet(bnetId);
+  if (!Array.isArray(gameAccounts) || !gameAccounts.length) {
+    return { ok: false, reason: 'missingGameAccount', bnetId };
+  }
+
+  return { ok: true, bnetId, gameAccounts };
+}
+
 function entryCharactersTable(entry) {
   return safeIdentifier(entry?.config?.charactersTable, 'characters');
 }
@@ -1555,6 +1581,7 @@ async function loadSession(req) {
 }
 
 async function persistSession(accountId, email, req) {
+  const normalizedEmail = normalizeEmail(email);
   const token = crypto.randomBytes(48).toString('base64url');
   const hashed = hashSessionToken(token);
   const now = Date.now();
@@ -1564,7 +1591,7 @@ async function persistSession(accountId, email, req) {
   await pool.execute(
     `REPLACE INTO sessions (id, account_id, email, created_at, expires_at, last_ip, last_user_agent)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [hashed, accountId, email, now, expiresAt, ip || null, userAgent || null]
+    [hashed, accountId, normalizedEmail, now, expiresAt, ip || null, userAgent || null]
   );
   return { token, expiresAt };
 }
@@ -1584,20 +1611,22 @@ async function requireSession(req, res, next) {
 }
 
 async function getAuthAccountByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
   const tables = ['bnetaccount', 'battlenet_accounts'];
   for (const table of tables) {
     try {
       const [rows] = await authPool.execute(
-        `SELECT id, email, sha_pass_hash, salt, verifier FROM \`${table}\` WHERE email = ? LIMIT 1`,
-        [email]
+        `SELECT id, email, sha_pass_hash, salt, verifier FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
+        [normalized]
       );
       if (rows.length) return rows[0];
     } catch (err) {
       if (err?.code === 'ER_BAD_FIELD_ERROR') {
         try {
           const [fallbackRows] = await authPool.execute(
-            `SELECT id, email, salt, verifier FROM \`${table}\` WHERE email = ? LIMIT 1`,
-            [email]
+            `SELECT id, email, salt, verifier FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
+            [normalized]
           );
           if (fallbackRows.length) {
             const row = fallbackRows[0];
@@ -1640,7 +1669,8 @@ app.get('/api/status', async (req, res) => {
 
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { email: rawEmail, password } = req.body || {};
+    const email = normalizeEmail(rawEmail);
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
 
@@ -1766,7 +1796,8 @@ app.get('/api/characters', requireSession, async (req, res) => {
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
   try {
-    const { password, email, cfToken } = req.body || {};
+    const { password, email: rawEmail, cfToken } = req.body || {};
+    const email = normalizeEmail(rawEmail);
 
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
@@ -1819,7 +1850,8 @@ app.post('/api/register', limiter, async (req, res) => {
 
 app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) => {
   try {
-    const { email } = req.body || {};
+    const { email: rawEmail } = req.body || {};
+    const email = normalizeEmail(rawEmail);
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
 
     const account = await getAuthAccountByEmail(email).catch((err) => {
@@ -1902,16 +1934,17 @@ app.post('/api/password-reset/confirm', async (req, res) => {
       return badRequest(res, 'Invalid or expired token');
     }
 
-    const account = await getAuthAccountByEmail(entry.email);
+    const normalizedEmail = normalizeEmail(entry.email);
+    const account = await getAuthAccountByEmail(normalizedEmail);
     if (!account) {
       await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
       console.warn('Password reset token has no matching account', { target: maskEmail(entry.email) });
       return badRequest(res, 'Invalid or expired token');
     }
 
-    await retailPasswordReset({ soap: SOAP, authPool, email: entry.email, newPassword: password });
+    await retailPasswordReset({ soap: SOAP, authPool, email: normalizedEmail, newPassword: password });
 
-    await pool.execute('DELETE FROM password_resets WHERE email = ?', [entry.email]);
+    await pool.execute('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);
 
     return res.json({ ok: true });
   } catch (e) {
@@ -1979,13 +2012,14 @@ app.get('/verify', async (req, res) => {
         );
     }
 
-    // Create/reset TC account now (idempotent) + ensure gameaccount
+    let ensureResult = null;
     try {
-      await ensureRetailAccount({
+      ensureResult = await ensureRetailAccount({
         soap: SOAP,
         authPool,
         email: row.email,
         password: row.password,
+        debug: CONFIG.SOAP_DEBUG,
       });
     } catch (e) {
       console.error('SOAP create/reset failed:', e);
@@ -2000,6 +2034,33 @@ app.get('/verify', async (req, res) => {
             steps: [
               'Wait a moment and try the verification link again.',
               'If the issue persists, open a support ticket so we can complete the registration for you.',
+            ],
+          })
+        );
+    }
+
+    const postCheck = await confirmRetailProvisioning(row.email);
+    if (!postCheck.ok) {
+      const logPayload = {
+        target: maskEmail(row.email),
+        reason: postCheck.reason,
+        bnetId: postCheck.bnetId ?? null,
+      };
+      if (ensureResult?.soapLog?.length) {
+        logPayload.soapLog = ensureResult.soapLog;
+      }
+      console.warn('Retail provisioning deferred', logPayload);
+      return res
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            state: 'pending',
+            title: "We'll finish this for you",
+            message:
+              "Your verification is in our queue, but we couldn't confirm the game license just yet. We'll finish linking it for you and email once it's live.",
+            steps: [
+              'No action needed—feel free to close this tab while we complete the setup.',
+              'If you still cannot log in after 15 minutes, open a support ticket and mention this verification message so we can prioritize the fix.',
             ],
           })
         );
@@ -2064,6 +2125,14 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
       glow: 'shadow-emerald-900/30',
       highlight: 'text-emerald-300',
       icon: '✓',
+    },
+    pending: {
+      badge: 'Setup queued',
+      badgeGradient: 'from-sky-400 via-cyan-400 to-indigo-400',
+      border: 'border-sky-400/40',
+      glow: 'shadow-sky-900/30',
+      highlight: 'text-sky-300',
+      icon: '⧗',
     },
     expired: {
       badge: 'Link expired',
@@ -2204,5 +2273,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Public URL (BASE_URL): ${CONFIG.BASE_URL}`);
   console.log(`   Turnstile sitekey: ${CONFIG.TURNSTILE_SITEKEY}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
