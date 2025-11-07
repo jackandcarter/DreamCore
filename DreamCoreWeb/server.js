@@ -1256,20 +1256,30 @@ function deriveVerifier(email, password, salt) {
 
 function matchesSrpHash({ storedHash, salt, verifier }, email, password) {
   const normalizedHash = typeof storedHash === 'string' ? storedHash.trim().toUpperCase() : null;
-  const { sha256, sha1 } = srpHashIdentity(email, password);
-  const sha256Hex = upperHex(sha256);
-  const sha1Hex = upperHex(sha1);
-  if (normalizedHash && (normalizedHash === sha256Hex || normalizedHash === sha1Hex)) {
-    return true;
+  const attempts = [];
+  const originalPassword = typeof password === 'string' ? password : '';
+  attempts.push(originalPassword);
+  const upperPassword = originalPassword.toUpperCase();
+  if (upperPassword !== originalPassword) {
+    attempts.push(upperPassword);
   }
-  if (verifier) {
-    try {
-      const derived = deriveVerifier(email, password, salt);
-      if (derived && Buffer.compare(Buffer.from(verifier), derived) === 0) {
-        return true;
+
+  for (const candidate of attempts) {
+    const { sha256, sha1 } = srpHashIdentity(email, candidate);
+    const sha256Hex = upperHex(sha256);
+    const sha1Hex = upperHex(sha1);
+    if (normalizedHash && (normalizedHash === sha256Hex || normalizedHash === sha1Hex)) {
+      return true;
+    }
+    if (verifier) {
+      try {
+        const derived = deriveVerifier(email, candidate, salt);
+        if (derived && Buffer.compare(Buffer.from(verifier), derived) === 0) {
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed to derive SRP verifier', e);
       }
-    } catch (e) {
-      console.error('Failed to derive SRP verifier', e);
     }
   }
   return false;
@@ -2172,22 +2182,17 @@ app.get('/verify', async (req, res) => {
           message: 'Your Battle.net account for the private server has been created.',
           successSteps: [
             {
-              number: 'Step 1',
-              title: 'Your DreamCore login',
+              number: 'Step 2',
+              title: 'Verification Complete! Your Account has been created!',
               body: [
                 `Sign in with ${escapeHtml(row.email)}.`,
                 'Keep using the password you chose during sign-up.',
               ],
             },
             {
-              number: 'Step 2',
-              title: 'Verification complete',
-              body: ['Step 2 is complete — you are fully verified and ready to continue.'],
-            },
-            {
               number: 'Step 3',
               title: 'Install & connect',
-              body: ['Step 3: follow the installation guide below to set up DreamCore on your system.'],
+              body: ['Follow the installation guide below to set up DreamCore on your system.'],
               cta: {
                 href: CONFIG.GUIDE_URL,
                 label: 'Open installation guide',
