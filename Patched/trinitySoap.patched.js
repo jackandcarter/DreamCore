@@ -1,4 +1,4 @@
-// Retail-only TrinityCore SOAP helpers with DB confirmation (no command probing)
+// Retail-only TrinityCore SOAP helpers (no password reset, no 3.3.5)
 // Requires: mysql2/promise
 
 import mysql from "mysql2/promise";
@@ -42,7 +42,7 @@ function extractReturn(xml) {
   return m ? m[1].trim() : xml.trim();
 }
 
-const q = (s) => `"${String(s).replace(/(["\\])/g, "\\$1" )}"`;
+const q = (s) => `"${String(s).replace(/(["\\])/g, "\\$1")}"`;
 
 export function normalizeEmail(e) {
   return String(e ?? "").trim().toLowerCase();
@@ -51,13 +51,16 @@ export function normalizeEmail(e) {
 async function callSoap(soap, command) {
   const { host, port, user, pass } = soap;
   if (!host || !user || !pass) throw new Error("Missing SOAP configuration");
+
   const auth = Buffer.from(`${user}:${pass}`).toString("base64");
   const resp = await fetch(`http://${host}:${port}/`, {
     method: "POST",
     headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${auth}` },
     body: envelope(command),
   });
+
   const text = await resp.text();
+
   const fault = text.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
   if (fault) {
     const e = new Error(fault[1].trim());
@@ -65,11 +68,13 @@ async function callSoap(soap, command) {
     e.soapBody = text;
     throw e;
   }
+
   if (!resp.ok) {
     const e = new Error(`SOAP HTTP ${resp.status}`);
     e.soapBody = text;
     throw e;
   }
+
   return { raw: text, ret: extractReturn(text) };
 }
 
@@ -78,30 +83,7 @@ async function bnetCreate(soap, email, pass) {
   return callSoap(soap, `bnetaccount create ${q(email)} ${q(pass)}`);
 }
 
-async function bnetSetPassword(soap, email, pass) {
-  return callSoap(soap, `bnetaccount set password ${q(email)} ${q(pass)} ${q(pass)}`);
-}
-
-function isErrorReturn(ret) {
-  if (ret == null) return false;
-  const value = String(ret).trim().toLowerCase();
-  if (!value) return false;
-  const patterns = [
-    "error",
-    "fail",
-    "unable",
-    "unknown",
-    "invalid",
-    "not exist",
-    "already exist",
-    "not linked",
-    "not created",
-    "usage",
-  ];
-  return patterns.some((fragment) => value.includes(fragment));
-}
-
-// ---------- High-level flows (confirm via DB, not text) ----------
+// ---------- High-level flow ----------
 export async function ensureRetailAccount({ soap, email, password, debug = false }) {
   if (!soap) throw new Error("Missing soap");
   const normEmail = normalizeEmail(email);
@@ -109,6 +91,7 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
   if (!password) throw new Error("Missing password");
 
   const soapLog = [];
+
   const run = async (label, fn) => {
     try {
       const out = await fn();
@@ -120,7 +103,7 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
     }
   };
 
-  // Retail-only: attempt to create a Battle.net account. If it already exists, we treat it as success.
+  // Retail-only: try to create; if it already exists, treat as success (no resets).
   try {
     await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
   } catch (e) {
@@ -131,10 +114,7 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
   return { ok: true, email: normEmail, soapLog };
 }
 
-export async function retailPasswordReset() { throw new Error("Password reset disabled in this build"); }
-
 export async function executeRetailCommand({ soap, command }) {
   if (!soap || !command) throw new Error("Missing soap/command");
   return callSoap(soap, command);
 }
-
