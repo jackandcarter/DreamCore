@@ -57,6 +57,18 @@ function sanitizeSoapArg(value, { label } = {}) {
   return raw;
 }
 
+function q(value) {
+  if (value == null) {
+    throw new Error("Missing value");
+  }
+  const text = String(value);
+  if (!text) {
+    throw new Error("Missing value");
+  }
+  const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
 export function normalizeEmail(e) {
   return String(e ?? "").trim().toLowerCase();
 }
@@ -91,15 +103,6 @@ async function bnetCreate(soap, email, pass) {
   const safeEmail = sanitizeSoapArg(email, { label: 'email' });
   const safePass = sanitizeSoapArg(pass, { label: 'password' });
   return callSoap(soap, `bnetaccount create ${safeEmail} ${safePass}`);
-}
-
-async function bnetSetPassword(soap, email, pass) {
-  const safeEmail = sanitizeSoapArg(email, { label: 'email' });
-  const safePass = sanitizeSoapArg(pass, { label: 'password' });
-  return callSoap(
-    soap,
-    `bnetaccount set password ${safeEmail} ${safePass} ${safePass}`
-  );
 }
 
 function isErrorReturn(ret) {
@@ -159,26 +162,15 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
   };
 }
 
-export async function retailPasswordReset({ soap, email, accountName, identifier, newPassword }) {
-  if (!soap) throw new Error("Missing soap configuration");
-  const raw = identifier ?? email ?? accountName;
-  const target = (() => {
-    if (typeof raw !== "string") return "";
-    const trimmed = raw.trim();
-    if (!trimmed) return "";
-    return trimmed.includes("@") ? normalizeEmail(trimmed) : trimmed;
-  })();
+export async function retailPasswordReset({ soap, email, newPassword }) {
+  if (!soap) throw new Error("Missing soap");
+  const normEmail = normalizeEmail(email);
+  if (!normEmail) throw new Error("Invalid email");
+  if (!newPassword) throw new Error("Missing new password");
 
-  if (!target) {
-    throw new Error("Missing account identifier for password reset");
-  }
-
-  await bnetSetPassword(soap, target, newPassword);
-
-  return {
-    ok: true,
-    target,
-  };
+  const cmd = `bnetaccount set password ${q(normEmail)} ${q(newPassword)} ${q(newPassword)}`;
+  const out = await callSoap(soap, cmd);
+  return out.ret || out.raw || "ok";
 }
 
 export async function executeRetailCommand({ soap, command }) {
