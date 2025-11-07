@@ -634,7 +634,7 @@ const accountScript = () => {
       msg.textContent = 'Password cannot contain spaces or quotes.';
       return;
     }
-    if (newPassword.length < ${CONFIG.MIN_PASS}) {
+    if (newPassword.length < CONFIG.MIN_PASS) {
       msg.textContent = `Password must be at least ${CONFIG.MIN_PASS} characters.`;
       return;
     }
