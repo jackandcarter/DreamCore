@@ -42,7 +42,20 @@ function extractReturn(xml) {
   return m ? m[1].trim() : xml.trim();
 }
 
-const q = (s) => `"${String(s).replace(/(["\\])/g, "\\$1")}"`;
+function sanitizeSoapArg(value, { label } = {}) {
+  const name = label ? `${label} ` : '';
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    throw new Error(`${name}argument missing`);
+  }
+  if (/\s/.test(raw)) {
+    throw new Error(`${name}argument must not contain whitespace`);
+  }
+  if (/["']/.test(raw)) {
+    throw new Error(`${name}argument must not contain quotes`);
+  }
+  return raw;
+}
 
 export function normalizeEmail(e) {
   return String(e ?? "").trim().toLowerCase();
@@ -80,7 +93,9 @@ async function callSoap(soap, command) {
 
 // ---------- Retail-only commands ----------
 async function bnetCreate(soap, email, pass) {
-  return callSoap(soap, `bnetaccount create ${q(email)} ${q(pass)}`);
+  const safeEmail = sanitizeSoapArg(email, { label: 'email' });
+  const safePass = sanitizeSoapArg(pass, { label: 'password' });
+  return callSoap(soap, `bnetaccount create ${safeEmail} ${safePass}`);
 }
 
 // ---------- High-level flow ----------
