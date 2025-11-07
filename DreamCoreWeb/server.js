@@ -300,9 +300,9 @@ const REG_PAGE = () => `<!doctype html>
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
-                <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
+                <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
                        class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
-                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. Your email becomes your DreamCore login.</p>
+                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your DreamCore login.</p>
               </div>
               <div class="pt-2" id="cf-box">
                 <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
@@ -337,9 +337,15 @@ const clientScript = () => {
     const tokenEl = document.querySelector('.cf-turnstile input[name="cf-turnstile-response"]');
     const cfToken = tokenEl ? tokenEl.value : '';
 
+    const rawPassword = document.getElementById('password').value;
+    if (/\s/.test(rawPassword) || /['"]/.test(rawPassword)) {
+      msg.textContent = 'Password cannot contain spaces or quotes.';
+      return;
+    }
+
     const payload = {
       email: document.getElementById('email').value.trim(),
-      password: document.getElementById('password').value,
+      password: rawPassword,
       cfToken
     };
 
@@ -992,7 +998,13 @@ function renderTransactionalEmail({ title, intro, paragraphs = [], button, foote
   `;
 }
 function isValidPassword(p) {
-  return typeof p === 'string' && p.length >= CONFIG.MIN_PASS && p.length <= CONFIG.MAX_PASS;
+  return (
+    typeof p === 'string' &&
+    p.length >= CONFIG.MIN_PASS &&
+    p.length <= CONFIG.MAX_PASS &&
+    !/\s/.test(p) &&
+    !/['"]/.test(p)
+  );
 }
 function isValidEmail(e) {
   return typeof e === 'string' && /.+@.+\..+/.test(e) && e.length <= 254;
