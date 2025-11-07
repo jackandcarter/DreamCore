@@ -1254,34 +1254,105 @@ function deriveVerifier(email, password, salt) {
   return Buffer.from(hex, 'hex');
 }
 
-function matchesSrpHash({ storedHash, salt, verifier }, email, password) {
-  const normalizedHash = typeof storedHash === 'string' ? storedHash.trim().toUpperCase() : null;
-  const attempts = [];
-  const originalPassword = typeof password === 'string' ? password : '';
-  attempts.push(originalPassword);
-  const upperPassword = originalPassword.toUpperCase();
-  if (upperPassword !== originalPassword) {
-    attempts.push(upperPassword);
+function normalizeHashValue(value) {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    return value.trim().toUpperCase();
+  }
+  try {
+    if (Buffer.isBuffer(value)) {
+      const ascii = value.toString('utf8');
+      return /^[0-9a-fA-F]+$/.test(ascii) ? ascii.toUpperCase() : value.toString('hex').toUpperCase();
+    }
+  } catch (err) {
+    // fall through to generic handler
+  }
+  try {
+    return Buffer.from(value).toString('hex').toUpperCase();
+  } catch (err) {
+    return String(value).trim().toUpperCase();
+  }
+}
+
+function normalizeBuffer(value) {
+  if (value == null) return null;
+  if (Buffer.isBuffer(value)) return value.length ? Buffer.from(value) : null;
+  if (value instanceof Uint8Array) return value.length ? Buffer.from(value) : null;
+  if (typeof value === 'string') {
+    if (!value.length) return null;
+    if (/^[0-9a-fA-F]+$/.test(value) && value.length % 2 === 0) {
+      return Buffer.from(value, 'hex');
+    }
+    return Buffer.from(value, 'utf8');
+  }
+  try {
+    const buf = Buffer.from(value);
+    return buf.length ? buf : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function legacyAccountHash(username, password) {
+  const userUpper = String(username || '').trim().toUpperCase();
+  if (!userUpper) return null;
+  const passUpper = String(password || '').trim().toUpperCase();
+  return crypto.createHash('sha1').update(`${userUpper}:${passUpper}`).digest('hex').toUpperCase();
+}
+
+function matchesAccountPassword({ storedHash, salt, verifier, email, username }, password) {
+  const normalizedHash = typeof storedHash === 'string' ? storedHash : normalizeHashValue(storedHash);
+  const saltBuffer = normalizeBuffer(salt);
+  const verifierBuffer = normalizeBuffer(verifier);
+  const emailIdentities = [];
+  const usernameIdentities = [];
+
+  if (typeof email === 'string' && email.trim()) {
+    emailIdentities.push(email.trim());
+  }
+  if (typeof username === 'string' && username.trim()) {
+    usernameIdentities.push(username.trim());
+  }
+
+  const attempts = new Set();
+  if (typeof password === 'string') {
+    attempts.add(password);
+    const trimmed = password.trim();
+    if (trimmed && trimmed !== password) attempts.add(trimmed);
+    const upperPassword = password.toUpperCase();
+    if (upperPassword !== password) attempts.add(upperPassword);
   }
 
   for (const candidate of attempts) {
-    const { sha256, sha1 } = srpHashIdentity(email, candidate);
-    const sha256Hex = upperHex(sha256);
-    const sha1Hex = upperHex(sha1);
-    if (normalizedHash && (normalizedHash === sha256Hex || normalizedHash === sha1Hex)) {
-      return true;
+    for (const identity of emailIdentities) {
+      const { sha256, sha1 } = srpHashIdentity(identity, candidate);
+      const sha256Hex = upperHex(sha256);
+      const sha1Hex = upperHex(sha1);
+      if (normalizedHash && (normalizedHash === sha256Hex || normalizedHash === sha1Hex)) {
+        return true;
+      }
+      if (saltBuffer && verifierBuffer) {
+        try {
+          const derived = deriveVerifier(identity, candidate, saltBuffer);
+          if (derived && Buffer.compare(verifierBuffer, derived) === 0) {
+            return true;
+          }
+        } catch (e) {
+          console.error('Failed to derive SRP verifier', e);
+        }
+      }
     }
-    if (verifier) {
-      try {
-        const derived = deriveVerifier(email, candidate, salt);
-        if (derived && Buffer.compare(Buffer.from(verifier), derived) === 0) {
+
+    if (normalizedHash && usernameIdentities.length) {
+      for (const identity of usernameIdentities) {
+        const legacy = legacyAccountHash(identity, candidate);
+        if (legacy && legacy === normalizedHash) {
           return true;
         }
-      } catch (e) {
-        console.error('Failed to derive SRP verifier', e);
       }
     }
   }
+
   return false;
 }
 
@@ -1854,6 +1925,67 @@ async function getAuthAccountByEmail(email) {
   return null;
 }
 
+async function getGameAccountByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  try {
+    const [rows] = await authPool.execute(
+      'SELECT id, username, email, sha_pass_hash, salt, verifier FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+      [normalized]
+    );
+    if (rows.length) return rows[0];
+  } catch (err) {
+    if (err?.code === 'ER_BAD_FIELD_ERROR') {
+      try {
+        const [fallbackRows] = await authPool.execute(
+          'SELECT id, username, email, sha_pass_hash FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+          [normalized]
+        );
+        if (fallbackRows.length) {
+          const row = fallbackRows[0];
+          row.salt = null;
+          row.verifier = null;
+          return row;
+        }
+      } catch (inner) {
+        if (inner?.code === 'ER_NO_SUCH_TABLE') {
+          return null;
+        }
+        throw inner;
+      }
+      return null;
+    }
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return null;
+    }
+    throw err;
+  }
+  return null;
+}
+
+async function findBnetIdForGameAccount(accountId) {
+  const safeId = toSafeNumber(accountId);
+  if (safeId == null) return null;
+  try {
+    const [rows] = await authPool.execute(
+      'SELECT bnetaccountid FROM `bnetaccount_gameaccount` WHERE gameaccountid = ? LIMIT 1',
+      [safeId]
+    );
+    if (rows.length) {
+      const row = rows[0];
+      const raw = row.bnetaccountid ?? row.bnetAccountId ?? row.id;
+      const parsed = toSafeNumber(raw);
+      return parsed == null ? null : parsed;
+    }
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return null;
+    }
+    throw err;
+  }
+  return null;
+}
+
 async function verifyTurnstile(token, ip) {
   if (!token) return false;
   const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
@@ -1881,8 +2013,34 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
 
-    const account = await getAuthAccountByEmail(email);
-    if (!account) {
+    const primaryAccount = await getAuthAccountByEmail(email);
+    const fallbackAccount = await getGameAccountByEmail(email);
+
+    const candidates = [];
+    if (primaryAccount) {
+      candidates.push({
+        source: 'bnet',
+        id: primaryAccount.id,
+        email: primaryAccount.email || email,
+        username: primaryAccount.username || null,
+        sha_pass_hash: primaryAccount.sha_pass_hash,
+        salt: primaryAccount.salt,
+        verifier: primaryAccount.verifier,
+      });
+    }
+    if (fallbackAccount) {
+      candidates.push({
+        source: 'account',
+        id: fallbackAccount.id,
+        email: fallbackAccount.email || email,
+        username: fallbackAccount.username || null,
+        sha_pass_hash: fallbackAccount.sha_pass_hash,
+        salt: fallbackAccount.salt,
+        verifier: fallbackAccount.verifier,
+      });
+    }
+
+    if (!candidates.length) {
       console.warn('Suspicious login attempt (no account)', {
         target: maskEmail(email),
         ip: req.ip,
@@ -1890,23 +2048,28 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    let storedHash = null;
-    if (account.sha_pass_hash != null) {
-      if (typeof account.sha_pass_hash === 'string') {
-        storedHash = account.sha_pass_hash;
-      } else if (Buffer.isBuffer(account.sha_pass_hash)) {
-        const ascii = account.sha_pass_hash.toString('utf8');
-        storedHash = /^[0-9a-fA-F]+$/.test(ascii) ? ascii : account.sha_pass_hash.toString('hex');
-      } else {
-        storedHash = String(account.sha_pass_hash);
+    let matched = null;
+    for (const candidate of candidates) {
+      const storedHash = normalizeHashValue(candidate.sha_pass_hash);
+      const salt = normalizeBuffer(candidate.salt);
+      const verifier = normalizeBuffer(candidate.verifier);
+      const ok = matchesAccountPassword(
+        {
+          storedHash,
+          salt,
+          verifier,
+          email: candidate.email,
+          username: candidate.username,
+        },
+        password
+      );
+      if (ok) {
+        matched = candidate;
+        break;
       }
     }
 
-    const salt = account.salt ? Buffer.from(account.salt) : null;
-    const verifier = account.verifier ? Buffer.from(account.verifier) : null;
-
-    const matches = matchesSrpHash({ storedHash, salt, verifier }, email, password);
-    if (!matches) {
+    if (!matched) {
       console.warn('Suspicious login attempt (hash mismatch)', {
         target: maskEmail(email),
         ip: req.ip,
@@ -1914,7 +2077,23 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const session = await persistSession(account.id, email, req);
+    let sessionAccountId = matched.id;
+    const numericId = toSafeNumber(matched.id);
+    if (numericId != null) {
+      sessionAccountId = numericId;
+    } else if (typeof matched.id === 'bigint') {
+      sessionAccountId = matched.id.toString();
+    } else if (matched.id != null && typeof matched.id !== 'string') {
+      sessionAccountId = String(matched.id);
+    }
+    if (matched.source === 'account') {
+      const linkedBnetId = await findBnetIdForGameAccount(matched.id);
+      if (linkedBnetId != null) {
+        sessionAccountId = linkedBnetId;
+      }
+    }
+
+    const session = await persistSession(sessionAccountId, matched.email || email, req);
     const maxAge = CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
     res.cookie(CONFIG.SESSION_COOKIE_NAME, session.token, {
       httpOnly: true,
@@ -1926,7 +2105,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
     return res.json({
       ok: true,
-      accountId: account.id,
+      accountId: sessionAccountId,
       session: {
         token: session.token,
         expiresAt: session.expiresAt,
