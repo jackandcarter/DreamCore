@@ -82,6 +82,25 @@ async function bnetSetPassword(soap, email, pass) {
   return callSoap(soap, `bnetaccount set password ${q(email)} ${q(pass)} ${q(pass)}`);
 }
 
+function isErrorReturn(ret) {
+  if (ret == null) return false;
+  const value = String(ret).trim().toLowerCase();
+  if (!value) return false;
+  const patterns = [
+    "error",
+    "fail",
+    "unable",
+    "unknown",
+    "invalid",
+    "not exist",
+    "already exist",
+    "not linked",
+    "not created",
+    "usage",
+  ];
+  return patterns.some((fragment) => value.includes(fragment));
+}
+
 // ---------- High-level flows (confirm via DB, not text) ----------
 export async function ensureRetailAccount({ soap, email, password, debug = false }) {
   if (!soap) throw new Error("Missing soap configuration");
@@ -96,7 +115,14 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
   const run = async (label, fn) => {
     try {
       const response = await fn();
-      record(`${label}: ${response?.ret ?? "ok"}`.slice(0, 240));
+      const ret = response?.ret ?? "";
+      const retText = String(ret ?? "");
+      record(`${label}: ${(retText || "ok").slice(0, 240)}`);
+      if (isErrorReturn(ret)) {
+        const err = new Error(`${label} returned error: ${retText}`);
+        err.soapReturn = ret;
+        throw err;
+      }
       return response;
     } catch (err) {
       record(`${label} FAILED: ${String(err?.message || err).slice(0, 200)}`);
