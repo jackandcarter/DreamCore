@@ -125,48 +125,13 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
     await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
   } catch (e) {
     const msg = String(e?.message || e);
-    // If account already exists, do NOT attempt any resets or password changes. Treat as success.
     if (!/already exists|exists/i.test(msg)) throw e;
   }
 
   return { ok: true, email: normEmail, soapLog };
 }
-  };
-  const run = async (label, fn) => {
-    try {
-      const response = await fn();
-      const ret = response?.ret ?? "";
-      const retText = String(ret ?? "");
-      record(`${label}: ${(retText || "ok").slice(0, 240)}`);
-      if (isErrorReturn(ret)) {
-        const err = new Error(`${label} returned error: ${retText}`);
-        err.soapReturn = ret;
-        throw err;
-      }
-      return response;
-    } catch (err) {
-      record(`${label} FAILED: ${String(err?.message || err).slice(0, 200)}`);
-      throw err;
-    }
-  };
-
-  await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
-
-  return {
-    ok: true,
-    email: normEmail,
-    soapLog,
-  };
-}
 
 export async function retailPasswordReset() { throw new Error("Password reset disabled in this build"); }
-  await bnetSetPassword(soap, target, newPassword);
-
-  return {
-    ok: true,
-    target,
-  };
-}
 
 export async function executeRetailCommand({ soap, command }) {
   if (!soap || !command) throw new Error("Missing soap/command");
