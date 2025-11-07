@@ -171,7 +171,7 @@ export async function retailPasswordReset({ soap, email, newPassword }) {
   const safeEmail = sanitizeSoapArg(normEmail, { label: "email" });
   const safePass = sanitizeSoapArg(newPassword, { label: "new password" });
 
-  const cmd = `bnetaccount set password ${q(safeEmail)} ${q(safePass)} ${q(safePass)}`;
+  const cmd = `bnetaccount set password ${safeEmail} ${safePass} ${safePass}`;
   const out = await callSoap(soap, cmd);
   return out.ret || out.raw || "ok";
 }
