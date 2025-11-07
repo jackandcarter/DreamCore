@@ -35,6 +35,7 @@ import {
   ensureRetailAccount,
   executeRetailCommand,
   normalizeEmail,
+  retailPasswordReset,
 } from './lib/trinitySoap.js';
 
 // ----- CONFIG (read from env or inline defaults for dev) -----
@@ -450,7 +451,7 @@ const loginScript = () => {
     try {
       const res = await fetch('/api/session', { credentials: 'same-origin' });
       if (res.ok) {
-        window.location.href = '/characters';
+        window.location.href = '/account';
       }
     } catch (err) {
       console.error('Session check failed', err);
@@ -489,7 +490,7 @@ const loginScript = () => {
         return;
       }
       msg.textContent = 'Login successful. Redirecting…';
-      setTimeout(() => { window.location.href = '/characters'; }, 600);
+      setTimeout(() => { window.location.href = '/account'; }, 600);
     } catch (err) {
       console.error('Login request failed', err);
       msg.textContent = 'Network error. Please try again.';
@@ -501,6 +502,183 @@ const loginScript = () => {
   checkSession();
 };
 const LOGIN_JS = `(${loginScript.toString()})();`;
+
+const ACCOUNT_PAGE = () => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${CONFIG.HEADER_TITLE} — Account Management</title>
+  <script src="/account.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+    }
+    .aurora::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: aurora-shift 24s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes aurora-shift {
+      0% { transform: rotate(0deg) scale(1.1); }
+      50% { transform: rotate(180deg) scale(1.2); }
+      100% { transform: rotate(360deg) scale(1.1); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-2xl relative z-10">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+      <div class="px-6 pt-8 pb-10 sm:px-10">
+        <div class="flex items-baseline justify-between">
+          <h1 class="text-4xl font-semibold tracking-tight text-white">User Account Management</h1>
+          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Manage</span>
+        </div>
+        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Update credentials and keep your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> Battle.net account secure.</p>
+
+        <div class="mt-8 space-y-8">
+          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex items-center gap-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
+              <div>
+                <h2 class="text-lg font-semibold text-white">Reset your Battle.net password</h2>
+                <p class="text-[15px] text-indigo-100/90">Choose a new password below. This updates your in-game login immediately.</p>
+              </div>
+            </div>
+            <form id="accountForm" class="mt-6 space-y-5">
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountEmail">Email</label>
+                <input id="accountEmail" type="email" name="email" readonly
+                       class="w-full rounded-2xl bg-gray-800/60 border border-gray-700 px-3 py-3 text-[15px] font-semibold text-indigo-200 focus:outline-none"
+                       value="" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountPassword">New password</label>
+                <input id="accountPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60"
+                       placeholder="••••••••" />
+                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
+              </div>
+              <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Reset password</button>
+            </form>
+            <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+          </section>
+
+          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-lg font-semibold text-white">Need to view your characters?</h2>
+                <p class="text-[15px] text-indigo-100/90">Head to the roster dashboard to see every character linked to your account.</p>
+              </div>
+              <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/characters">Open character roster</a>
+            </div>
+            <button id="accountLogout" class="mt-6 inline-flex items-center justify-center rounded-2xl border border-indigo-400/40 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400">Log out</button>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
+  </div>
+</body>
+</html>`;
+
+const accountScript = () => {
+  const form = document.getElementById('accountForm');
+  const emailInput = document.getElementById('accountEmail');
+  const passwordInput = document.getElementById('accountPassword');
+  const msg = document.getElementById('accountMsg');
+  const submit = document.getElementById('resetSubmit');
+  const logoutButton = document.getElementById('accountLogout');
+
+  function setLoading(state) {
+    if (!submit) return;
+    submit.disabled = state;
+    submit.classList.toggle('opacity-60', state);
+  }
+
+  async function loadSession() {
+    try {
+      const res = await fetch('/api/session', { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      const email = data?.session?.email;
+      if (emailInput && email) {
+        emailInput.value = email;
+      }
+    } catch (err) {
+      console.error('Session lookup failed', err);
+      window.location.href = '/login';
+    }
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const newPassword = passwordInput?.value || '';
+
+    if (!newPassword) {
+      msg.textContent = 'Please provide a new password.';
+      return;
+    }
+    if (/\s/.test(newPassword) || /['"]/.test(newPassword)) {
+      msg.textContent = 'Password cannot contain spaces or quotes.';
+      return;
+    }
+    if (newPassword.length < ${CONFIG.MIN_PASS}) {
+      msg.textContent = `Password must be at least ${CONFIG.MIN_PASS} characters.`;
+      return;
+    }
+
+    setLoading(true);
+    msg.textContent = 'Submitting password reset…';
+
+    try {
+      const res = await fetch('/api/account/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to reset password.';
+        return;
+      }
+      msg.textContent = 'Password reset successfully. Use this new password the next time you log in.';
+      if (passwordInput) {
+        passwordInput.value = '';
+      }
+    } catch (err) {
+      console.error('Password reset failed', err);
+      msg.textContent = 'Network error. Please try again.';
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  logoutButton?.addEventListener('click', async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (err) {
+      console.error('Logout failed', err);
+    } finally {
+      window.location.href = '/login';
+    }
+  });
+
+  loadSession();
+};
+const ACCOUNT_JS = `(${accountScript.toString()})();`;
 
 const RESET_PAGE = () => `<!doctype html>
 <html lang="en">
@@ -928,11 +1106,19 @@ app.get('/client.js', (req, res) => res.type('application/javascript').send(CLIE
 app.get('/login', async (req, res) => {
   const session = await loadSession(req).catch(() => null);
   if (session) {
-    return res.redirect('/characters');
+    return res.redirect('/account');
   }
   return res.type('text/html').send(LOGIN_PAGE());
 });
 app.get('/login.js', (req, res) => res.type('application/javascript').send(LOGIN_JS));
+app.get('/account', async (req, res) => {
+  const session = await loadSession(req).catch(() => null);
+  if (!session) {
+    return res.redirect('/login');
+  }
+  return res.type('text/html').send(ACCOUNT_PAGE());
+});
+app.get('/account.js', (req, res) => res.type('application/javascript').send(ACCOUNT_JS));
 app.get('/reset-password', (req, res) => res.type('text/html').send(RESET_PAGE()));
 app.get('/reset.js', (req, res) => res.type('application/javascript').send(RESET_JS));
 app.get('/characters', async (req, res) => {
@@ -1770,6 +1956,34 @@ app.get('/api/session', requireSession, (req, res) => {
   res.json({ ok: true, session: { accountId: req.session.account_id, email: req.session.email, expiresAt: req.session.expires_at } });
 });
 
+app.post('/api/account/reset-password', requireSession, async (req, res) => {
+  try {
+    const { newPassword } = req.body || {};
+    if (!isValidPassword(newPassword)) {
+      return badRequest(
+        res,
+        `Password must be at least ${CONFIG.MIN_PASS} characters with no spaces or quotes.`
+      );
+    }
+
+    const email = req.session?.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Unable to determine account email for this session.' });
+    }
+
+    await retailPasswordReset({
+      soap: SOAP,
+      email,
+      newPassword,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Account password reset failed', e);
+    return res.status(500).json({ error: 'Unable to reset password at this time.' });
+  }
+});
+
 app.get('/api/characters', requireSession, async (req, res) => {
   try {
     const accountId = req.session?.account_id;
@@ -1957,10 +2171,31 @@ app.get('/verify', async (req, res) => {
           title: 'Your account is ready!',
           message: 'Your Battle.net account for the private server has been created.',
           successSteps: [
-            { title: 'Username (email)', body: [`${escapeHtml(row.email)}`] },
-            { title: 'Password', body: ['Use the password you chose during sign-up.'] },
-            { title: 'Next', body: ['Launch the game and log in with this Battle.net account.'] },
+            {
+              number: 'Step 1',
+              title: 'Your DreamCore login',
+              body: [
+                `Sign in with ${escapeHtml(row.email)}.`,
+                'Keep using the password you chose during sign-up.',
+              ],
+            },
+            {
+              number: 'Step 2',
+              title: 'Verification complete',
+              body: ['Step 2 is complete — you are fully verified and ready to continue.'],
+            },
+            {
+              number: 'Step 3',
+              title: 'Install & connect',
+              body: ['Step 3: follow the installation guide below to set up DreamCore on your system.'],
+              cta: {
+                href: CONFIG.GUIDE_URL,
+                label: 'Open installation guide',
+              },
+            },
           ],
+          successFooter:
+            'You can return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore portal</a> from the landing page whenever you need to change your password.',
           debug: CONFIG.SOAP_DEBUG ? [{ label: 'soapLog', data: ensureResult?.soapLog || [] }] : [],
         })
       );
@@ -1983,7 +2218,7 @@ app.get('/verify', async (req, res) => {
   }
 });
 
-function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
+function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter }) {
   const tone = {
     success: {
       badge: 'Verified',
@@ -2071,6 +2306,11 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
           .join('')}</div>`
       : '';
 
+  const successFooterHtml =
+    state === 'success' && successFooter
+      ? `<div class="mt-10 rounded-3xl border border-indigo-500/30 bg-gray-900/60 p-5 text-[15px] text-indigo-100/90 shadow-inner shadow-indigo-900/20">${successFooter}</div>`
+      : '';
+
   const safeMessage = message.replace(/<(?!\/?(a|strong)\b)[^>]*>/gi, '');
 
   return `<!doctype html>
@@ -2112,6 +2352,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps }) {
         <p class="mt-3 text-[15px] text-indigo-100/90">${safeMessage}</p>
         ${stepsList}
         ${successGuide}
+        ${successFooterHtml}
       </div>
       <div class="bg-gray-900/70 border-t ${tone.border} px-6 py-5 sm:px-10">
         <p class="text-xs text-indigo-200/80">Need a hand? Contact the DreamCore team and mention this verification message for quicker help.</p>
