@@ -57,6 +57,18 @@ function sanitizeSoapArg(value, { label } = {}) {
   return raw;
 }
 
+function q(value) {
+  if (value == null) {
+    throw new Error("Missing value");
+  }
+  const text = String(value);
+  if (!text) {
+    throw new Error("Missing value");
+  }
+  const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
 export function normalizeEmail(e) {
   return String(e ?? "").trim().toLowerCase();
 }
@@ -98,7 +110,26 @@ async function bnetCreate(soap, email, pass) {
   return callSoap(soap, `bnetaccount create ${safeEmail} ${safePass}`);
 }
 
-// ---------- High-level flow ----------
+function isErrorReturn(ret) {
+  if (ret == null) return false;
+  const value = String(ret).trim().toLowerCase();
+  if (!value) return false;
+  const patterns = [
+    "error",
+    "fail",
+    "unable",
+    "unknown",
+    "invalid",
+    "not exist",
+    "already exist",
+    "not linked",
+    "not created",
+    "usage",
+  ];
+  return patterns.some((fragment) => value.includes(fragment));
+}
+
+// ---------- High-level flows (confirm via DB, not text) ----------
 export async function ensureRetailAccount({ soap, email, password, debug = false }) {
   if (!soap) throw new Error("Missing soap");
   const normEmail = normalizeEmail(email);
@@ -118,15 +149,27 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
     }
   };
 
-  // Retail-only: try to create; if it already exists, treat as success (no resets).
-  try {
-    await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
-  } catch (e) {
-    const msg = String(e?.message || e);
-    if (!/already exists|exists/i.test(msg)) throw e;
-  }
+  await run("bnetaccount create", () => bnetCreate(soap, normEmail, password));
 
-  return { ok: true, email: normEmail, soapLog };
+  return {
+    ok: true,
+    email: normEmail,
+    soapLog,
+  };
+}
+
+export async function retailPasswordReset({ soap, email, newPassword }) {
+  if (!soap) throw new Error("Missing soap");
+  const normEmail = normalizeEmail(email);
+  if (!normEmail) throw new Error("Invalid email");
+  if (!newPassword) throw new Error("Missing new password");
+
+  const safeEmail = sanitizeSoapArg(normEmail, { label: "email" });
+  const safePass = sanitizeSoapArg(newPassword, { label: "new password" });
+
+  const cmd = `bnetaccount set password ${safeEmail} ${safePass} ${safePass}`;
+  const out = await callSoap(soap, cmd);
+  return out.ret || out.raw || "ok";
 }
 
 export async function executeRetailCommand({ soap, command }) {
