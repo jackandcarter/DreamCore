@@ -1848,111 +1848,8 @@ app.post('/api/register', limiter, async (req, res) => {
   }
 });
 
-app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) => {
-  try {
-    const { email: rawEmail } = req.body || {};
-    const email = normalizeEmail(rawEmail);
-    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
-
-    const account = await getAuthAccountByEmail(email).catch((err) => {
-      console.error('Password reset lookup failed', err);
-      throw err;
-    });
-
-    // Always respond success to avoid leaking account existence, but only issue tokens for known users
-    if (!account) {
-      console.warn('Password reset requested for unknown email', {
-        target: maskEmail(email),
-        ip: req.ip,
-      });
-      return res.json({ ok: true });
-    }
-
-    const now = Date.now();
-    await pool.execute('DELETE FROM password_resets WHERE expires_at < ?', [now]);
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = now + CONFIG.RESET_TOKEN_TTL_MIN * 60 * 1000;
-
-    await pool.execute('DELETE FROM password_resets WHERE email = ?', [email]);
-    await pool.execute(
-      'INSERT INTO password_resets (token, email, created_at, expires_at) VALUES (?, ?, ?, ?)',
-      [token, email, now, expiresAt]
-    );
-
-    const resetUrl = `${CONFIG.BASE_URL}/reset-password?token=${token}`;
-    const safeEmail = escapeHtml(email);
-    const html = renderTransactionalEmail({
-      title: `${CONFIG.BRAND_NAME} — Reset your password`,
-      intro: `We received a request to reset your ${CONFIG.BRAND_NAME} password.`,
-      paragraphs: [
-        `Set a new password for ${safeEmail} within ${CONFIG.RESET_TOKEN_TTL_MIN} minutes to keep your account secure.`,
-        'If you did not request this change, you can safely ignore this email and your password will stay the same.',
-      ],
-      button: { href: resetUrl, label: 'Set a new password' },
-    });
-    const text = [
-      `${CONFIG.BRAND_NAME}: reset your password`,
-      `Reset the password for ${email} by visiting: ${resetUrl}`,
-      `This link expires in ${CONFIG.RESET_TOKEN_TTL_MIN} minutes.`,
-      '',
-      'If you did not request this, you can ignore this email.',
-    ].join('\n');
-
-    await transporter.sendMail({
-      to: email,
-      from: CONFIG.FROM_EMAIL,
-      subject: `${CONFIG.BRAND_NAME}: reset your password`,
-      html,
-      text,
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('Password reset request error', e);
-    return res.status(500).json({ error: 'Unable to process request' });
-  }
-});
-
-app.post('/api/password-reset/confirm', async (req, res) => {
-  try {
-    const { token, password } = req.body || {};
-    if (typeof token !== 'string' || token.length < 10) return badRequest(res, 'Invalid or expired token');
-    if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
-
-    const now = Date.now();
-    await pool.execute('DELETE FROM password_resets WHERE expires_at < ?', [now]);
-
-    const [rows] = await pool.execute(
-      'SELECT email, expires_at FROM password_resets WHERE token = ? LIMIT 1',
-      [token]
-    );
-    const entry = Array.isArray(rows) ? rows[0] : null;
-
-    if (!entry || now > entry.expires_at) {
-      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
-      return badRequest(res, 'Invalid or expired token');
-    }
-
-    const normalizedEmail = normalizeEmail(entry.email);
-    const account = await getAuthAccountByEmail(normalizedEmail);
-    if (!account) {
-      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
-      console.warn('Password reset token has no matching account', { target: maskEmail(entry.email) });
-      return badRequest(res, 'Invalid or expired token');
-    }
-
-    await retailPasswordReset({ soap: SOAP, email: normalizedEmail, newPassword: password });
-
-    await pool.execute('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('Password reset confirm error', e);
-    return res.status(500).json({ error: 'Unable to reset password' });
-  }
-});
-
+// [removed] password reset request endpoint disabled
+// [removed] password reset confirm endpoint disabled
 // ----- Verify link -----
 app.get('/verify', async (req, res) => {
   try {
@@ -2016,6 +1913,7 @@ app.get('/verify', async (req, res) => {
     try {
       ensureResult = await ensureRetailAccount({
         soap: SOAP,
+        authPool,
         email: row.email,
         password: row.password,
         debug: CONFIG.SOAP_DEBUG,
