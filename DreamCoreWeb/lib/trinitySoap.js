@@ -1,4 +1,4 @@
-// Retail-only TrinityCore SOAP helpers with DB confirmation (no command probing)
+// Retail-only TrinityCore SOAP helpers (no password reset, no 3.3.5)
 // Requires: mysql2/promise
 
 import mysql from "mysql2/promise";
@@ -76,13 +76,16 @@ export function normalizeEmail(e) {
 async function callSoap(soap, command) {
   const { host, port, user, pass } = soap;
   if (!host || !user || !pass) throw new Error("Missing SOAP configuration");
+
   const auth = Buffer.from(`${user}:${pass}`).toString("base64");
   const resp = await fetch(`http://${host}:${port}/`, {
     method: "POST",
     headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${auth}` },
     body: envelope(command),
   });
+
   const text = await resp.text();
+
   const fault = text.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
   if (fault) {
     const e = new Error(fault[1].trim());
@@ -90,11 +93,13 @@ async function callSoap(soap, command) {
     e.soapBody = text;
     throw e;
   }
+
   if (!resp.ok) {
     const e = new Error(`SOAP HTTP ${resp.status}`);
     e.soapBody = text;
     throw e;
   }
+
   return { raw: text, ret: extractReturn(text) };
 }
 
@@ -126,29 +131,20 @@ function isErrorReturn(ret) {
 
 // ---------- High-level flows (confirm via DB, not text) ----------
 export async function ensureRetailAccount({ soap, email, password, debug = false }) {
-  if (!soap) throw new Error("Missing soap configuration");
+  if (!soap) throw new Error("Missing soap");
   const normEmail = normalizeEmail(email);
+  if (!normEmail) throw new Error("Invalid email");
+  if (!password) throw new Error("Missing password");
 
   const soapLog = [];
-  const record = (line) => {
-    if (debug) {
-      soapLog.push(line);
-    }
-  };
+
   const run = async (label, fn) => {
     try {
-      const response = await fn();
-      const ret = response?.ret ?? "";
-      const retText = String(ret ?? "");
-      record(`${label}: ${(retText || "ok").slice(0, 240)}`);
-      if (isErrorReturn(ret)) {
-        const err = new Error(`${label} returned error: ${retText}`);
-        err.soapReturn = ret;
-        throw err;
-      }
-      return response;
+      const out = await fn();
+      soapLog.push({ label, ok: true, ret: out.ret ?? out.raw ?? String(out) });
+      return out;
     } catch (err) {
-      record(`${label} FAILED: ${String(err?.message || err).slice(0, 200)}`);
+      soapLog.push({ label, ok: false, error: String(err?.message || err) });
       throw err;
     }
   };
@@ -180,4 +176,3 @@ export async function executeRetailCommand({ soap, command }) {
   if (!soap || !command) throw new Error("Missing soap/command");
   return callSoap(soap, command);
 }
-
