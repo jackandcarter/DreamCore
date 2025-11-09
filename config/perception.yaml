@@ -1,0 +1,13 @@
+llm:
+  base_url: "http://localhost:8000"
+  model: "llama-3-8b"
+  max_tokens: 1024
+  temperature: 0.2
+  rate_limit_per_minute: 30
+batching:
+  max_batch_size: 4
+  max_latency_ms: 200
+  estimated_observation_cost_mb: 128
+resources:
+  ram_cap_mb: 8192
+  gpu_cap_mb: 4096
