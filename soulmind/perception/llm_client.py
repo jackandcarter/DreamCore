@@ -5,7 +5,21 @@ import asyncio
 import json
 from typing import Any, Dict, Optional
 
-import httpx
+try:  # pragma: no cover - optional dependency for HTTP calls
+    import httpx
+except Exception:  # pragma: no cover - fallback stub
+    class _MissingAsyncClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise RuntimeError("httpx is required to use LLMClient")
+
+        async def aclose(self) -> None:  # pragma: no cover - defensive
+            return None
+
+        async def post(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover - defensive
+            raise RuntimeError("httpx is required to use LLMClient")
+
+    class httpx:  # type: ignore
+        AsyncClient = _MissingAsyncClient
 
 
 class LLMClient:
