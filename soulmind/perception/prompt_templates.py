@@ -5,7 +5,11 @@ import json
 from datetime import date, datetime
 from typing import Any, Mapping, Sequence
 
+from jinja2 import Environment
+
 from .schemas import ConceptEdge, ConceptNode, Observation
+
+_ENV = Environment(trim_blocks=True, lstrip_blocks=True)
 
 _OBSERVATION_SCHEMA = json.dumps(Observation.model_json_schema(), indent=2)
 _NODE_SCHEMA = json.dumps(ConceptNode.model_json_schema(), indent=2)
@@ -67,35 +71,76 @@ _GAP_FEWSHOT = {
 }
 
 
-def _format_observation_prompt(observations: Sequence[Observation]) -> str:
-    blocks = []
-    for idx, observation in enumerate(observations, start=1):
-        payload = json.dumps(jsonable(observation), indent=2)
-        blocks.append(f"Observation {idx}:\n{payload}")
-    return "\n".join(blocks)
+_OBSERVATION_TEMPLATE = _ENV.from_string(
+    """
+You translate observations into ontology compliant JSON.
+
+Schema guide:
+Observation schema:
+{{ observation_schema }}
+ConceptNode schema:
+{{ node_schema }}
+ConceptEdge schema:
+{{ edge_schema }}
+
+Example input:
+{{ fewshot.observations | tojson(indent=2) }}
+Example output:
+{{ fewshot.expected | tojson(indent=2) }}
+
+Instructions:
+- Return a JSON object with a "results" array.
+- Each element must have "observation_id", "nodes", "edges", and "uncertainty" (0-1 where higher is more uncertain).
+- Nodes and edges must validate against the schemas.
+- Respect timestamps and confidence scores supplied in the observations.
+
+Now process the following observations:
+{% for obs in observations %}Observation {{ loop.index }}:
+{{ obs | tojson(indent=2) }}
+{% endfor %}
+"""
+)
+
+_GAP_TEMPLATE = _ENV.from_string(
+    """
+You repair partially parsed concept graphs.
+
+You received the following observations:
+{% for obs in observations %}- {{ obs.observation_id }}: {{ obs.description }}
+{% endfor %}
+
+The previous response was:
+{{ previous_response | tojson(indent=2) }}
+
+Validation error:
+{{ validation_error }}
+
+Use the schemas:
+Observation:
+{{ observation_schema }}
+ConceptNode:
+{{ node_schema }}
+ConceptEdge:
+{{ edge_schema }}
+
+Reference fix example:
+{{ fewshot.partial | tojson(indent=2) }}
+Missing fields from example: {{ fewshot.missing | tojson() }}
+Hint: {{ fewshot.cue }}
+
+Return a corrected JSON response with the same "results" layout as specified above.
+"""
+)
 
 
 def render_observation_to_concepts(observations: Sequence[Observation]) -> str:
-    observations_block = _format_observation_prompt(observations)
-    example_input = json.dumps(_OBSERVATION_FEWSHOT["observations"], indent=2)
-    example_output = json.dumps(_OBSERVATION_FEWSHOT["expected"], indent=2)
-    return (
-        "You translate observations into ontology compliant JSON.\n\n"
-        "Schema guide:\n"
-        f"Observation schema:\n{_OBSERVATION_SCHEMA}\n"
-        f"ConceptNode schema:\n{_NODE_SCHEMA}\n"
-        f"ConceptEdge schema:\n{_EDGE_SCHEMA}\n\n"
-        "Example input:\n"
-        f"{example_input}\n"
-        "Example output:\n"
-        f"{example_output}\n\n"
-        "Instructions:\n"
-        "- Return a JSON object with a \"results\" array.\n"
-        "- Each element must have \"observation_id\", \"nodes\", \"edges\", and \"uncertainty\" (0-1 where higher is more uncertain).\n"
-        "- Nodes and edges must validate against the schemas.\n"
-        "- Respect timestamps and confidence scores supplied in the observations.\n\n"
-        "Now process the following observations:\n"
-        f"{observations_block}"
+    serialized = [jsonable(o) for o in observations]
+    return _OBSERVATION_TEMPLATE.render(
+        observations=serialized,
+        observation_schema=_OBSERVATION_SCHEMA,
+        node_schema=_NODE_SCHEMA,
+        edge_schema=_EDGE_SCHEMA,
+        fewshot=_OBSERVATION_FEWSHOT,
     )
 
 
@@ -104,30 +149,14 @@ def render_gap_filling(
     previous_response: Mapping[str, Any],
     validation_error: str,
 ) -> str:
-    observations_lines = "\n".join(
-        f"- {obs.observation_id}: {obs.description}" for obs in observations
-    )
-    previous_json = json.dumps(previous_response, indent=2)
-    partial_example = json.dumps(_GAP_FEWSHOT["partial"], indent=2)
-    missing = json.dumps(_GAP_FEWSHOT["missing"])
-    cue = _GAP_FEWSHOT["cue"]
-    return (
-        "You repair partially parsed concept graphs.\n\n"
-        "You received the following observations:\n"
-        f"{observations_lines}\n\n"
-        "The previous response was:\n"
-        f"{previous_json}\n\n"
-        "Validation error:\n"
-        f"{validation_error}\n\n"
-        "Use the schemas:\n"
-        f"Observation:\n{_OBSERVATION_SCHEMA}\n"
-        f"ConceptNode:\n{_NODE_SCHEMA}\n"
-        f"ConceptEdge:\n{_EDGE_SCHEMA}\n\n"
-        "Reference fix example:\n"
-        f"{partial_example}\n"
-        f"Missing fields from example: {missing}\n"
-        f"Hint: {cue}\n\n"
-        "Return a corrected JSON response with the same \"results\" layout as specified above."
+    return _GAP_TEMPLATE.render(
+        observations=observations,
+        previous_response=previous_response,
+        validation_error=validation_error,
+        observation_schema=_OBSERVATION_SCHEMA,
+        node_schema=_NODE_SCHEMA,
+        edge_schema=_EDGE_SCHEMA,
+        fewshot=_GAP_FEWSHOT,
     )
 
 

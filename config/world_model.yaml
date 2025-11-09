@@ -1,9 +1,0 @@
-load_control:
-  max_concurrent_cycles: 2
-  min_interval_seconds: 120
-  load_average_threshold: 0.75
-scheduler:
-  interval_seconds: 300
-  jitter_seconds: 45
-token_limits:
-  summary_tokens: 512
