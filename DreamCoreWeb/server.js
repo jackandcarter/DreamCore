@@ -202,6 +202,19 @@ await pool.query(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS portal_credentials (
+    email VARCHAR(254) PRIMARY KEY,
+    account_id BIGINT UNSIGNED NULL,
+    password_hash VARBINARY(128) NOT NULL,
+    salt VARBINARY(64) NOT NULL,
+    version TINYINT UNSIGNED NOT NULL,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    KEY idx_account_id (account_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
   host: CONFIG.SMTP_HOST,
@@ -1888,6 +1901,45 @@ async function requireSession(req, res, next) {
   }
 }
 
+async function getPortalCredential(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  try {
+    const [rows] = await pool.execute(
+      'SELECT email, account_id, password_hash, salt, version FROM portal_credentials WHERE email = ? LIMIT 1',
+      [normalized]
+    );
+    if (!rows.length) return null;
+    return rows[0];
+  } catch (err) {
+    console.error('Failed to load portal credential', err);
+    return null;
+  }
+}
+
+async function upsertPortalCredential({ email, password, accountId }) {
+  const normalized = normalizeEmail(email);
+  if (!normalized || typeof password !== 'string' || !password.length) return;
+  try {
+    const { hash, salt, version } = await hashPortalPassword(password);
+    const now = Date.now();
+    const numericAccountId = toSafeNumber(accountId);
+    await pool.execute(
+      `INSERT INTO portal_credentials (email, account_id, password_hash, salt, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         account_id = VALUES(account_id),
+         password_hash = VALUES(password_hash),
+         salt = VALUES(salt),
+         version = VALUES(version),
+         updated_at = VALUES(updated_at)`,
+      [normalized, numericAccountId ?? null, hash, salt, version, now, now]
+    );
+  } catch (err) {
+    console.error('Failed to upsert portal credential', err);
+  }
+}
+
 async function getAuthAccountByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
@@ -1997,6 +2049,43 @@ async function verifyTurnstile(token, ip) {
   return !!data.success;
 }
 
+const PORTAL_HASH_VERSION = 1;
+const PORTAL_SCRYPT_KEYLEN = 64;
+const PORTAL_SCRYPT_OPTIONS = { N: 1 << 14, r: 8, p: 1 };
+
+function scryptAsync(password, salt, keylen, options = PORTAL_SCRYPT_OPTIONS) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, keylen, options, (err, derivedKey) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(derivedKey);
+    });
+  });
+}
+
+async function hashPortalPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = await scryptAsync(password, salt, PORTAL_SCRYPT_KEYLEN);
+  return { salt, hash, version: PORTAL_HASH_VERSION };
+}
+
+async function verifyPortalPassword(password, record) {
+  if (!record || typeof password !== 'string' || !password.length) return false;
+  if (record.version !== PORTAL_HASH_VERSION) return false;
+  const saltBuffer = normalizeBuffer(record.salt);
+  const hashBuffer = normalizeBuffer(record.password_hash);
+  if (!saltBuffer || !hashBuffer) return false;
+  try {
+    const derived = await scryptAsync(password, saltBuffer, hashBuffer.length);
+    return derived.length === hashBuffer.length && crypto.timingSafeEqual(hashBuffer, derived);
+  } catch (err) {
+    console.error('Failed to verify portal password', err);
+    return false;
+  }
+}
+
 app.get('/api/status', async (req, res) => {
   try {
     const { ret } = await executeRetailCommand({ soap: SOAP, command: 'server info' });
@@ -2013,78 +2102,132 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
 
-    const primaryAccount = await getAuthAccountByEmail(email);
-    const fallbackAccount = await getGameAccountByEmail(email);
-
-    const candidates = [];
-    if (primaryAccount) {
-      candidates.push({
-        source: 'bnet',
-        id: primaryAccount.id,
-        email: primaryAccount.email || email,
-        username: primaryAccount.username || null,
-        sha_pass_hash: primaryAccount.sha_pass_hash,
-        salt: primaryAccount.salt,
-        verifier: primaryAccount.verifier,
-      });
-    }
-    if (fallbackAccount) {
-      candidates.push({
-        source: 'account',
-        id: fallbackAccount.id,
-        email: fallbackAccount.email || email,
-        username: fallbackAccount.username || null,
-        sha_pass_hash: fallbackAccount.sha_pass_hash,
-        salt: fallbackAccount.salt,
-        verifier: fallbackAccount.verifier,
-      });
-    }
-
-    if (!candidates.length) {
-      console.warn('Suspicious login attempt (no account)', {
-        target: maskEmail(email),
-        ip: req.ip,
-      });
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    const [portalCredential, primaryAccount, fallbackAccount] = await Promise.all([
+      getPortalCredential(email),
+      getAuthAccountByEmail(email),
+      getGameAccountByEmail(email),
+    ]);
 
     let matched = null;
-    for (const candidate of candidates) {
-      const storedHash = normalizeHashValue(candidate.sha_pass_hash);
-      const salt = normalizeBuffer(candidate.salt);
-      const verifier = normalizeBuffer(candidate.verifier);
-      const ok = matchesAccountPassword(
-        {
-          storedHash,
-          salt,
-          verifier,
-          email: candidate.email,
-          username: candidate.username,
-        },
-        password
-      );
-      if (ok) {
-        matched = candidate;
-        break;
+
+    if (portalCredential) {
+      const portalOk = await verifyPortalPassword(password, portalCredential);
+      if (portalOk) {
+        if (primaryAccount) {
+          matched = {
+            source: 'bnet',
+            id: primaryAccount.id,
+            email: primaryAccount.email || email,
+            username: primaryAccount.username || null,
+            sha_pass_hash: primaryAccount.sha_pass_hash,
+            salt: primaryAccount.salt,
+            verifier: primaryAccount.verifier,
+          };
+        } else if (fallbackAccount) {
+          matched = {
+            source: 'account',
+            id: fallbackAccount.id,
+            email: fallbackAccount.email || email,
+            username: fallbackAccount.username || null,
+            sha_pass_hash: fallbackAccount.sha_pass_hash,
+            salt: fallbackAccount.salt,
+            verifier: fallbackAccount.verifier,
+          };
+        } else {
+          matched = {
+            source: 'portal',
+            id: portalCredential.account_id ?? null,
+            email,
+            username: null,
+          };
+        }
+      } else {
+        console.warn('Suspicious login attempt (portal hash mismatch)', {
+          target: maskEmail(email),
+          ip: req.ip,
+        });
       }
     }
 
     if (!matched) {
-      console.warn('Suspicious login attempt (hash mismatch)', {
-        target: maskEmail(email),
-        ip: req.ip,
-      });
-      return res.status(401).json({ error: 'Invalid credentials' });
+      const candidates = [];
+      if (primaryAccount) {
+        candidates.push({
+          source: 'bnet',
+          id: primaryAccount.id,
+          email: primaryAccount.email || email,
+          username: primaryAccount.username || null,
+          sha_pass_hash: primaryAccount.sha_pass_hash,
+          salt: primaryAccount.salt,
+          verifier: primaryAccount.verifier,
+        });
+      }
+      if (fallbackAccount) {
+        candidates.push({
+          source: 'account',
+          id: fallbackAccount.id,
+          email: fallbackAccount.email || email,
+          username: fallbackAccount.username || null,
+          sha_pass_hash: fallbackAccount.sha_pass_hash,
+          salt: fallbackAccount.salt,
+          verifier: fallbackAccount.verifier,
+        });
+      }
+
+      if (!candidates.length) {
+        console.warn('Suspicious login attempt (no account)', {
+          target: maskEmail(email),
+          ip: req.ip,
+        });
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      for (const candidate of candidates) {
+        const storedHash = normalizeHashValue(candidate.sha_pass_hash);
+        const salt = normalizeBuffer(candidate.salt);
+        const verifier = normalizeBuffer(candidate.verifier);
+        const ok = matchesAccountPassword(
+          {
+            storedHash,
+            salt,
+            verifier,
+            email: candidate.email,
+            username: candidate.username,
+          },
+          password
+        );
+        if (ok) {
+          matched = candidate;
+          break;
+        }
+      }
+
+      if (!matched) {
+        console.warn('Suspicious login attempt (hash mismatch)', {
+          target: maskEmail(email),
+          ip: req.ip,
+        });
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
     }
 
     let sessionAccountId = matched.id;
-    const numericId = toSafeNumber(matched.id);
+    if (sessionAccountId == null) {
+      if (primaryAccount?.id != null) {
+        sessionAccountId = primaryAccount.id;
+      } else if (fallbackAccount?.id != null) {
+        sessionAccountId = fallbackAccount.id;
+      } else if (portalCredential?.account_id != null) {
+        sessionAccountId = portalCredential.account_id;
+      }
+    }
+    const numericId = toSafeNumber(sessionAccountId);
     if (numericId != null) {
       sessionAccountId = numericId;
-    } else if (typeof matched.id === 'bigint') {
-      sessionAccountId = matched.id.toString();
-    } else if (matched.id != null && typeof matched.id !== 'string') {
-      sessionAccountId = String(matched.id);
+    } else if (typeof sessionAccountId === 'bigint') {
+      sessionAccountId = sessionAccountId.toString();
+    } else if (sessionAccountId != null && typeof sessionAccountId !== 'string') {
+      sessionAccountId = String(sessionAccountId);
     }
     if (matched.source === 'account') {
       const linkedBnetId = await findBnetIdForGameAccount(matched.id);
@@ -2093,7 +2236,16 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       }
     }
 
+    if (sessionAccountId == null) {
+      console.error('Login succeeded but account id is missing', {
+        target: maskEmail(email),
+        source: matched.source,
+      });
+      return res.status(500).json({ error: 'Unable to login' });
+    }
+
     const session = await persistSession(sessionAccountId, matched.email || email, req);
+    await upsertPortalCredential({ email, password, accountId: sessionAccountId });
     const maxAge = CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
     res.cookie(CONFIG.SESSION_COOKIE_NAME, session.token, {
       httpOnly: true,
@@ -2165,6 +2317,8 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
       email,
       newPassword,
     });
+
+    await upsertPortalCredential({ email, password: newPassword, accountId: req.session?.account_id });
 
     return res.json({ ok: true });
   } catch (e) {
@@ -2351,6 +2505,13 @@ app.get('/verify', async (req, res) => {
 
     // Consume token (best-effort)
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
+
+    const [createdPrimary, createdFallback] = await Promise.all([
+      getAuthAccountByEmail(row.email),
+      getGameAccountByEmail(row.email),
+    ]);
+    const portalAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
+    await upsertPortalCredential({ email: row.email, password: row.password, accountId: portalAccountId });
 
     return res
       .type('text/html')
