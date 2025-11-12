@@ -248,6 +248,18 @@ await classicPool.query(`
 `);
 
 await pool.query(`
+  CREATE TABLE IF NOT EXISTS pending_classic (
+    token VARCHAR(64) PRIMARY KEY,
+    username VARCHAR(32) NOT NULL,
+    password VARCHAR(128) NOT NULL,
+    email VARCHAR(254) NOT NULL,
+    created_at BIGINT NOT NULL,
+    KEY idx_created_at (created_at),
+    UNIQUE KEY uniq_email_classic (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+await pool.query(`
   CREATE TABLE IF NOT EXISTS sessions (
     id CHAR(64) PRIMARY KEY,
     account_id BIGINT UNSIGNED NOT NULL,
