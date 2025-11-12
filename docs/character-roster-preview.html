@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DreamCore Character Roster Preview</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.8);
+      --accent: #38bdf8;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      font-family: "Inter", "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(129, 140, 248, 0.2), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+      padding: 32px;
+      box-sizing: border-box;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 24px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+    .logo span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      border-radius: 12px;
+      font-weight: 700;
+    }
+    .session-info {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    main {
+      display: grid;
+      gap: 24px;
+    }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 20px;
+      padding: 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.45);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+    }
+    .card strong {
+      font-size: 2.4rem;
+      letter-spacing: -0.04em;
+      display: block;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(129, 140, 248, 0.2));
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+    .button.secondary {
+      border-color: rgba(148, 163, 184, 0.4);
+      background: transparent;
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .tile {
+      padding: 20px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      display: grid;
+      gap: 12px;
+    }
+    .tile h3 {
+      margin: 0;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .tag {
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.18);
+      color: #7dd3fc;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      gap: 12px;
+    }
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.2);
+      overflow: hidden;
+      position: relative;
+    }
+    .progress::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: var(--value, 60%);
+      background: linear-gradient(90deg, #38bdf8, #22d3ee);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.6);
+    }
+    footer {
+      margin-top: auto;
+      padding-top: 40px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>DC</span>
+      DreamCore: My Characters
+    </div>
+    <div class="session-info">Connected as <strong>aria.solace@dreamcore</strong></div>
+  </header>
+  <main>
+    <section class="summary-cards">
+      <article class="card">
+        <h2>Total Characters</h2>
+        <strong>7</strong>
+        <div class="meta">Across 3 shards</div>
+      </article>
+      <article class="card">
+        <h2>Last Sync</h2>
+        <strong>2m ago</strong>
+        <div class="meta">Triggered via /api/characters</div>
+      </article>
+      <article class="card">
+        <h2>Pending Imports</h2>
+        <strong>1</strong>
+        <div class="meta">Awaiting approval</div>
+      </article>
+      <article class="card">
+        <h2>Favorites</h2>
+        <strong>3</strong>
+        <div class="meta">Pinned to quick launch</div>
+      </article>
+    </section>
+
+    <section class="actions">
+      <button class="button">⟳ Refresh Roster</button>
+      <button class="button secondary">＋ Add New Character</button>
+    </section>
+
+    <section class="grid">
+      <article class="tile" style="--value: 72%">
+        <h3>Lyra Voss <span class="tag">Stellar</span></h3>
+        <div class="meta">Level 38 • Last login 4h ago • Shard: Nebula-5</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 46%">
+        <h3>Echo-91 <span class="tag">Synthetic</span></h3>
+        <div class="meta">Level 24 • Last login 1d ago • Shard: Cobalt-2</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 88%">
+        <h3>Seraphine Vale <span class="tag">Mystic</span></h3>
+        <div class="meta">Level 42 • Last login 12m ago • Shard: Aurora-1</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 33%">
+        <h3>Kellan Ward <span class="tag">Ranger</span></h3>
+        <div class="meta">Level 18 • Last login 6d ago • Shard: Verdant-3</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 59%">
+        <h3>Tamsin Quill <span class="tag">Chrono</span></h3>
+        <div class="meta">Level 27 • Last login 8h ago • Shard: Meridian-7</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 91%">
+        <h3>Unit-Null <span class="tag">Prototype</span></h3>
+        <div class="meta">Level 44 • Last login 2h ago • Shard: Hyperion-0</div>
+        <div class="progress"></div>
+      </article>
+      <article class="tile" style="--value: 15%">
+        <h3>Mira Shade <span class="tag">Rogue</span></h3>
+        <div class="meta">Level 9 • Last login 14d ago • Shard: Ember-6</div>
+        <div class="progress"></div>
+      </article>
+    </section>
+  </main>
+  <footer>
+    Preview mockup rendered locally • Data sourced from fictional seed payload
+  </footer>
+</body>
+</html>
