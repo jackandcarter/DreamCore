@@ -124,6 +124,14 @@ const DB = {
   NAME: process.env.DB_NAME || 'tc_register',
 };
 
+const CLASSIC_DB = {
+  HOST: process.env.CLASSIC_DB_HOST || '127.0.0.1',
+  PORT: Number(process.env.CLASSIC_DB_PORT || 3306),
+  USER: process.env.CLASSIC_DB_USER || 'trinity',
+  PASS: process.env.CLASSIC_DB_PASS || 'trinity_password',
+  NAME: process.env.CLASSIC_DB_NAME || 'tc_register_classic',
+};
+
 const AUTH_DB = {
   HOST: process.env.AUTH_DB_HOST || '127.0.0.1',
   PORT: Number(process.env.AUTH_DB_PORT || 3306),
@@ -150,6 +158,18 @@ await admin.query(
 );
 await admin.end();
 
+const classicAdmin = await mysql.createConnection({
+  host: CLASSIC_DB.HOST,
+  port: CLASSIC_DB.PORT,
+  user: CLASSIC_DB.USER,
+  password: CLASSIC_DB.PASS,
+  multipleStatements: true,
+});
+await classicAdmin.query(
+  `CREATE DATABASE IF NOT EXISTS \`${CLASSIC_DB.NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+);
+await classicAdmin.end();
+
 // Main pool — note the "database" option
 const pool = await mysql.createPool({
   host: DB.HOST,
@@ -157,6 +177,18 @@ const pool = await mysql.createPool({
   user: DB.USER,
   password: DB.PASS,
   database: DB.NAME,            // <-- important
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+  multipleStatements: true,
+});
+
+const classicPool = await mysql.createPool({
+  host: CLASSIC_DB.HOST,
+  port: CLASSIC_DB.PORT,
+  user: CLASSIC_DB.USER,
+  password: CLASSIC_DB.PASS,
+  database: CLASSIC_DB.NAME,
   waitForConnections: true,
   connectionLimit: 10,
   namedPlaceholders: true,
@@ -200,6 +232,18 @@ await pool.query(`
     created_at BIGINT NOT NULL,
     KEY idx_created_at (created_at),
     UNIQUE KEY uniq_email (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+await classicPool.query(`
+  CREATE TABLE IF NOT EXISTS pending_classic (
+    token VARCHAR(64) PRIMARY KEY,
+    username VARCHAR(32) NOT NULL,
+    password VARCHAR(128) NOT NULL,
+    email VARCHAR(254) NOT NULL,
+    created_at BIGINT NOT NULL,
+    KEY idx_created_at (created_at),
+    UNIQUE KEY uniq_email_classic (email)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
@@ -2640,7 +2684,7 @@ app.post('/api/classic/register', limiter, async (req, res) => {
     const token = crypto.randomBytes(24).toString('hex');
     const now = Date.now();
     const safeUser = email.split('@')[0].slice(0, CONFIG.MAX_USER) || 'player';
-    await pool.execute(
+    await classicPool.execute(
       'INSERT INTO pending_classic (token, username, password, email, created_at) VALUES (?, ?, ?, ?, ?)\n       ON DUPLICATE KEY UPDATE token = VALUES(token), username = VALUES(username), password = VALUES(password), created_at = VALUES(created_at)',
       [token, safeUser, password, email, now]
     );
@@ -2848,7 +2892,7 @@ app.get('/classic/verify', async (req, res) => {
         );
     }
 
-    const [rows] = await pool.execute('SELECT * FROM pending_classic WHERE token = ?', [token]);
+    const [rows] = await classicPool.execute('SELECT * FROM pending_classic WHERE token = ?', [token]);
     const row = Array.isArray(rows) ? rows[0] : undefined;
     if (!row) {
       return res
@@ -2870,7 +2914,7 @@ app.get('/classic/verify', async (req, res) => {
 
     const ageMin = (Date.now() - row.created_at) / 60000;
     if (ageMin > CONFIG.TOKEN_TTL_MIN) {
-      await pool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
+      await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
       return res
         .status(400)
         .type('text/html')
@@ -2915,7 +2959,7 @@ app.get('/classic/verify', async (req, res) => {
         );
     }
 
-    await pool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
+    await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
 
     return res
       .type('text/html')
@@ -3121,7 +3165,7 @@ setInterval(async () => {
   try { await pool.execute('DELETE FROM pending WHERE created_at < ?', [cutoff]); } catch (e) {
     console.error('Failed to prune pending tokens', e);
   }
-  try { await pool.execute('DELETE FROM pending_classic WHERE created_at < ?', [cutoff]); } catch (e) {
+  try { await classicPool.execute('DELETE FROM pending_classic WHERE created_at < ?', [cutoff]); } catch (e) {
     console.error('Failed to prune classic pending tokens', e);
   }
   try { await pool.execute('DELETE FROM sessions WHERE expires_at <= ?', [now]); } catch (e) {
@@ -3137,5 +3181,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Classic portal URL: ${CONFIG.CLASSIC_BASE_URL}`);
   console.log(`   Classic SOAP endpoint: ${CLASSIC_SOAP.host}:${CLASSIC_SOAP.port}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
