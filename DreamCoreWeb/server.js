@@ -262,14 +262,19 @@ await pool.query(`
 await pool.query(`
   CREATE TABLE IF NOT EXISTS sessions (
     id CHAR(64) PRIMARY KEY,
-    account_id BIGINT UNSIGNED NOT NULL,
+    portal_user_id BIGINT UNSIGNED NOT NULL,
+    account_id BIGINT UNSIGNED DEFAULT NULL,
     email VARCHAR(254) NOT NULL,
+    username VARCHAR(64) DEFAULT NULL,
+    retail_accounts_json TEXT DEFAULT NULL,
+    classic_accounts_json TEXT DEFAULT NULL,
     created_at BIGINT NOT NULL,
     expires_at BIGINT NOT NULL,
     last_ip VARCHAR(64) DEFAULT NULL,
     last_user_agent VARCHAR(255) DEFAULT NULL,
     KEY idx_account (account_id),
-    KEY idx_expires (expires_at)
+    KEY idx_expires (expires_at),
+    KEY idx_session_portal_user (portal_user_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
@@ -288,6 +293,7 @@ await pool.query(`
   CREATE TABLE IF NOT EXISTS portal_users (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     email VARCHAR(254) NOT NULL,
+    username VARCHAR(64) DEFAULT NULL,
     password_hash VARBINARY(128) NOT NULL,
     salt VARBINARY(64) NOT NULL,
     version TINYINT UNSIGNED NOT NULL,
@@ -296,7 +302,8 @@ await pool.query(`
     last_login_at BIGINT DEFAULT NULL,
     login_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
-    UNIQUE KEY uniq_portal_email (email)
+    UNIQUE KEY uniq_portal_email (email),
+    UNIQUE KEY uniq_portal_username (username)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
@@ -323,6 +330,43 @@ await pool.query(`
       REFERENCES portal_users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
+
+async function addColumnIfMissing(table, clause) {
+  try {
+    await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${clause}`);
+  } catch (err) {
+    if (err?.code === 'ER_DUP_FIELDNAME') {
+      return;
+    }
+    throw err;
+  }
+}
+
+async function addIndexIfMissing(table, clause) {
+  try {
+    await pool.query(`ALTER TABLE \`${table}\` ${clause}`);
+  } catch (err) {
+    if (err?.code === 'ER_DUP_KEYNAME') {
+      return;
+    }
+    if (err?.code === 'ER_DUP_KEY') {
+      return;
+    }
+    throw err;
+  }
+}
+
+async function ensurePortalSchemaUpgrades() {
+  await addColumnIfMissing('portal_users', 'username VARCHAR(64) DEFAULT NULL AFTER email');
+  await addIndexIfMissing('portal_users', 'ADD UNIQUE KEY uniq_portal_username (username)');
+  await addColumnIfMissing('sessions', 'portal_user_id BIGINT UNSIGNED DEFAULT NULL AFTER id');
+  await addColumnIfMissing('sessions', 'username VARCHAR(64) DEFAULT NULL AFTER email');
+  await addColumnIfMissing('sessions', 'retail_accounts_json TEXT DEFAULT NULL AFTER username');
+  await addColumnIfMissing('sessions', 'classic_accounts_json TEXT DEFAULT NULL AFTER retail_accounts_json');
+  await addIndexIfMissing('sessions', 'ADD KEY idx_session_portal_user (portal_user_id)');
+}
+
+await ensurePortalSchemaUpgrades();
 
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
@@ -703,14 +747,14 @@ const LOGIN_PAGE = () => `<!doctype html>
               <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
               <div>
                 <h2 class="text-lg font-semibold text-white">Log in to your account</h2>
-                <p class="text-[15px] text-indigo-100/90">Use the email and password you verified during registration.</p>
+                <p class="text-[15px] text-indigo-100/90">Use the email or username and password you verified during registration.</p>
               </div>
             </div>
             <form id="loginForm" class="mt-6 space-y-5">
               <div>
-                <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginEmail">Email</label>
-                <input id="loginEmail" type="email" name="email" autocomplete="username" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
+                <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginIdentity">Email or username</label>
+                <input id="loginIdentity" type="text" name="identity" autocomplete="username" required
+                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com or player123" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginPassword">Password</label>
@@ -757,11 +801,11 @@ const loginScript = () => {
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const email = document.getElementById('loginEmail')?.value.trim();
+    const identity = document.getElementById('loginIdentity')?.value.trim();
     const password = document.getElementById('loginPassword')?.value || '';
 
-    if (!email || !password) {
-      msg.textContent = 'Email and password are required.';
+    if (!identity || !password) {
+      msg.textContent = 'Email or username and password are required.';
       return;
     }
 
@@ -773,7 +817,7 @@ const loginScript = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ identity, password })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1499,6 +1543,27 @@ function maskEmail(e) {
   return `${prefix || '*'}***${suffix}@${domain}`;
 }
 
+function maskPortalIdentity(value) {
+  if (typeof value !== 'string') return 'unknown';
+  const trimmed = value.trim();
+  if (!trimmed) return 'unknown';
+  if (trimmed.includes('@')) {
+    return maskEmail(trimmed);
+  }
+  if (trimmed.length <= 2) {
+    return `${trimmed || '*'}***`;
+  }
+  return `${trimmed.slice(0, 2)}***${trimmed.slice(-1)}`;
+}
+
+function normalizePortalUsername(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const clipped = trimmed.slice(0, CONFIG.MAX_USER);
+  return clipped || null;
+}
+
 function upperHex(buffer) {
   return Buffer.from(buffer).toString('hex').toUpperCase();
 }
@@ -2137,33 +2202,129 @@ function getSessionToken(req) {
   return null;
 }
 
+function sanitizeAccountIdList(values) {
+  if (!Array.isArray(values)) return [];
+  const clean = [];
+  for (const value of values) {
+    const numeric = toSafeNumber(value);
+    if (numeric != null) {
+      clean.push(numeric);
+    }
+  }
+  return clean;
+}
+
+function encodeAccountIdList(values) {
+  const clean = sanitizeAccountIdList(values);
+  return clean.length ? JSON.stringify(clean) : null;
+}
+
+function decodeAccountIdList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return sanitizeAccountIdList(raw);
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return sanitizeAccountIdList(Array.isArray(parsed) ? parsed : []);
+    } catch (err) {
+      // fall through
+    }
+  }
+  return [];
+}
+
+function attachSessionHelpers(session) {
+  if (!session) return session;
+  const retailAccountIds = sanitizeAccountIdList(
+    session.retailAccountIds ?? decodeAccountIdList(session.retail_accounts_json)
+  );
+  const classicAccountIds = sanitizeAccountIdList(
+    session.classicAccountIds ?? decodeAccountIdList(session.classic_accounts_json)
+  );
+  session.retailAccountIds = retailAccountIds;
+  session.classicAccountIds = classicAccountIds;
+  delete session.retail_accounts_json;
+  delete session.classic_accounts_json;
+  Object.defineProperty(session, 'getRetailAccountIds', {
+    value: () => retailAccountIds.slice(),
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(session, 'getClassicAccountIds', {
+    value: () => classicAccountIds.slice(),
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(session, 'getPrimaryRetailAccountId', {
+    value: () => (retailAccountIds.length ? retailAccountIds[0] : null),
+    enumerable: false,
+    configurable: true,
+  });
+  return session;
+}
+
 async function loadSession(req) {
   const token = getSessionToken(req);
   if (!token) return null;
   const hashed = hashSessionToken(token);
   const now = Date.now();
   const [rows] = await pool.execute(
-    'SELECT id, account_id, email, created_at, expires_at FROM sessions WHERE id = ? AND expires_at > ?',
+    `SELECT id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
+            created_at, expires_at
+       FROM sessions
+      WHERE id = ? AND expires_at > ?
+      LIMIT 1`,
     [hashed, now]
   );
   if (!rows.length) return null;
   const session = rows[0];
+  if (session.portal_user_id == null) {
+    return null;
+  }
   session.token = token;
-  return session;
+  session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
+  session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
+  return attachSessionHelpers(session);
 }
 
-async function persistSession(accountId, email, req) {
-  const normalizedEmail = normalizeEmail(email);
+async function persistSession({ portalUserId, email, username, retailAccountIds = [], classicAccountIds = [] }, req) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    throw new Error('Cannot persist session without portal user id');
+  }
+  const normalizedEmail = normalizeEmail(email) || (typeof email === 'string' ? email.trim() : null);
+  if (!normalizedEmail) {
+    throw new Error('Cannot persist session without email');
+  }
   const token = crypto.randomBytes(48).toString('base64url');
   const hashed = hashSessionToken(token);
   const now = Date.now();
   const expiresAt = now + CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
   const userAgent = (req.headers['user-agent'] || '').slice(0, 255);
   const ip = (req.ip || req.headers['x-forwarded-for'] || '').toString().slice(0, 64);
+  const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
+  const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
+  const primaryAccountId = sanitizedRetailIds.length ? sanitizedRetailIds[0] : null;
+  const sessionUsername = normalizePortalUsername(username);
   await pool.execute(
-    `REPLACE INTO sessions (id, account_id, email, created_at, expires_at, last_ip, last_user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [hashed, accountId, normalizedEmail, now, expiresAt, ip || null, userAgent || null]
+    `REPLACE INTO sessions (id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
+                            created_at, expires_at, last_ip, last_user_agent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      hashed,
+      safePortalId,
+      primaryAccountId,
+      normalizedEmail,
+      sessionUsername,
+      encodeAccountIdList(sanitizedRetailIds),
+      encodeAccountIdList(sanitizedClassicIds),
+      now,
+      expiresAt,
+      ip || null,
+      userAgent || null,
+    ]
   );
   return { token, expiresAt };
 }
@@ -2182,36 +2343,74 @@ async function requireSession(req, res, next) {
   }
 }
 
-async function getPortalUser(email) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return null;
+async function loadPortalUserAccountLinks(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    return { retailAccountIds: [], classicAccountIds: [] };
+  }
+  try {
+    const [[retailRows], [classicRows]] = await Promise.all([
+      pool.execute('SELECT retail_account_id FROM portal_user_retail_accounts WHERE portal_user_id = ?', [safePortalId]),
+      pool.execute('SELECT classic_account_id FROM portal_user_classic_accounts WHERE portal_user_id = ?', [safePortalId]),
+    ]);
+    const retailAccountIds = retailRows
+      .map((row) => toSafeNumber(row.retail_account_id))
+      .filter((value) => value != null);
+    const classicAccountIds = classicRows
+      .map((row) => toSafeNumber(row.classic_account_id))
+      .filter((value) => value != null);
+    return { retailAccountIds, classicAccountIds };
+  } catch (err) {
+    console.error('Failed to load portal user account links', err);
+    return { retailAccountIds: [], classicAccountIds: [] };
+  }
+}
+
+async function loadPortalUser(whereClause, params) {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, email, password_hash, salt, version, created_at, updated_at, last_login_at, login_count
-       FROM portal_users WHERE email = ? LIMIT 1`,
-      [normalized]
+      `SELECT id, email, username, password_hash, salt, version, created_at, updated_at, last_login_at, login_count
+       FROM portal_users WHERE ${whereClause} LIMIT 1`,
+      params
     );
     if (!rows.length) return null;
     const user = rows[0];
-    const [retailRows] = await pool.execute(
-      'SELECT retail_account_id FROM portal_user_retail_accounts WHERE portal_user_id = ?',
-      [user.id]
-    );
-    const [classicRows] = await pool.execute(
-      'SELECT classic_account_id FROM portal_user_classic_accounts WHERE portal_user_id = ?',
-      [user.id]
-    );
-    user.retailAccountIds = retailRows
-      .map((row) => toSafeNumber(row.retail_account_id))
-      .filter((value) => value != null);
-    user.classicAccountIds = classicRows
-      .map((row) => toSafeNumber(row.classic_account_id))
-      .filter((value) => value != null);
+    const links = await loadPortalUserAccountLinks(user.id);
+    user.retailAccountIds = links.retailAccountIds;
+    user.classicAccountIds = links.classicAccountIds;
     return user;
   } catch (err) {
     console.error('Failed to load portal user', err);
     return null;
   }
+}
+
+async function getPortalUserByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  return loadPortalUser('email = ?', [normalized]);
+}
+
+async function getPortalUserByUsername(username) {
+  const normalized = normalizePortalUsername(username);
+  if (!normalized) return null;
+  return loadPortalUser('UPPER(username) = UPPER(?)', [normalized]);
+}
+
+async function getPortalUserById(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) return null;
+  return loadPortalUser('id = ?', [safePortalId]);
+}
+
+async function getPortalUserByIdentity(identity) {
+  if (typeof identity !== 'string') return null;
+  const emailCandidate = normalizeEmail(identity);
+  if (emailCandidate) {
+    const byEmail = await getPortalUserByEmail(emailCandidate);
+    if (byEmail) return byEmail;
+  }
+  return getPortalUserByUsername(identity);
 }
 
 async function linkPortalUserToRetailAccount(portalUserId, accountId, { linkedAt } = {}) {
@@ -2261,21 +2460,23 @@ async function recordPortalLogin(portalUserId) {
   }
 }
 
-async function upsertPortalUser({ email, password, retailAccountId, classicAccountId }) {
+async function upsertPortalUser({ email, password, retailAccountId, classicAccountId, username }) {
   const normalized = normalizeEmail(email);
   if (!normalized || typeof password !== 'string' || !password.length) return null;
+  const normalizedUsername = normalizePortalUsername(username);
   try {
     const { hash, salt, version } = await hashPortalPassword(password);
     const now = Date.now();
     await pool.execute(
-      `INSERT INTO portal_users (email, password_hash, salt, version, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO portal_users (email, username, password_hash, salt, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
+         username = COALESCE(VALUES(username), portal_users.username),
          password_hash = VALUES(password_hash),
          salt = VALUES(salt),
          version = VALUES(version),
          updated_at = VALUES(updated_at)`,
-      [normalized, hash, salt, version, now, now]
+      [normalized, normalizedUsername, hash, salt, version, now, now]
     );
     const [rows] = await pool.execute('SELECT id FROM portal_users WHERE email = ? LIMIT 1', [normalized]);
     const portalUserId = rows?.[0]?.id ?? null;
@@ -2291,6 +2492,24 @@ async function upsertPortalUser({ email, password, retailAccountId, classicAccou
   } catch (err) {
     console.error('Failed to upsert portal user', err);
     return null;
+  }
+}
+
+async function setPortalUserPassword(portalUserId, password) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null || typeof password !== 'string' || !password.length) {
+    return false;
+  }
+  try {
+    const { hash, salt, version } = await hashPortalPassword(password);
+    await pool.execute(
+      'UPDATE portal_users SET password_hash = ?, salt = ?, version = ?, updated_at = ? WHERE id = ?',
+      [hash, salt, version, Date.now(), safePortalId]
+    );
+    return true;
+  } catch (err) {
+    console.error('Failed to update portal password', err);
+    return false;
   }
 }
 
@@ -2451,165 +2670,50 @@ app.get('/api/status', async (req, res) => {
 
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
-    const { email: rawEmail, password } = req.body || {};
-    const email = normalizeEmail(rawEmail);
-    if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
+    const { identity: rawIdentity, email: fallbackEmail, password } = req.body || {};
+    const identitySource = typeof rawIdentity === 'string' ? rawIdentity : fallbackEmail;
+    const identity = typeof identitySource === 'string' ? identitySource.trim() : '';
+    if (!identity) return badRequest(res, 'Email or username is required.');
     if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
 
-    const [portalUser, primaryAccount, fallbackAccount] = await Promise.all([
-      getPortalUser(email),
-      getAuthAccountByEmail(email),
-      getGameAccountByEmail(email),
-    ]);
-
-    let matched = null;
-    let portalUserIdFromLogin = portalUser?.id ?? null;
-
-    if (portalUser) {
-      const portalOk = await verifyPortalPassword(password, portalUser);
-      if (portalOk) {
-        if (primaryAccount) {
-          matched = {
-            source: 'bnet',
-            id: primaryAccount.id,
-            email: primaryAccount.email || email,
-            username: primaryAccount.username || null,
-            sha_pass_hash: primaryAccount.sha_pass_hash,
-            salt: primaryAccount.salt,
-            verifier: primaryAccount.verifier,
-          };
-        } else if (fallbackAccount) {
-          matched = {
-            source: 'account',
-            id: fallbackAccount.id,
-            email: fallbackAccount.email || email,
-            username: fallbackAccount.username || null,
-            sha_pass_hash: fallbackAccount.sha_pass_hash,
-            salt: fallbackAccount.salt,
-            verifier: fallbackAccount.verifier,
-          };
-        } else {
-          matched = {
-            source: 'portal',
-            id: portalUser.retailAccountIds?.[0] ?? null,
-            email,
-            username: null,
-            portalUserId: portalUser.id,
-          };
-        }
-      } else {
-        console.warn('Suspicious login attempt (portal hash mismatch)', {
-          target: maskEmail(email),
-          ip: req.ip,
-        });
-      }
-    }
-
-    if (!matched) {
-      const candidates = [];
-      if (primaryAccount) {
-        candidates.push({
-          source: 'bnet',
-          id: primaryAccount.id,
-          email: primaryAccount.email || email,
-          username: primaryAccount.username || null,
-          sha_pass_hash: primaryAccount.sha_pass_hash,
-          salt: primaryAccount.salt,
-          verifier: primaryAccount.verifier,
-        });
-      }
-      if (fallbackAccount) {
-        candidates.push({
-          source: 'account',
-          id: fallbackAccount.id,
-          email: fallbackAccount.email || email,
-          username: fallbackAccount.username || null,
-          sha_pass_hash: fallbackAccount.sha_pass_hash,
-          salt: fallbackAccount.salt,
-          verifier: fallbackAccount.verifier,
-        });
-      }
-
-      if (!candidates.length) {
-        console.warn('Suspicious login attempt (no account)', {
-          target: maskEmail(email),
-          ip: req.ip,
-        });
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      for (const candidate of candidates) {
-        const storedHash = normalizeHashValue(candidate.sha_pass_hash);
-        const salt = normalizeBuffer(candidate.salt);
-        const verifier = normalizeBuffer(candidate.verifier);
-        const ok = matchesAccountPassword(
-          {
-            storedHash,
-            salt,
-            verifier,
-            email: candidate.email,
-            username: candidate.username,
-          },
-          password
-        );
-        if (ok) {
-          matched = candidate;
-          break;
-        }
-      }
-
-      if (!matched) {
-        console.warn('Suspicious login attempt (hash mismatch)', {
-          target: maskEmail(email),
-          ip: req.ip,
-        });
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-    }
-
-    let sessionAccountId = matched.id;
-    if (sessionAccountId == null) {
-      if (primaryAccount?.id != null) {
-        sessionAccountId = primaryAccount.id;
-      } else if (fallbackAccount?.id != null) {
-        sessionAccountId = fallbackAccount.id;
-      } else if (portalUser?.retailAccountIds?.length) {
-        sessionAccountId = portalUser.retailAccountIds[0];
-      }
-    }
-    const numericId = toSafeNumber(sessionAccountId);
-    if (numericId != null) {
-      sessionAccountId = numericId;
-    } else if (typeof sessionAccountId === 'bigint') {
-      sessionAccountId = sessionAccountId.toString();
-    } else if (sessionAccountId != null && typeof sessionAccountId !== 'string') {
-      sessionAccountId = String(sessionAccountId);
-    }
-    if (matched.source === 'account') {
-      const linkedBnetId = await findBnetIdForGameAccount(matched.id);
-      if (linkedBnetId != null) {
-        sessionAccountId = linkedBnetId;
-      }
-    }
-
-    if (sessionAccountId == null) {
-      console.error('Login succeeded but account id is missing', {
-        target: maskEmail(email),
-        source: matched.source,
+    const portalUser = await getPortalUserByIdentity(identity);
+    if (!portalUser) {
+      console.warn('Portal login attempt for unknown identity', {
+        target: maskPortalIdentity(identity),
+        ip: req.ip,
       });
-      return res.status(500).json({ error: 'Unable to login' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const session = await persistSession(sessionAccountId, matched.email || email, req);
-    const persistedPortalUserId = await upsertPortalUser({
-      email,
-      password,
-      retailAccountId: sessionAccountId,
-    });
-    const loginPortalId = persistedPortalUserId ?? portalUserIdFromLogin;
-    if (loginPortalId != null) {
-      await recordPortalLogin(loginPortalId);
+    const passwordOk = await verifyPortalPassword(password, portalUser);
+    if (!passwordOk) {
+      console.warn('Portal login attempt with incorrect password', {
+        target: maskPortalIdentity(identity),
+        portalUserId: portalUser.id,
+        ip: req.ip,
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    await recordPortalLogin(portalUser.id);
+
+    const retailAccountIds = sanitizeAccountIdList(Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : []);
+    const classicAccountIds = sanitizeAccountIdList(
+      Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : []
+    );
+    const primaryRetailAccountId = retailAccountIds.length ? retailAccountIds[0] : null;
+
+    const session = await persistSession(
+      {
+        portalUserId: portalUser.id,
+        email: portalUser.email,
+        username: portalUser.username,
+        retailAccountIds,
+        classicAccountIds,
+      },
+      req
+    );
+
     const maxAge = CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
     res.cookie(CONFIG.SESSION_COOKIE_NAME, session.token, {
       httpOnly: true,
@@ -2621,7 +2725,12 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
     return res.json({
       ok: true,
-      accountId: sessionAccountId,
+      portalUserId: portalUser.id,
+      accountId: primaryRetailAccountId,
+      email: portalUser.email,
+      username: portalUser.username,
+      retailAccountIds,
+      classicAccountIds,
       session: {
         token: session.token,
         expiresAt: session.expiresAt,
@@ -2635,7 +2744,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
 app.post('/api/logout', async (req, res) => {
   try {
-    const token = getSessionToken(req);
+    const session = await loadSession(req);
+    const token = session?.token || getSessionToken(req);
     if (token) {
       const hashed = hashSessionToken(token);
       try {
@@ -2658,7 +2768,20 @@ app.post('/api/logout', async (req, res) => {
 });
 
 app.get('/api/session', requireSession, (req, res) => {
-  res.json({ ok: true, session: { accountId: req.session.account_id, email: req.session.email, expiresAt: req.session.expires_at } });
+  const retailAccountIds = req.session?.getRetailAccountIds?.() || [];
+  const classicAccountIds = req.session?.getClassicAccountIds?.() || [];
+  res.json({
+    ok: true,
+    session: {
+      portalUserId: req.session.portal_user_id,
+      accountId: req.session.account_id ?? (retailAccountIds[0] ?? null),
+      email: req.session.email,
+      username: req.session.username,
+      retailAccountIds,
+      classicAccountIds,
+      expiresAt: req.session.expires_at,
+    },
+  });
 });
 
 app.post('/api/account/reset-password', requireSession, async (req, res) => {
@@ -2671,18 +2794,23 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
       );
     }
 
-    const email = req.session?.email;
-    if (!email) {
-      return res.status(400).json({ error: 'Unable to determine account email for this session.' });
+    const portalUserId = req.session?.portal_user_id;
+    if (portalUserId == null) {
+      return res.status(400).json({ error: 'Missing portal session.' });
+    }
+
+    const portalUser = await getPortalUserById(portalUserId);
+    if (!portalUser) {
+      return res.status(404).json({ error: 'Portal account not found.' });
     }
 
     await retailPasswordReset({
       soap: SOAP,
-      email,
+      email: portalUser.email,
       newPassword,
     });
 
-    await upsertPortalUser({ email, password: newPassword, retailAccountId: req.session?.account_id });
+    await setPortalUserPassword(portalUser.id, newPassword);
 
     return res.json({ ok: true });
   } catch (e) {
@@ -2693,7 +2821,7 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
 
 app.get('/api/characters', requireSession, async (req, res) => {
   try {
-    const accountId = req.session?.account_id;
+    const accountId = req.session?.getPrimaryRetailAccountId?.();
     const cacheKey = accountId != null ? String(accountId) : null;
     const refreshFlag = String(req.query?.refresh ?? req.query?.force ?? req.query?.nocache ?? '').toLowerCase();
     const bypassCache = ['1', 'true', 'yes'].includes(refreshFlag);
@@ -2929,7 +3057,12 @@ app.get('/verify', async (req, res) => {
       getGameAccountByEmail(row.email),
     ]);
     const portalAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
-    await upsertPortalUser({ email: row.email, password: row.password, retailAccountId: portalAccountId });
+    await upsertPortalUser({
+      email: row.email,
+      password: row.password,
+      retailAccountId: portalAccountId,
+      username: row.username,
+    });
 
     return res
       .type('text/html')

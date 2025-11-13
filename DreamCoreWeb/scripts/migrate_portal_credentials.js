@@ -26,6 +26,7 @@ async function ensurePortalTables(conn) {
     CREATE TABLE IF NOT EXISTS portal_users (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       email VARCHAR(254) NOT NULL,
+      username VARCHAR(64) DEFAULT NULL,
       password_hash VARBINARY(128) NOT NULL,
       salt VARBINARY(64) NOT NULL,
       version TINYINT UNSIGNED NOT NULL,
@@ -34,7 +35,8 @@ async function ensurePortalTables(conn) {
       last_login_at BIGINT DEFAULT NULL,
       login_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
       PRIMARY KEY (id),
-      UNIQUE KEY uniq_portal_email (email)
+      UNIQUE KEY uniq_portal_email (email),
+      UNIQUE KEY uniq_portal_username (username)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -95,14 +97,15 @@ async function migrate() {
     const version = row.version ?? 1;
     try {
       await connection.execute(
-        `INSERT INTO portal_users (email, password_hash, salt, version, created_at, updated_at, last_login_at, login_count)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, 0)
+        `INSERT INTO portal_users (email, username, password_hash, salt, version, created_at, updated_at, last_login_at, login_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0)
          ON DUPLICATE KEY UPDATE
+           username = COALESCE(VALUES(username), portal_users.username),
            password_hash = VALUES(password_hash),
            salt = VALUES(salt),
            version = VALUES(version),
            updated_at = VALUES(updated_at)`,
-        [email, row.password_hash, row.salt, version, createdAt, updatedAt]
+        [email, null, row.password_hash, row.salt, version, createdAt, updatedAt]
       );
       const [userRows] = await connection.execute('SELECT id FROM portal_users WHERE email = ? LIMIT 1', [email]);
       const portalUserId = userRows?.[0]?.id;
