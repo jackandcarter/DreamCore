@@ -34,6 +34,7 @@ import {
   makeSoapConfig,
   ensureRetailAccount,
   ensureClassicAccount,
+  classicPasswordReset,
   executeRetailCommand,
   normalizeEmail,
   retailPasswordReset,
@@ -115,6 +116,8 @@ const CLASSIC_SOAP = makeSoapConfig({
   user: process.env.CLASSIC_SOAP_USER || CONFIG.TC_SOAP_USER,
   pass: process.env.CLASSIC_SOAP_PASS || CONFIG.TC_SOAP_PASS,
 });
+
+const RESET_TOKEN_TTL_MS = CONFIG.RESET_TOKEN_TTL_MIN * 60 * 1000;
 
 // ----- DB (MariaDB for pending verifications) -----
 const DB = {
@@ -333,6 +336,19 @@ await pool.query(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS portal_audit_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    portal_user_id BIGINT UNSIGNED NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    details TEXT DEFAULT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_portal_audit_user (portal_user_id),
+    KEY idx_portal_audit_action (action)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
 async function addColumnIfMissing(table, clause) {
   try {
     await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${clause}`);
@@ -402,6 +418,13 @@ const loginLimiter = rateLimit({
 
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const linkAccountLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
@@ -1306,6 +1329,52 @@ const CHARACTERS_PAGE = () => `<!doctype html>
         </div>
         <pre id="rosterStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition">Loading characters…</pre>
         <div id="familySections" class="mt-6 space-y-6"></div>
+        <div id="linkingPanel" class="mt-8 space-y-6 hidden">
+          <section id="retailLinkSection" class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
+                <h2 class="text-xl font-semibold text-white">Create your retail login</h2>
+                <p class="text-sm text-indigo-200/80">Provision a Battle.net-style account that links back to this portal.</p>
+              </div>
+            </div>
+            <form id="retailLinkForm" class="mt-4 space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
+                <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-indigo-500/40 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60" placeholder="Choose a secure password" />
+                <p class="mt-2 text-xs text-indigo-200/80">We'll sync this password across your portal and retail login.</p>
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p id="retailLinkMsg" class="text-sm text-indigo-200/90"></p>
+                <button id="retailLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Create retail login</button>
+              </div>
+            </form>
+          </section>
+          <section id="classicLinkSection" class="rounded-3xl border border-rose-500/40 bg-gray-900/70 p-5 shadow-inner shadow-rose-900/30">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-300">DreamCore Classic</p>
+                <h2 class="text-xl font-semibold text-white">Add a Classic realm account</h2>
+                <p class="text-sm text-rose-100/85">Spin up Wrath credentials without leaving this portal.</p>
+              </div>
+            </div>
+            <form id="classicLinkForm" class="mt-4 space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkUsername">Classic username</label>
+                <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Pick an account name" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkPassword">Account password</label>
+                <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Choose a secure password" />
+                <p class="mt-2 text-xs text-rose-100/80">This password replaces any existing Classic login tied to your portal account.</p>
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p id="classicLinkMsg" class="text-sm text-rose-100/90"></p>
+                <button id="classicLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Create Classic login</button>
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
     </div>
     <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
@@ -1321,6 +1390,20 @@ const charactersScript = () => {
   const sessionEmail = document.getElementById('sessionEmail');
   const refreshButton = document.getElementById('refreshRoster');
   const logoutButton = document.getElementById('logoutBtn');
+  const linkingPanel = document.getElementById('linkingPanel');
+  const retailLinkSection = document.getElementById('retailLinkSection');
+  const classicLinkSection = document.getElementById('classicLinkSection');
+  const retailLinkForm = document.getElementById('retailLinkForm');
+  const retailLinkPassword = document.getElementById('retailLinkPassword');
+  const retailLinkMsg = document.getElementById('retailLinkMsg');
+  const retailLinkSubmit = document.getElementById('retailLinkSubmit');
+  const classicLinkForm = document.getElementById('classicLinkForm');
+  const classicLinkUsername = document.getElementById('classicLinkUsername');
+  const classicLinkPassword = document.getElementById('classicLinkPassword');
+  const classicLinkMsg = document.getElementById('classicLinkMsg');
+  const classicLinkSubmit = document.getElementById('classicLinkSubmit');
+
+  let currentSession = null;
 
   const CLASS_NAMES = {
     1: 'Warrior',
@@ -1450,19 +1533,63 @@ const charactersScript = () => {
     familySections.innerHTML = families.map((family) => renderFamilySection(family)).join('');
   }
 
-  async function loadSessionAndRoster() {
+  function updateLinkingVisibility() {
+    const hasRetail = Array.isArray(currentSession?.retailAccountIds)
+      ? currentSession.retailAccountIds.length > 0
+      : false;
+    const hasClassic = Array.isArray(currentSession?.classicAccountIds)
+      ? currentSession.classicAccountIds.length > 0
+      : false;
+    if (retailLinkSection) {
+      retailLinkSection.classList.toggle('hidden', hasRetail);
+    }
+    if (classicLinkSection) {
+      classicLinkSection.classList.toggle('hidden', hasClassic);
+    }
+    if (linkingPanel) {
+      linkingPanel.classList.toggle('hidden', hasRetail && hasClassic);
+    }
+  }
+
+  function setLinkLoading(button, state) {
+    if (!button) return;
+    button.disabled = state;
+    button.classList.toggle('opacity-60', state);
+  }
+
+  function deriveClassicUsername() {
+    if (classicLinkUsername && classicLinkUsername.value.trim()) {
+      return classicLinkUsername.value.trim();
+    }
+    const candidate = currentSession?.username || (currentSession?.email || '').split('@')[0] || '';
+    return candidate.trim();
+  }
+
+  async function refreshSession() {
+    const sessionRes = await fetch('/api/session', { credentials: 'same-origin' });
+    if (sessionRes.status === 401) {
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    const sessionData = await sessionRes.json().catch(() => ({}));
+    currentSession = sessionData?.session || null;
+    if (sessionEmail && currentSession?.email) {
+      sessionEmail.textContent = currentSession.email;
+    }
+    if (classicLinkUsername && currentSession && !classicLinkUsername.value.trim()) {
+      classicLinkUsername.value = deriveClassicUsername();
+    }
+    updateLinkingVisibility();
+  }
+
+  async function initDashboard() {
     try {
-      const sessionRes = await fetch('/api/session', { credentials: 'same-origin' });
-      if (sessionRes.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
-      const sessionData = await sessionRes.json();
-      if (sessionEmail && sessionData?.session?.email) {
-        sessionEmail.textContent = sessionData.session.email;
-      }
+      await refreshSession();
       await loadCharacters();
     } catch (err) {
+      if (err?.message === 'Unauthorized') {
+        return;
+      }
       console.error('Session lookup failed', err);
       rosterStatus.textContent = 'Unable to confirm your session. Redirecting to login…';
       setTimeout(() => { window.location.href = '/login'; }, 1200);
@@ -1494,6 +1621,81 @@ const charactersScript = () => {
     }
   }
 
+  retailLinkForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const passwordValue = retailLinkPassword?.value || '';
+    if (!passwordValue) {
+      retailLinkMsg.textContent = 'Enter a password to continue.';
+      return;
+    }
+    retailLinkMsg.textContent = 'Provisioning retail login…';
+    setLinkLoading(retailLinkSubmit, true);
+    try {
+      const res = await fetch('/api/account/link-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ gameType: 'retail', password: passwordValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        retailLinkMsg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to link retail login.';
+        return;
+      }
+      retailLinkMsg.textContent = 'Retail login created! Password updated across your portal.';
+      if (retailLinkPassword) {
+        retailLinkPassword.value = '';
+      }
+      await refreshSession();
+      await loadCharacters(true);
+    } catch (err) {
+      console.error('Retail link failed', err);
+      retailLinkMsg.textContent = 'Network error while linking retail login.';
+    } finally {
+      setLinkLoading(retailLinkSubmit, false);
+    }
+  });
+
+  classicLinkForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const usernameValue = classicLinkUsername?.value.trim() || '';
+    const passwordValue = classicLinkPassword?.value || '';
+    if (!usernameValue) {
+      classicLinkMsg.textContent = 'Enter a Classic username to continue.';
+      return;
+    }
+    if (!passwordValue) {
+      classicLinkMsg.textContent = 'Enter a password to continue.';
+      return;
+    }
+    classicLinkMsg.textContent = 'Provisioning Classic login…';
+    setLinkLoading(classicLinkSubmit, true);
+    try {
+      const res = await fetch('/api/account/link-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ gameType: 'classic', password: passwordValue, username: usernameValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        classicLinkMsg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to link Classic login.';
+        return;
+      }
+      classicLinkMsg.textContent = 'Classic login created! Password updated across your portal.';
+      if (classicLinkPassword) {
+        classicLinkPassword.value = '';
+      }
+      await refreshSession();
+      await loadCharacters(true);
+    } catch (err) {
+      console.error('Classic link failed', err);
+      classicLinkMsg.textContent = 'Network error while linking Classic login.';
+    } finally {
+      setLinkLoading(classicLinkSubmit, false);
+    }
+  });
+
   refreshButton?.addEventListener('click', (event) => {
     event.preventDefault();
     loadCharacters(true);
@@ -1509,7 +1711,7 @@ const charactersScript = () => {
     }
   });
 
-  loadSessionAndRoster();
+  initDashboard();
 };
 const CHARACTERS_JS = `(${charactersScript.toString()})();`;
 
@@ -2583,6 +2785,25 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
   return { token, expiresAt };
 }
 
+async function updateSessionAccountLinks(session, { retailAccountIds, classicAccountIds }) {
+  if (!session?.token) {
+    return;
+  }
+  const hashed = hashSessionToken(session.token);
+  const nextRetail = retailAccountIds != null ? sanitizeAccountIdList(retailAccountIds) : session.retailAccountIds || [];
+  const nextClassic = classicAccountIds != null ? sanitizeAccountIdList(classicAccountIds) : session.classicAccountIds || [];
+  try {
+    await pool.execute(
+      'UPDATE sessions SET retail_accounts_json = ?, classic_accounts_json = ? WHERE id = ?',
+      [encodeAccountIdList(nextRetail), encodeAccountIdList(nextClassic), hashed]
+    );
+    session.retailAccountIds = nextRetail;
+    session.classicAccountIds = nextClassic;
+  } catch (err) {
+    console.error('Failed to update session account links', err);
+  }
+}
+
 async function requireSession(req, res, next) {
   try {
     const session = await loadSession(req);
@@ -2594,6 +2815,23 @@ async function requireSession(req, res, next) {
   } catch (e) {
     console.error('Session lookup failed', e);
     return res.status(500).json({ error: 'Session lookup failed' });
+  }
+}
+
+async function recordPortalAuditEvent({ portalUserId, action, details }) {
+  const safePortalId = toSafeNumber(portalUserId);
+  const trimmedAction = typeof action === 'string' ? action.trim() : '';
+  if (safePortalId == null || !trimmedAction) {
+    return;
+  }
+  const payload = details ? JSON.stringify(details) : null;
+  try {
+    await pool.execute(
+      'INSERT INTO portal_audit_logs (portal_user_id, action, details, created_at) VALUES (?, ?, ?, ?)',
+      [safePortalId, trimmedAction.slice(0, 64), payload, Date.now()]
+    );
+  } catch (err) {
+    console.error('Failed to record portal audit event', err);
   }
 }
 
@@ -2679,6 +2917,11 @@ async function linkPortalUserToRetailAccount(portalUserId, accountId, { linkedAt
        ON DUPLICATE KEY UPDATE linked_at = VALUES(linked_at)`,
       [safePortalId, safeAccountId, timestamp]
     );
+    await recordPortalAuditEvent({
+      portalUserId: safePortalId,
+      action: 'link:retail',
+      details: { accountId: safeAccountId },
+    });
   } catch (err) {
     console.error('Failed to link portal user to retail account', err);
   }
@@ -2696,6 +2939,11 @@ async function linkPortalUserToClassicAccount(portalUserId, accountId, { linkedA
        ON DUPLICATE KEY UPDATE linked_at = VALUES(linked_at)`,
       [safePortalId, safeAccountId, timestamp]
     );
+    await recordPortalAuditEvent({
+      portalUserId: safePortalId,
+      action: 'link:classic',
+      details: { accountId: safeAccountId },
+    });
   } catch (err) {
     console.error('Failed to link portal user to classic account', err);
   }
@@ -2764,6 +3012,30 @@ async function setPortalUserPassword(portalUserId, password) {
   } catch (err) {
     console.error('Failed to update portal password', err);
     return false;
+  }
+}
+
+async function applyLinkedPasswordUpdate({ portalUser, newPassword }) {
+  if (!portalUser || typeof newPassword !== 'string' || !newPassword.length) {
+    throw new Error('Missing portal user or password');
+  }
+  const retailIds = Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : [];
+  const classicIds = Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : [];
+  if (retailIds.length) {
+    await retailPasswordReset({ soap: SOAP, email: portalUser.email, newPassword });
+  }
+  if (classicIds.length) {
+    const classicAccounts = await loadClassicAccountCredentials(classicIds);
+    for (const account of classicAccounts) {
+      if (!account?.username) {
+        console.warn('Classic account missing username for password reset', {
+          portalUserId: portalUser.id,
+          accountId: account?.id,
+        });
+        continue;
+      }
+      await classicPasswordReset({ soap: CLASSIC_SOAP, username: account.username, newPassword });
+    }
   }
 }
 
@@ -2858,6 +3130,30 @@ async function getAccountByUsername(username) {
     throw err;
   }
   return null;
+}
+
+async function loadClassicAccountCredentials(accountIds) {
+  const sanitized = sanitizeAccountIdList(accountIds);
+  if (!sanitized.length) {
+    return [];
+  }
+  const placeholders = sanitized.map(() => '?').join(',');
+  try {
+    const [rows] = await authPool.execute(
+      `SELECT id, username, email FROM \`account\` WHERE id IN (${placeholders})`,
+      sanitized
+    );
+    return rows.map((row) => ({
+      id: toSafeNumber(row.id),
+      username: row.username,
+      email: row.email,
+    }));
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return [];
+    }
+    throw err;
+  }
 }
 
 async function findBnetIdForGameAccount(accountId) {
@@ -3076,11 +3372,7 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
       return res.status(404).json({ error: 'Portal account not found.' });
     }
 
-    await retailPasswordReset({
-      soap: SOAP,
-      email: portalUser.email,
-      newPassword,
-    });
+    await applyLinkedPasswordUpdate({ portalUser, newPassword });
 
     await setPortalUserPassword(portalUser.id, newPassword);
 
@@ -3088,6 +3380,93 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
   } catch (e) {
     console.error('Account password reset failed', e);
     return res.status(500).json({ error: 'Unable to reset password at this time.' });
+  }
+});
+
+app.post('/api/account/link-game', requireSession, linkAccountLimiter, async (req, res) => {
+  try {
+    const { password, username: rawUsername, gameType: rawGameType } = req.body || {};
+    if (!isValidPassword(password)) {
+      return badRequest(res, 'Invalid password');
+    }
+    const portalUserId = req.session?.portal_user_id;
+    if (portalUserId == null) {
+      return res.status(400).json({ error: 'Missing portal session.' });
+    }
+    const portalUser = await getPortalUserById(portalUserId);
+    if (!portalUser) {
+      return res.status(404).json({ error: 'Portal account not found.' });
+    }
+    const gameType = typeof rawGameType === 'string' && rawGameType.trim().toLowerCase() === 'classic'
+      ? 'classic'
+      : 'retail';
+    const retailIds = Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : [];
+    const classicIds = Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : [];
+
+    if (gameType === 'retail') {
+      if (retailIds.length) {
+        return badRequest(res, 'A retail account is already linked to this portal user.');
+      }
+      await ensureRetailAccount({
+        soap: SOAP,
+        email: portalUser.email,
+        password,
+        debug: CONFIG.SOAP_DEBUG,
+      });
+      const [createdPrimary, createdFallback] = await Promise.all([
+        getAuthAccountByEmail(portalUser.email),
+        getGameAccountByEmail(portalUser.email),
+      ]);
+      const retailAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
+      if (retailAccountId == null) {
+        throw new Error('Retail account provisioning completed but no ID was returned.');
+      }
+      retailIds.push(retailAccountId);
+      await linkPortalUserToRetailAccount(portalUser.id, retailAccountId, { linkedAt: Date.now() });
+    } else {
+      if (classicIds.length) {
+        return badRequest(res, 'A classic account is already linked to this portal user.');
+      }
+      const fallbackUsername = normalizePortalUsername(rawUsername)
+        || normalizePortalUsername(portalUser.username)
+        || normalizePortalUsername((portalUser.email || '').split('@')[0]);
+      if (!fallbackUsername) {
+        return badRequest(res, 'Username is required for Classic accounts.');
+      }
+      await ensureClassicAccount({
+        soap: CLASSIC_SOAP,
+        email: portalUser.email,
+        username: fallbackUsername,
+        password,
+        debug: CONFIG.SOAP_DEBUG,
+      });
+      const [byUsername, byEmail] = await Promise.all([
+        getAccountByUsername(fallbackUsername),
+        getGameAccountByEmail(portalUser.email),
+      ]);
+      const classicAccountId = byUsername?.id ?? byEmail?.id ?? null;
+      if (classicAccountId == null) {
+        throw new Error('Classic account provisioning completed but no ID was returned.');
+      }
+      classicIds.push(classicAccountId);
+      portalUser.username = portalUser.username || fallbackUsername;
+      await linkPortalUserToClassicAccount(portalUser.id, classicAccountId, { linkedAt: Date.now() });
+    }
+
+    portalUser.retailAccountIds = retailIds;
+    portalUser.classicAccountIds = classicIds;
+
+    await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
+    await setPortalUserPassword(portalUser.id, password);
+    await updateSessionAccountLinks(req.session, {
+      retailAccountIds: retailIds,
+      classicAccountIds: classicIds,
+    });
+
+    return res.json({ ok: true, linked: gameType });
+  } catch (e) {
+    console.error('Link account failed', e);
+    return res.status(500).json({ error: 'Unable to link account right now.' });
   }
 });
 
@@ -3245,8 +3624,96 @@ app.post('/api/classic/register', limiter, async (req, res) => {
   }
 });
 
-// [removed] password reset request endpoint disabled
-// [removed] password reset confirm endpoint disabled
+app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) => {
+  try {
+    const { email: rawEmail } = req.body || {};
+    const email = normalizeEmail(rawEmail);
+    if (!isValidEmail(email)) {
+      return badRequest(res, 'Invalid email');
+    }
+    const portalUser = await getPortalUserByEmail(email);
+    if (!portalUser) {
+      return res.json({ ok: true });
+    }
+    await pool.execute('DELETE FROM password_resets WHERE email = ?', [portalUser.email]);
+    const token = crypto.randomBytes(32).toString('hex');
+    const now = Date.now();
+    const expiresAt = now + RESET_TOKEN_TTL_MS;
+    await pool.execute('INSERT INTO password_resets (token, email, created_at, expires_at) VALUES (?, ?, ?, ?)', [
+      token,
+      portalUser.email,
+      now,
+      expiresAt,
+    ]);
+    const base = (CONFIG.BASE_URL || '').replace(/\/+$/, '');
+    const resetUrl = `${base || CONFIG.BASE_URL}/reset-password?token=${token}`;
+    const safeEmail = escapeHtml(portalUser.email);
+    const html = renderTransactionalEmail({
+      title: `${CONFIG.BRAND_NAME} — Reset your password`,
+      intro: `We received a request to reset the DreamCore portal password for ${safeEmail}.`,
+      paragraphs: [
+        `Use the secure button within ${CONFIG.RESET_TOKEN_TTL_MIN} minutes to choose a new password.`,
+        'This update refreshes any linked DreamCore Master or DreamCore Classic logins tied to this portal.',
+      ],
+      button: { href: resetUrl, label: 'Set a new password' },
+      footerLines: ['If you did not request this, you can safely ignore this email.'],
+    });
+    const text = [
+      'DreamCore Portal — Reset your password',
+      `We received a request to reset the DreamCore portal password for ${portalUser.email}.`,
+      `Use this link within ${CONFIG.RESET_TOKEN_TTL_MIN} minutes: ${resetUrl}`,
+      'This update also refreshes any linked DreamCore Master or Classic logins.',
+      'If you did not make this request, ignore this email.',
+    ].join('\n\n');
+    await transporter.sendMail({
+      to: portalUser.email,
+      from: CONFIG.FROM_EMAIL,
+      subject: `${CONFIG.BRAND_NAME}: reset your password`,
+      html,
+      text,
+    });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Password reset request failed', e);
+    return res.status(500).json({ error: 'Unable to process password reset request.' });
+  }
+});
+
+app.post('/api/password-reset/confirm', passwordResetLimiter, async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (typeof token !== 'string' || !token.trim()) {
+      return badRequest(res, 'Missing token');
+    }
+    if (!isValidPassword(password)) {
+      return badRequest(
+        res,
+        `Password must be at least ${CONFIG.MIN_PASS} characters with no spaces or quotes.`
+      );
+    }
+    const [rows] = await pool.execute(
+      'SELECT email, expires_at FROM password_resets WHERE token = ? LIMIT 1',
+      [token]
+    );
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row || row.expires_at < Date.now()) {
+      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
+      return badRequest(res, 'Reset link is invalid or expired.');
+    }
+    const portalUser = await getPortalUserByEmail(row.email);
+    if (!portalUser) {
+      await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
+      return badRequest(res, 'Reset link is invalid or expired.');
+    }
+    await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
+    await setPortalUserPassword(portalUser.id, password);
+    await pool.execute('DELETE FROM password_resets WHERE email = ?', [portalUser.email]);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Password reset confirmation failed', e);
+    return res.status(500).json({ error: 'Unable to update password at this time.' });
+  }
+});
 // ----- Verify link -----
 app.get('/verify', async (req, res) => {
   try {
@@ -3808,6 +4275,9 @@ setInterval(async () => {
   }
   try { await pool.execute('DELETE FROM sessions WHERE expires_at <= ?', [now]); } catch (e) {
     console.error('Failed to prune sessions', e);
+  }
+  try { await pool.execute('DELETE FROM password_resets WHERE expires_at <= ?', [now]); } catch (e) {
+    console.error('Failed to prune password reset tokens', e);
   }
 }, 60 * 60 * 1000);
 

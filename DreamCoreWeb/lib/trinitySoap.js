@@ -252,6 +252,15 @@ export async function ensureClassicAccount({ soap, email, username, password, de
   };
 }
 
+export async function classicPasswordReset({ soap, username, newPassword }) {
+  if (!soap) throw new Error("Missing soap");
+  const safeUsername = sanitizeSoapArg(username, { label: "username" }).toUpperCase();
+  const safePass = sanitizeSoapArg(newPassword, { label: "new password" });
+  const cmd = `account set password ${safeUsername} ${safePass} ${safePass}`;
+  const out = await callSoap(soap, cmd);
+  return out.ret || out.raw || "ok";
+}
+
 export async function retailPasswordReset({ soap, email, newPassword }) {
   if (!soap) throw new Error("Missing soap");
   const normEmail = normalizeEmail(email);
