@@ -3166,11 +3166,14 @@ app.get('/verify', async (req, res) => {
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
     if (isClassic) {
-      const [byEmail, byUsername] = await Promise.all([
-        getGameAccountByEmail(row.email),
-        getAccountByUsername(row.username),
-      ]);
-      const classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+      let classicAccountId = ensureResult?.accountId ?? null;
+      if (classicAccountId == null) {
+        const [byEmail, byUsername] = await Promise.all([
+          getGameAccountByEmail(row.email),
+          getAccountByUsername(row.username),
+        ]);
+        classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+      }
       if (classicAccountId != null) {
         await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
       }
@@ -3361,11 +3364,14 @@ app.get('/classic/verify', async (req, res) => {
 
     await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
 
-    const [byEmail, byUsername] = await Promise.all([
-      getGameAccountByEmail(row.email),
-      getAccountByUsername(row.username),
-    ]);
-    const classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+    let classicAccountId = ensureResult?.accountId ?? null;
+    if (classicAccountId == null) {
+      const [byEmail, byUsername] = await Promise.all([
+        getGameAccountByEmail(row.email),
+        getAccountByUsername(row.username),
+      ]);
+      classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+    }
     if (classicAccountId != null) {
       await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
     }
