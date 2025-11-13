@@ -1305,7 +1305,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
           <button id="refreshRoster" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
         </div>
         <pre id="rosterStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition">Loading characters…</pre>
-        <div id="characterGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+        <div id="familySections" class="mt-6 space-y-6"></div>
       </div>
     </div>
     <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar</p>
@@ -1315,7 +1315,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
 
 const charactersScript = () => {
   const rosterStatus = document.getElementById('rosterStatus');
-  const characterGrid = document.getElementById('characterGrid');
+  const familySections = document.getElementById('familySections');
   const totalCharacters = document.getElementById('totalCharacters');
   const totalRealms = document.getElementById('totalRealms');
   const sessionEmail = document.getElementById('sessionEmail');
@@ -1354,6 +1354,16 @@ const charactersScript = () => {
     24: 'Pandaren',
   };
 
+  const FAMILY_LABELS = {
+    retail: ${JSON.stringify(CONFIG.BRAND_NAME || 'DreamCore Master')},
+    classic: ${JSON.stringify(CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic')},
+  };
+
+  function formatFamilyLabel(family) {
+    if (!family) return FAMILY_LABELS.retail;
+    return FAMILY_LABELS[family] || family.charAt(0).toUpperCase() + family.slice(1);
+  }
+
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
   }
@@ -1365,47 +1375,79 @@ const charactersScript = () => {
     return date.toLocaleString();
   }
 
+  function renderCharacterCard(character) {
+    const className = CLASS_NAMES[character.class] || `Class #${character.class}`;
+    const raceName = RACE_NAMES[character.race] || `Race #${character.race}`;
+    const realmName = character.realm?.name || 'Unknown realm';
+    const lastPlayed = formatDate(character.lastLogin);
+    return `
+      <article class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
+        <div class="flex items-baseline justify-between">
+          <h3 class="text-xl font-semibold text-white">${escapeHtml(character.name)}</h3>
+          <span class="text-sm font-semibold text-indigo-300">Lvl ${escapeHtml(character.level)}</span>
+        </div>
+        <p class="mt-2 text-[15px] text-indigo-100/90">${escapeHtml(raceName)} · ${escapeHtml(className)}</p>
+        <p class="mt-2 text-sm text-indigo-200/80">Realm: <span class="font-semibold text-indigo-100">${escapeHtml(realmName)}</span></p>
+        <p class="mt-2 text-xs text-indigo-200/70">Last seen: ${escapeHtml(lastPlayed)}</p>
+      </article>
+    `;
+  }
+
+  function renderFamilySection(familyPayload) {
+    const familyKey = familyPayload?.family || 'retail';
+    const familyLabel = formatFamilyLabel(familyKey);
+    const characters = Array.isArray(familyPayload?.characters) ? familyPayload.characters : [];
+    const realms = Array.isArray(familyPayload?.realms) ? familyPayload.realms : [];
+    const summary = familyPayload?.summary || {};
+    const familyMessage = typeof familyPayload?.message === 'string' ? familyPayload.message : '';
+    const content = characters.length
+      ? `<div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">${characters.map(renderCharacterCard).join('')}</div>`
+      : `<p class="text-sm text-indigo-200/90">No characters linked to your ${escapeHtml(familyLabel)} accounts yet.</p>`;
+    return `
+      <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/60 p-5 shadow-inner shadow-indigo-900/30">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">${escapeHtml(familyLabel)}</p>
+            <h2 class="text-2xl font-semibold text-white">${escapeHtml(familyLabel)} roster</h2>
+            ${familyMessage ? `<p class="text-sm text-indigo-200/80">${escapeHtml(familyMessage)}</p>` : ''}
+          </div>
+          <div class="text-sm text-indigo-200/80">Characters: <span class="font-semibold text-indigo-100">${escapeHtml(summary?.totalCharacters ?? characters.length)}</span> · Realms: <span class="font-semibold text-indigo-100">${escapeHtml(summary?.totalRealms ?? realms.length)}</span></div>
+        </div>
+        <div class="mt-4">${content}</div>
+      </section>
+    `;
+  }
+
   function renderCharacters(payload) {
     if (!payload) {
       rosterStatus.textContent = 'Unable to load characters.';
-      characterGrid.innerHTML = '';
+      familySections.innerHTML = '';
       return;
     }
 
-    const { characters = [], summary = {}, message } = payload;
-    totalCharacters.textContent = summary?.totalCharacters ?? characters.length;
+    const families = Array.isArray(payload.families) ? payload.families : [];
+    const summary = payload.summary || {};
+    totalCharacters.textContent = summary?.totalCharacters ?? 0;
     totalRealms.textContent = summary?.totalRealms ?? 0;
 
-    if (message) {
-      rosterStatus.textContent = message;
+    const hasCharacters = families.some((family) => Array.isArray(family?.characters) && family.characters.length);
+
+    if (payload.message) {
+      rosterStatus.textContent = payload.message;
+    } else if (hasCharacters) {
+      rosterStatus.textContent = 'Roster loaded.';
+    } else if (families.length) {
+      rosterStatus.textContent = 'No characters found for your linked accounts.';
     } else {
-      rosterStatus.textContent = characters.length ? 'Roster loaded.' : 'No characters found for this account.';
+      rosterStatus.textContent = 'Link an account to view characters.';
     }
 
-    if (!characters.length) {
-      characterGrid.innerHTML = '<p class="text-sm text-indigo-200/90">Create a character in-game and refresh to see it here.</p>';
+    if (!families.length) {
+      familySections.innerHTML = '<p class="text-sm text-indigo-200/90">Link a retail or classic account to view your roster.</p>';
       return;
     }
 
-    const cards = characters.map((character) => {
-      const className = CLASS_NAMES[character.class] || `Class #${character.class}`;
-      const raceName = RACE_NAMES[character.race] || `Race #${character.race}`;
-      const realmName = character.realm?.name || 'Unknown realm';
-      const lastPlayed = formatDate(character.lastLogin);
-      return `
-        <article class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
-          <div class="flex items-baseline justify-between">
-            <h3 class="text-xl font-semibold text-white">${escapeHtml(character.name)}</h3>
-            <span class="text-sm font-semibold text-indigo-300">Lvl ${escapeHtml(character.level)}</span>
-          </div>
-          <p class="mt-2 text-[15px] text-indigo-100/90">${escapeHtml(raceName)} · ${escapeHtml(className)}</p>
-          <p class="mt-2 text-sm text-indigo-200/80">Realm: <span class="font-semibold text-indigo-100">${escapeHtml(realmName)}</span></p>
-          <p class="mt-2 text-xs text-indigo-200/70">Last seen: ${escapeHtml(lastPlayed)}</p>
-        </article>
-      `;
-    });
-
-    characterGrid.innerHTML = cards.join('');
+    familySections.innerHTML = families.map((family) => renderFamilySection(family)).join('');
   }
 
   async function loadSessionAndRoster() {
@@ -1441,14 +1483,14 @@ const charactersScript = () => {
         rosterStatus.textContent = data?.error
           ? 'Error: ' + data.error
           : 'Unable to load characters.';
-        characterGrid.innerHTML = '';
+        familySections.innerHTML = '';
         return;
       }
       renderCharacters(data);
     } catch (err) {
       console.error('Character fetch failed', err);
       rosterStatus.textContent = 'Network error while loading characters.';
-      characterGrid.innerHTML = '';
+      familySections.innerHTML = '';
     }
   }
 
@@ -2056,9 +2098,11 @@ function entryCharactersTable(entry) {
   return safeIdentifier(entry?.config?.charactersTable, 'characters');
 }
 
-async function loadBattleNetCharacters(bnetAccountId) {
-  const gameAccounts = await fetchGameAccountsForBnet(bnetAccountId);
-  if (!gameAccounts.length) {
+async function loadBattleNetCharacters(bnetAccountIds) {
+  const normalizedIds = Array.isArray(bnetAccountIds)
+    ? sanitizeAccountIdList(bnetAccountIds)
+    : sanitizeAccountIdList([bnetAccountIds]);
+  if (!normalizedIds.length) {
     return { characters: [], realms: [] };
   }
 
@@ -2066,44 +2110,56 @@ async function loadBattleNetCharacters(bnetAccountId) {
   const realmMetaMap = new Map();
   const groups = new Map();
 
-  for (const account of gameAccounts) {
-    const realmEntry = resolveRealmEntry(account);
-    if (!realmEntry) continue;
-    const realmId = toSafeNumber(account.realmId);
-    const realmName = account.realmName || realmEntry.config.name || 'Realm';
-    const groupKey = `${realmEntry.key}#${realmId ?? 'null'}`;
-    let group = groups.get(groupKey);
-    if (!group) {
-      group = {
-        entry: realmEntry,
-        accountIds: [],
-        realmId,
-        realmName,
-      };
-      groups.set(groupKey, group);
-    }
-    if (account.gameAccountId != null) {
-      group.accountIds.push(account.gameAccountId);
-    }
-    let realmMeta = realmMetaMap.get(groupKey);
-    if (!realmMeta) {
-      realmMeta = {
-        id: realmId,
-        name: realmName,
-        accounts: [],
-        hasCharacters: false,
-      };
-      realmMetaMap.set(groupKey, realmMeta);
-    }
-    if (account.gameAccountId != null) {
-      const id = toSafeNumber(account.gameAccountId);
-      if (id != null) {
-        realmMeta.accounts.push({
-          id,
-          username: account.username || null,
-        });
+  for (const bnetAccountId of normalizedIds) {
+    const gameAccounts = await fetchGameAccountsForBnet(bnetAccountId);
+    for (const account of gameAccounts) {
+      const realmEntry = resolveRealmEntry(account);
+      if (!realmEntry) continue;
+      const realmId = toSafeNumber(account.realmId);
+      const realmName = account.realmName || realmEntry.config.name || 'Realm';
+      const groupKey = `${realmEntry.key}#${realmId ?? 'null'}`;
+      let group = groups.get(groupKey);
+      if (!group) {
+        group = {
+          entry: realmEntry,
+          accountIds: [],
+          realmId,
+          realmName,
+          seen: new Set(),
+        };
+        groups.set(groupKey, group);
+      }
+      if (account.gameAccountId != null) {
+        const numeric = toSafeNumber(account.gameAccountId);
+        if (numeric != null && !group.seen.has(numeric)) {
+          group.accountIds.push(numeric);
+          group.seen.add(numeric);
+        }
+      }
+      let realmMeta = realmMetaMap.get(groupKey);
+      if (!realmMeta) {
+        realmMeta = {
+          id: realmId,
+          name: realmName,
+          accounts: [],
+          hasCharacters: false,
+        };
+        realmMetaMap.set(groupKey, realmMeta);
+      }
+      if (account.gameAccountId != null) {
+        const id = toSafeNumber(account.gameAccountId);
+        if (id != null) {
+          realmMeta.accounts.push({
+            id,
+            username: account.username || null,
+          });
+        }
       }
     }
+  }
+
+  if (!groups.size) {
+    return { characters: [], realms: [] };
   }
 
   for (const group of groups.values()) {
@@ -2181,37 +2237,200 @@ async function loadBattleNetCharacters(bnetAccountId) {
   return { characters, realms };
 }
 
+async function fetchClassicAccountMetadata(accountIds) {
+  if (!accountIds.length) {
+    return new Map();
+  }
+  const placeholders = accountIds.map(() => '?').join(', ');
+  try {
+    const [rows] = await authPool.query(
+      `SELECT id, username FROM \`account\` WHERE id IN (${placeholders})`,
+      accountIds
+    );
+    const map = new Map();
+    for (const row of rows) {
+      const id = toSafeNumber(row.id);
+      if (id != null && !map.has(id)) {
+        map.set(id, { id, username: row.username || null });
+      }
+    }
+    return map;
+  } catch (err) {
+    console.error('Failed to load classic account metadata', err);
+    return new Map();
+  }
+}
+
+async function loadClassicCharacters(classicAccountIds) {
+  const sanitized = Array.isArray(classicAccountIds)
+    ? sanitizeAccountIdList(classicAccountIds)
+    : sanitizeAccountIdList([classicAccountIds]);
+  const uniqueIds = Array.from(new Set(sanitized));
+  if (!uniqueIds.length) {
+    return { characters: [], realms: [] };
+  }
+
+  const accountMetadata = await fetchClassicAccountMetadata(uniqueIds);
+  const characters = [];
+  const realmMetaMap = new Map();
+
+  for (const entry of REALM_POOL_ENTRIES) {
+    if (!entry?.pool) continue;
+    const tableName = entryCharactersTable(entry);
+    const realmId = toSafeNumber(entry?.config?.realmId);
+    const realmName = entry?.config?.name || 'Realm';
+    const placeholders = uniqueIds.map(() => '?').join(', ');
+    if (!placeholders) continue;
+    const realmKey = `${entry.key}#${realmId ?? 'null'}`;
+    const ensureRealmMeta = () => {
+      let realmMeta = realmMetaMap.get(realmKey);
+      if (!realmMeta) {
+        realmMeta = {
+          id: realmId,
+          name: realmName,
+          accounts: [],
+          hasCharacters: false,
+        };
+        realmMetaMap.set(realmKey, realmMeta);
+      }
+      return realmMeta;
+    };
+    try {
+      const [rows] = await entry.pool.query(
+        `SELECT account, name, level, class, race, logout_time FROM \`${tableName}\` WHERE account IN (${placeholders})`,
+        uniqueIds
+      );
+      if (!rows.length) continue;
+      const realmMeta = ensureRealmMeta();
+      for (const row of rows) {
+        const accountId = toSafeNumber(row.account ?? row.accountId ?? row.id);
+        const lastLogin = normalizeTimestamp(
+          row.logout_time ?? row.logoutTime ?? row.last_login ?? row.lastLogin
+        );
+        const character = {
+          name: row.name,
+          level: Number(row.level),
+          class: Number(row.class),
+          race: Number(row.race),
+          realm: { id: realmId, name: realmName },
+          lastLogin,
+        };
+        if (accountId != null) {
+          character.gameAccountId = accountId;
+        }
+        characters.push(character);
+        realmMeta.hasCharacters = true;
+        if (accountId != null) {
+          const metadata = accountMetadata.get(accountId);
+          realmMeta.accounts.push({
+            id: accountId,
+            username: metadata?.username || null,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Classic character lookup failed for realm', realmName, err);
+      const realmMeta = ensureRealmMeta();
+      realmMeta.error = 'Character lookup failed';
+    }
+  }
+
+  characters.sort((a, b) => {
+    const realmA = a.realm?.name || '';
+    const realmB = b.realm?.name || '';
+    const realmCompare = realmA.localeCompare(realmB, undefined, { sensitivity: 'base' });
+    if (realmCompare !== 0) return realmCompare;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  const realms = Array.from(realmMetaMap.values()).map((realm) => {
+    const seen = new Set();
+    const accounts = [];
+    for (const acc of realm.accounts) {
+      if (acc?.id == null) continue;
+      if (seen.has(acc.id)) continue;
+      seen.add(acc.id);
+      accounts.push({
+        id: acc.id,
+        username: acc.username || null,
+      });
+    }
+    return {
+      id: realm.id,
+      name: realm.name,
+      accounts,
+      hasCharacters: !!realm.hasCharacters,
+      error: realm.error || null,
+    };
+  });
+
+  return { characters, realms };
+}
+
+function normalizeFamilyRoster(family, roster = {}) {
+  const characters = Array.isArray(roster.characters) ? roster.characters : [];
+  const realms = Array.isArray(roster.realms) ? roster.realms : [];
+  const payload = {
+    family,
+    characters,
+    realms,
+    summary: {
+      totalCharacters: characters.length,
+      totalRealms: realms.length,
+    },
+  };
+  if (roster.message) {
+    payload.message = roster.message;
+  }
+  return payload;
+}
+
 function createEmptyCharacterResponse() {
   const refreshedAt = new Date().toISOString();
   return {
     ok: true,
-    characters: [],
-    realms: [],
+    families: [normalizeFamilyRoster('retail'), normalizeFamilyRoster('classic')],
     summary: { totalCharacters: 0, totalRealms: 0 },
-    message: 'No characters found for this account.',
+    message: 'No characters found for your linked accounts.',
     refreshedAt,
   };
 }
 
-async function buildCharactersResponse(accountId) {
-  const normalizedId = toSafeNumber(accountId);
-  if (normalizedId == null) {
+async function buildCharactersResponse({ retailAccountIds = [], classicAccountIds = [] } = {}) {
+  const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
+  const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
+  if (!sanitizedRetailIds.length && !sanitizedClassicIds.length) {
     return createEmptyCharacterResponse();
   }
-  const roster = await loadBattleNetCharacters(normalizedId);
   const refreshedAt = new Date().toISOString();
+  const families = [];
+  let totalCharacters = 0;
+  let totalRealms = 0;
+
+  const descriptors = [
+    { key: 'retail', ids: sanitizedRetailIds, loader: loadBattleNetCharacters },
+    { key: 'classic', ids: sanitizedClassicIds, loader: loadClassicCharacters },
+  ];
+
+  for (const descriptor of descriptors) {
+    let roster = { characters: [], realms: [] };
+    if (descriptor.ids.length) {
+      roster = await descriptor.loader(descriptor.ids);
+    }
+    const normalized = normalizeFamilyRoster(descriptor.key, roster);
+    families.push(normalized);
+    totalCharacters += normalized.summary.totalCharacters;
+    totalRealms += normalized.summary.totalRealms;
+  }
+
   const payload = {
     ok: true,
-    characters: roster.characters,
-    realms: roster.realms,
-    summary: {
-      totalCharacters: roster.characters.length,
-      totalRealms: roster.realms.length,
-    },
+    families,
+    summary: { totalCharacters, totalRealms },
     refreshedAt,
   };
-  if (!roster.characters.length) {
-    payload.message = 'No characters found for this account.';
+  if (!totalCharacters) {
+    payload.message = 'No characters found for your linked accounts.';
   }
   return payload;
 }
@@ -2874,8 +3093,12 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
 
 app.get('/api/characters', requireSession, async (req, res) => {
   try {
-    const accountId = req.session?.getPrimaryRetailAccountId?.();
-    const cacheKey = accountId != null ? String(accountId) : null;
+    const retailAccountIds = req.session?.getRetailAccountIds?.() || [];
+    const classicAccountIds = req.session?.getClassicAccountIds?.() || [];
+    const hasAccounts = retailAccountIds.length || classicAccountIds.length;
+    const cacheKey = hasAccounts
+      ? `retail:${retailAccountIds.join(',')}|classic:${classicAccountIds.join(',')}`
+      : null;
     const refreshFlag = String(req.query?.refresh ?? req.query?.force ?? req.query?.nocache ?? '').toLowerCase();
     const bypassCache = ['1', 'true', 'yes'].includes(refreshFlag);
 
@@ -2890,7 +3113,7 @@ app.get('/api/characters', requireSession, async (req, res) => {
       CHARACTER_CACHE.delete(cacheKey);
     }
 
-    const payload = await buildCharactersResponse(accountId);
+    const payload = await buildCharactersResponse({ retailAccountIds, classicAccountIds });
 
     if (cacheKey) {
       CHARACTER_CACHE.set(cacheKey, {
