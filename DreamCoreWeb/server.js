@@ -285,15 +285,42 @@ await pool.query(`
 `);
 
 await pool.query(`
-  CREATE TABLE IF NOT EXISTS portal_credentials (
-    email VARCHAR(254) PRIMARY KEY,
-    account_id BIGINT UNSIGNED NULL,
+  CREATE TABLE IF NOT EXISTS portal_users (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    email VARCHAR(254) NOT NULL,
     password_hash VARBINARY(128) NOT NULL,
     salt VARBINARY(64) NOT NULL,
     version TINYINT UNSIGNED NOT NULL,
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
-    KEY idx_account_id (account_id)
+    last_login_at BIGINT DEFAULT NULL,
+    login_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uniq_portal_email (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS portal_user_retail_accounts (
+    portal_user_id BIGINT UNSIGNED NOT NULL,
+    retail_account_id BIGINT UNSIGNED NOT NULL,
+    linked_at BIGINT NOT NULL,
+    PRIMARY KEY (portal_user_id, retail_account_id),
+    UNIQUE KEY uniq_portal_retail_account (retail_account_id),
+    CONSTRAINT fk_portal_retail_user FOREIGN KEY (portal_user_id)
+      REFERENCES portal_users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS portal_user_classic_accounts (
+    portal_user_id BIGINT UNSIGNED NOT NULL,
+    classic_account_id BIGINT UNSIGNED NOT NULL,
+    linked_at BIGINT NOT NULL,
+    PRIMARY KEY (portal_user_id, classic_account_id),
+    UNIQUE KEY uniq_portal_classic_account (classic_account_id),
+    CONSTRAINT fk_portal_classic_user FOREIGN KEY (portal_user_id)
+      REFERENCES portal_users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
@@ -2155,42 +2182,115 @@ async function requireSession(req, res, next) {
   }
 }
 
-async function getPortalCredential(email) {
+async function getPortalUser(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
   try {
     const [rows] = await pool.execute(
-      'SELECT email, account_id, password_hash, salt, version FROM portal_credentials WHERE email = ? LIMIT 1',
+      `SELECT id, email, password_hash, salt, version, created_at, updated_at, last_login_at, login_count
+       FROM portal_users WHERE email = ? LIMIT 1`,
       [normalized]
     );
     if (!rows.length) return null;
-    return rows[0];
+    const user = rows[0];
+    const [retailRows] = await pool.execute(
+      'SELECT retail_account_id FROM portal_user_retail_accounts WHERE portal_user_id = ?',
+      [user.id]
+    );
+    const [classicRows] = await pool.execute(
+      'SELECT classic_account_id FROM portal_user_classic_accounts WHERE portal_user_id = ?',
+      [user.id]
+    );
+    user.retailAccountIds = retailRows
+      .map((row) => toSafeNumber(row.retail_account_id))
+      .filter((value) => value != null);
+    user.classicAccountIds = classicRows
+      .map((row) => toSafeNumber(row.classic_account_id))
+      .filter((value) => value != null);
+    return user;
   } catch (err) {
-    console.error('Failed to load portal credential', err);
+    console.error('Failed to load portal user', err);
     return null;
   }
 }
 
-async function upsertPortalCredential({ email, password, accountId }) {
+async function linkPortalUserToRetailAccount(portalUserId, accountId, { linkedAt } = {}) {
+  const safePortalId = toSafeNumber(portalUserId);
+  const safeAccountId = toSafeNumber(accountId);
+  if (safePortalId == null || safeAccountId == null) return;
+  const timestamp = toSafeNumber(linkedAt) ?? Date.now();
+  try {
+    await pool.execute(
+      `INSERT INTO portal_user_retail_accounts (portal_user_id, retail_account_id, linked_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE linked_at = VALUES(linked_at)`,
+      [safePortalId, safeAccountId, timestamp]
+    );
+  } catch (err) {
+    console.error('Failed to link portal user to retail account', err);
+  }
+}
+
+async function linkPortalUserToClassicAccount(portalUserId, accountId, { linkedAt } = {}) {
+  const safePortalId = toSafeNumber(portalUserId);
+  const safeAccountId = toSafeNumber(accountId);
+  if (safePortalId == null || safeAccountId == null) return;
+  const timestamp = toSafeNumber(linkedAt) ?? Date.now();
+  try {
+    await pool.execute(
+      `INSERT INTO portal_user_classic_accounts (portal_user_id, classic_account_id, linked_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE linked_at = VALUES(linked_at)`,
+      [safePortalId, safeAccountId, timestamp]
+    );
+  } catch (err) {
+    console.error('Failed to link portal user to classic account', err);
+  }
+}
+
+async function recordPortalLogin(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) return;
+  try {
+    await pool.execute('UPDATE portal_users SET last_login_at = ?, login_count = login_count + 1 WHERE id = ?', [
+      Date.now(),
+      safePortalId,
+    ]);
+  } catch (err) {
+    console.error('Failed to record portal login metadata', err);
+  }
+}
+
+async function upsertPortalUser({ email, password, retailAccountId, classicAccountId }) {
   const normalized = normalizeEmail(email);
-  if (!normalized || typeof password !== 'string' || !password.length) return;
+  if (!normalized || typeof password !== 'string' || !password.length) return null;
   try {
     const { hash, salt, version } = await hashPortalPassword(password);
     const now = Date.now();
-    const numericAccountId = toSafeNumber(accountId);
     await pool.execute(
-      `INSERT INTO portal_credentials (email, account_id, password_hash, salt, version, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO portal_users (email, password_hash, salt, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         account_id = VALUES(account_id),
          password_hash = VALUES(password_hash),
          salt = VALUES(salt),
          version = VALUES(version),
          updated_at = VALUES(updated_at)`,
-      [normalized, numericAccountId ?? null, hash, salt, version, now, now]
+      [normalized, hash, salt, version, now, now]
     );
+    const [rows] = await pool.execute('SELECT id FROM portal_users WHERE email = ? LIMIT 1', [normalized]);
+    const portalUserId = rows?.[0]?.id ?? null;
+    if (portalUserId != null) {
+      if (retailAccountId != null) {
+        await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: now });
+      }
+      if (classicAccountId != null) {
+        await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: now });
+      }
+    }
+    return portalUserId;
   } catch (err) {
-    console.error('Failed to upsert portal credential', err);
+    console.error('Failed to upsert portal user', err);
+    return null;
   }
 }
 
@@ -2356,16 +2456,17 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || !password.length) return badRequest(res, 'Invalid password');
 
-    const [portalCredential, primaryAccount, fallbackAccount] = await Promise.all([
-      getPortalCredential(email),
+    const [portalUser, primaryAccount, fallbackAccount] = await Promise.all([
+      getPortalUser(email),
       getAuthAccountByEmail(email),
       getGameAccountByEmail(email),
     ]);
 
     let matched = null;
+    let portalUserIdFromLogin = portalUser?.id ?? null;
 
-    if (portalCredential) {
-      const portalOk = await verifyPortalPassword(password, portalCredential);
+    if (portalUser) {
+      const portalOk = await verifyPortalPassword(password, portalUser);
       if (portalOk) {
         if (primaryAccount) {
           matched = {
@@ -2390,9 +2491,10 @@ app.post('/api/login', loginLimiter, async (req, res) => {
         } else {
           matched = {
             source: 'portal',
-            id: portalCredential.account_id ?? null,
+            id: portalUser.retailAccountIds?.[0] ?? null,
             email,
             username: null,
+            portalUserId: portalUser.id,
           };
         }
       } else {
@@ -2471,8 +2573,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
         sessionAccountId = primaryAccount.id;
       } else if (fallbackAccount?.id != null) {
         sessionAccountId = fallbackAccount.id;
-      } else if (portalCredential?.account_id != null) {
-        sessionAccountId = portalCredential.account_id;
+      } else if (portalUser?.retailAccountIds?.length) {
+        sessionAccountId = portalUser.retailAccountIds[0];
       }
     }
     const numericId = toSafeNumber(sessionAccountId);
@@ -2499,7 +2601,15 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     }
 
     const session = await persistSession(sessionAccountId, matched.email || email, req);
-    await upsertPortalCredential({ email, password, accountId: sessionAccountId });
+    const persistedPortalUserId = await upsertPortalUser({
+      email,
+      password,
+      retailAccountId: sessionAccountId,
+    });
+    const loginPortalId = persistedPortalUserId ?? portalUserIdFromLogin;
+    if (loginPortalId != null) {
+      await recordPortalLogin(loginPortalId);
+    }
     const maxAge = CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
     res.cookie(CONFIG.SESSION_COOKIE_NAME, session.token, {
       httpOnly: true,
@@ -2572,7 +2682,7 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
       newPassword,
     });
 
-    await upsertPortalCredential({ email, password: newPassword, accountId: req.session?.account_id });
+    await upsertPortalUser({ email, password: newPassword, retailAccountId: req.session?.account_id });
 
     return res.json({ ok: true });
   } catch (e) {
@@ -2819,7 +2929,7 @@ app.get('/verify', async (req, res) => {
       getGameAccountByEmail(row.email),
     ]);
     const portalAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
-    await upsertPortalCredential({ email: row.email, password: row.password, accountId: portalAccountId });
+    await upsertPortalUser({ email: row.email, password: row.password, retailAccountId: portalAccountId });
 
     return res
       .type('text/html')
