@@ -33,6 +33,7 @@ import mysql from 'mysql2/promise';
 import {
   makeSoapConfig,
   ensureRetailAccount,
+  ensureClassicAccount,
   executeRetailCommand,
   normalizeEmail,
   retailPasswordReset,
@@ -229,6 +230,7 @@ await pool.query(`
     username VARCHAR(32) NOT NULL,
     password VARCHAR(128) NOT NULL,
     email VARCHAR(254) NOT NULL,
+    game_type VARCHAR(16) NOT NULL DEFAULT 'retail',
     created_at BIGINT NOT NULL,
     KEY idx_created_at (created_at),
     UNIQUE KEY uniq_email (email)
@@ -364,6 +366,7 @@ async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('sessions', 'retail_accounts_json TEXT DEFAULT NULL AFTER username');
   await addColumnIfMissing('sessions', 'classic_accounts_json TEXT DEFAULT NULL AFTER retail_accounts_json');
   await addIndexIfMissing('sessions', 'ADD KEY idx_session_portal_user (portal_user_id)');
+  await addColumnIfMissing('pending', "game_type VARCHAR(16) NOT NULL DEFAULT 'retail' AFTER email");
 }
 
 await ensurePortalSchemaUpgrades();
@@ -450,7 +453,7 @@ const HOME_PAGE = () => `<!doctype html>
               <span class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-amber-400 text-lg font-semibold text-gray-900 shadow-lg shadow-rose-900/40">Classic</span>
               <div>
                 <h2 class="text-2xl font-semibold text-white">${CONFIG.CLASSIC_BRAND_NAME}</h2>
-                <p class="mt-1 text-sm text-rose-100/80">Wrath of the Lich King (3.3.5) realm &mdash; managed through our upcoming DreamCore Classic portal.</p>
+                <p class="mt-1 text-sm text-rose-100/80">Wrath of the Lich King (3.3.5) realm &mdash; create and manage accounts from the same DreamCore Master portal you use for retail.</p>
               </div>
             </div>
             <p class="mt-6 text-sm text-indigo-100/80">Create your account now. Login tools are coming soon.</p>
@@ -469,7 +472,7 @@ const HOME_PAGE = () => `<!doctype html>
                 <p class="mt-1 text-sm text-indigo-100/80">Retail-ready realm running on TrinityCore master. Manage your Battle.net-style login here.</p>
               </div>
             </div>
-            <p class="mt-6 text-sm text-indigo-100/80">Register new accounts or manage existing DreamCore Master credentials.</p>
+            <p class="mt-6 text-sm text-indigo-100/80">Register new accounts or manage existing DreamCore Master credentials, plus spin up DreamCore Classic logins without leaving this portal.</p>
             <div class="mt-8 flex flex-col gap-3 sm:flex-row">
               <a class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:scale-[1.01]" href="/master">Open Master Portal</a>
               <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-300/50 bg-gray-900/60 px-5 py-3 text-sm font-semibold text-indigo-100/90 hover:border-indigo-200 hover:text-white transition" href="/login">Log in</a>
@@ -527,7 +530,7 @@ const REG_PAGE = () => `<!doctype html>
           <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to ${CONFIG.BRAND_NAME}</h1>
           <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
         </div>
-        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Create your account for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> and get in-game fast.</p>
+        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Spin up your DreamCore login for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> or <span class="font-semibold text-rose-300 drop-shadow">${CONFIG.CLASSIC_BRAND_NAME}</span> from the same secure portal.</p>
 
         <div class="mt-8 space-y-8">
           <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
@@ -550,6 +553,25 @@ const REG_PAGE = () => `<!doctype html>
                        class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
                 <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.BRAND_NAME} login.</p>
               </div>
+              <div>
+                <span class="block text-sm font-medium text-indigo-200 mb-2">Choose your realm</span>
+                <div class="grid gap-3 sm:grid-cols-2" role="group" aria-label="Realm selector">
+                  <label class="block cursor-pointer">
+                    <input type="radio" name="gameType" value="retail" class="sr-only peer" checked />
+                    <div class="flex flex-col gap-1 rounded-2xl border border-indigo-500/40 bg-gray-900/60 p-4 transition peer-checked:border-white peer-checked:bg-indigo-500/10">
+                      <span class="text-sm font-semibold text-white">DreamCore Master (Retail)</span>
+                      <span class="text-xs text-indigo-200/80">Battle.net-style account with modern features.</span>
+                    </div>
+                  </label>
+                  <label class="block cursor-pointer">
+                    <input type="radio" name="gameType" value="classic" class="sr-only peer" />
+                    <div class="flex flex-col gap-1 rounded-2xl border border-rose-400/40 bg-gray-900/60 p-4 transition peer-checked:border-white peer-checked:bg-rose-500/10">
+                      <span class="text-sm font-semibold text-white">DreamCore Classic (Wrath)</span>
+                      <span class="text-xs text-rose-100/80">Create WotLK logins without leaving this portal.</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
               <div class="pt-2" id="cf-box">
                 <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
               </div>
@@ -561,7 +583,7 @@ const REG_PAGE = () => `<!doctype html>
             <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <div class="mt-6 rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4 text-indigo-100 shadow-inner shadow-indigo-900/20">
               <p class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-200">What happens next?</p>
-              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, the success page will walk you through the remaining steps.</p>
+              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, we’ll finish provisioning your ${CONFIG.BRAND_NAME} or ${CONFIG.CLASSIC_BRAND_NAME} login—no extra forms required.</p>
             </div>
           </section>
         </div>
@@ -616,7 +638,7 @@ const CLASSIC_PAGE = () => `<!doctype html>
           <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to ${CONFIG.CLASSIC_BRAND_NAME}</h1>
           <span class="text-xs font-medium uppercase tracking-[0.4em] text-rose-300">Create</span>
         </div>
-        <p class="mt-3 text-[15px] text-rose-100 drop-shadow-sm">Create your account for <span class="font-semibold text-rose-300 drop-shadow">${CONFIG.CLASSIC_BRAND_NAME}</span> and join the Wrath of the Lich King realm.</p>
+        <p class="mt-3 text-[15px] text-rose-100 drop-shadow-sm">Create your account for <span class="font-semibold text-rose-300 drop-shadow">${CONFIG.CLASSIC_BRAND_NAME}</span> and join the Wrath of the Lich King realm—this same portal can also spin up DreamCore Master (retail) credentials whenever you need them.</p>
 
         <div class="mt-8 space-y-8">
           <section class="rounded-3xl border border-rose-400/40 bg-gray-900/60 p-6 shadow-inner shadow-rose-900/30">
@@ -628,6 +650,7 @@ const CLASSIC_PAGE = () => `<!doctype html>
               </div>
             </div>
             <form id="regForm" class="mt-6 space-y-5">
+              <input type="hidden" name="gameType" value="classic" />
               <div>
                 <label class="block text-sm font-medium text-rose-100 mb-1" for="email">Email</label>
                 <input id="email" type="email" name="email" required
@@ -650,7 +673,7 @@ const CLASSIC_PAGE = () => `<!doctype html>
             <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-rose-100 bg-gray-900/70 border border-rose-400/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <div class="mt-6 rounded-2xl border border-rose-400/30 bg-gray-900/60 p-4 text-rose-100 shadow-inner shadow-rose-900/20">
               <p class="text-sm font-semibold uppercase tracking-[0.25em] text-rose-200">What happens next?</p>
-              <p class="mt-2 text-[15px] text-rose-100/85">Check your inbox for our verification email. Once you confirm, we'll finish creating your DreamCore Classic login.</p>
+              <p class="mt-2 text-[15px] text-rose-100/85">Check your inbox for our verification email. Once you confirm, we'll finish creating your DreamCore Classic login and keep it linked to the same portal account you can use for retail.</p>
             </div>
           </section>
         </div>
@@ -678,10 +701,22 @@ const clientScript = () => {
       return;
     }
 
+    let gameType = 'retail';
+    const selectedType = form.querySelector('input[name="gameType"]:checked');
+    if (selectedType && typeof selectedType.value === 'string') {
+      gameType = selectedType.value;
+    } else {
+      const fallbackType = form.querySelector('input[name="gameType"]');
+      if (fallbackType && typeof fallbackType.value === 'string') {
+        gameType = fallbackType.value;
+      }
+    }
+
     const payload = {
       email: document.getElementById('email').value.trim(),
       password: rawPassword,
-      cfToken
+      cfToken,
+      gameType
     };
 
     const endpoint = window.REGISTER_ENDPOINT || '/api/register';
@@ -2588,6 +2623,24 @@ async function getGameAccountByEmail(email) {
   return null;
 }
 
+async function getAccountByUsername(username) {
+  if (typeof username !== 'string' || !username.trim()) return null;
+  const normalized = username.trim();
+  try {
+    const [rows] = await authPool.execute(
+      'SELECT id, username, email FROM `account` WHERE UPPER(username) = UPPER(?) LIMIT 1',
+      [normalized]
+    );
+    if (rows.length) return rows[0];
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return null;
+    }
+    throw err;
+  }
+  return null;
+}
+
 async function findBnetIdForGameAccount(accountId) {
   const safeId = toSafeNumber(accountId);
   if (safeId == null) return null;
@@ -2856,8 +2909,11 @@ app.get('/api/characters', requireSession, async (req, res) => {
 // ----- API: Register -----
 app.post('/api/register', limiter, async (req, res) => {
   try {
-    const { password, email: rawEmail, cfToken } = req.body || {};
+    const { password, email: rawEmail, cfToken, gameType: rawGameType } = req.body || {};
     const email = normalizeEmail(rawEmail);
+    const normalizedGameType = typeof rawGameType === 'string' ? rawGameType.trim().toLowerCase() : '';
+    const gameType = normalizedGameType === 'classic' ? 'classic' : 'retail';
+    const gameLabel = gameType === 'classic' ? CONFIG.CLASSIC_BRAND_NAME : CONFIG.BRAND_NAME;
 
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
@@ -2870,25 +2926,27 @@ app.post('/api/register', limiter, async (req, res) => {
     const now = Date.now();
     const safeUser = email.split('@')[0].slice(0, CONFIG.MAX_USER) || 'player';
     await pool.execute(
-      'INSERT INTO pending (token, username, password, email, created_at) VALUES (?, ?, ?, ?, ?)\n       ON DUPLICATE KEY UPDATE token = VALUES(token), username = VALUES(username), password = VALUES(password), created_at = VALUES(created_at)',
-      [token, safeUser, password, email, now]
+      'INSERT INTO pending (token, username, password, email, game_type, created_at) VALUES (?, ?, ?, ?, ?, ?)\n       ON DUPLICATE KEY UPDATE token = VALUES(token), username = VALUES(username), password = VALUES(password), game_type = VALUES(game_type), created_at = VALUES(created_at)',
+      [token, safeUser, password, email, gameType, now]
     );
 
     const verifyUrl = `${CONFIG.BASE_URL}/verify?token=${token}`;
     const safeEmail = escapeHtml(email);
     const html = renderTransactionalEmail({
-      title: `${CONFIG.BRAND_NAME} — Verify your email`,
-      intro: `You're almost ready to enter ${CONFIG.BRAND_NAME}.`,
+      title: `${gameLabel} — Verify your email`,
+      intro: `You're almost ready to enter ${gameLabel}.`,
       paragraphs: [
-        `Complete the signup for ${safeEmail} within ${CONFIG.TOKEN_TTL_MIN} minutes to activate your login.`,
+        `Complete the signup for ${safeEmail} within ${CONFIG.TOKEN_TTL_MIN} minutes to activate your DreamCore ${gameLabel} login.`,
+        'Need the other realm too? The DreamCore Master portal lets you create both Retail and Classic credentials from the same place.',
         'If you did not start this registration, you can safely ignore this message.',
       ],
       button: { href: verifyUrl, label: 'Finish registration' },
     });
     const text = [
-      `${CONFIG.BRAND_NAME}: verify your email`,
+      `${gameLabel}: verify your email`,
       `Finish creating the account for ${email} by visiting: ${verifyUrl}`,
       `This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.`,
+      'Remember: this same portal can mint both DreamCore Master (retail) and DreamCore Classic accounts whenever you need them.',
       '',
       `If you did not request this, you can ignore this email.`,
     ].join('\n');
@@ -2896,7 +2954,7 @@ app.post('/api/register', limiter, async (req, res) => {
     await transporter.sendMail({
       to: email,
       from: CONFIG.FROM_EMAIL,
-      subject: `${CONFIG.BRAND_NAME}: confirm your account`,
+      subject: `DreamCore Portal: confirm your ${gameLabel} account`,
       html,
       text,
     });
@@ -2935,6 +2993,7 @@ app.post('/api/classic/register', limiter, async (req, res) => {
       intro: `You're almost ready to enter ${CONFIG.CLASSIC_BRAND_NAME}.`,
       paragraphs: [
         `Complete the signup for ${safeEmail} within ${CONFIG.TOKEN_TTL_MIN} minutes to activate your login.`,
+        'The DreamCore Master portal now provisions both Retail and Classic accounts—just choose the realm you need.',
         'If you did not start this registration, you can safely ignore this message.',
       ],
       button: { href: verifyUrl, label: 'Finish registration' },
@@ -2943,6 +3002,7 @@ app.post('/api/classic/register', limiter, async (req, res) => {
       `${CONFIG.CLASSIC_BRAND_NAME}: verify your email`,
       `Finish creating the account for ${email} by visiting: ${verifyUrl}`,
       `This link expires in ${CONFIG.TOKEN_TTL_MIN} minutes.`,
+      'One secure portal handles DreamCore Master and DreamCore Classic logins whenever you need them.',
       '',
       `If you did not request this, you can ignore this email.`,
     ].join('\n');
@@ -3023,14 +3083,65 @@ app.get('/verify', async (req, res) => {
         );
     }
 
+    const rowGameType = typeof row.game_type === 'string' ? row.game_type.trim().toLowerCase() : '';
+    const isClassic = rowGameType === 'classic';
+    const brandConfig = isClassic
+      ? {
+          brand: CONFIG.CLASSIC_BRAND_NAME,
+          guideUrl: CONFIG.CLASSIC_GUIDE_URL,
+          cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
+          successTitle: 'Your DreamCore Classic account is ready!',
+          successMessage: 'Your DreamCore Classic credentials are now active and linked to this portal.',
+        }
+      : {
+          brand: CONFIG.BRAND_NAME,
+          guideUrl: CONFIG.GUIDE_URL,
+          cornerLogo: CONFIG.CORNER_LOGO,
+          successTitle: 'Your account is ready!',
+          successMessage: 'Your Battle.net-style DreamCore Master account has been created.',
+        };
+
+    const portalUserId = await upsertPortalUser({
+      email: row.email,
+      password: row.password,
+      username: row.username,
+    });
+    if (!portalUserId) {
+      return res
+        .status(500)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            cornerLogo: brandConfig.cornerLogo,
+            state: 'error',
+            title: 'Unable to save your portal login',
+            message: 'We could not finish linking your credentials to the DreamCore portal. Please try again shortly.',
+            steps: [
+              'Submit the registration form again to receive a new verification link.',
+              'If the problem persists, open a support ticket so we can assist manually.',
+            ],
+          })
+        );
+    }
+
     let ensureResult = null;
     try {
-      ensureResult = await ensureRetailAccount({
-        soap: SOAP,
-        email: row.email,
-        password: row.password,
-        debug: CONFIG.SOAP_DEBUG,
-      });
+      if (isClassic) {
+        ensureResult = await ensureClassicAccount({
+          soap: CLASSIC_SOAP,
+          email: row.email,
+          username: row.username,
+          password: row.password,
+          debug: CONFIG.SOAP_DEBUG,
+        });
+      } else {
+        ensureResult = await ensureRetailAccount({
+          soap: SOAP,
+          email: row.email,
+          password: row.password,
+          debug: CONFIG.SOAP_DEBUG,
+        });
+      }
     } catch (e) {
       console.error('SOAP create failed:', e);
       return res
@@ -3038,9 +3149,12 @@ app.get('/verify', async (req, res) => {
         .type('text/html')
         .send(
           VERIFY_PAGE({
+            cornerLogo: brandConfig.cornerLogo,
             state: 'error',
             title: 'Unable to finalize your account',
-            message: 'We could not create your Battle.net account. Please try again in a minute.',
+            message: isClassic
+              ? 'We could not create your DreamCore Classic account. Please try again in a minute.'
+              : 'We could not create your Battle.net account. Please try again in a minute.',
             steps: [
               'If it keeps failing, open a support ticket and include this error:',
               String(e?.message || e),
@@ -3049,49 +3163,68 @@ app.get('/verify', async (req, res) => {
         );
     }
 
-    // Consume token (best-effort)
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
-    const [createdPrimary, createdFallback] = await Promise.all([
-      getAuthAccountByEmail(row.email),
-      getGameAccountByEmail(row.email),
-    ]);
-    const portalAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
-    await upsertPortalUser({
-      email: row.email,
-      password: row.password,
-      retailAccountId: portalAccountId,
-      username: row.username,
-    });
+    if (isClassic) {
+      const [byEmail, byUsername] = await Promise.all([
+        getGameAccountByEmail(row.email),
+        getAccountByUsername(row.username),
+      ]);
+      const classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+      if (classicAccountId != null) {
+        await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
+      }
+    } else {
+      const [createdPrimary, createdFallback] = await Promise.all([
+        getAuthAccountByEmail(row.email),
+        getGameAccountByEmail(row.email),
+      ]);
+      const retailAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
+      if (retailAccountId != null) {
+        await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: Date.now() });
+      }
+    }
+
+    const steps = [
+      {
+        number: 'Step 2',
+        title: 'Verification complete!',
+        body: isClassic
+          ? [
+              `Sign in with ${escapeHtml(row.email)} using the password you chose during sign-up.`,
+              'Your DreamCore portal login now manages both Classic and Retail credentials.',
+            ]
+          : [
+              `Sign in with ${escapeHtml(row.email)}.`,
+              'Use this same portal whenever you want to create a DreamCore Classic login.',
+            ],
+      },
+      {
+        number: 'Step 3',
+        title: 'Install & connect',
+        body: [
+          isClassic
+            ? 'Follow the installation guide below to configure your DreamCore Classic client.'
+            : 'Follow the installation guide below to set up DreamCore on your system.',
+        ],
+        cta: {
+          href: brandConfig.guideUrl,
+          label: 'Open installation guide',
+        },
+      },
+    ];
 
     return res
       .type('text/html')
       .send(
         VERIFY_PAGE({
+          cornerLogo: brandConfig.cornerLogo,
           state: 'success',
-          title: 'Your account is ready!',
-          message: 'Your Battle.net account for the private server has been created.',
-          successSteps: [
-            {
-              number: 'Step 2',
-              title: 'Verification Complete! Your Account has been created!',
-              body: [
-                `Sign in with ${escapeHtml(row.email)}.`,
-                'Keep using the password you chose during sign-up.',
-              ],
-            },
-            {
-              number: 'Step 3',
-              title: 'Install & connect',
-              body: ['Follow the installation guide below to set up DreamCore on your system.'],
-              cta: {
-                href: CONFIG.GUIDE_URL,
-                label: 'Open installation guide',
-              },
-            },
-          ],
+          title: brandConfig.successTitle,
+          message: brandConfig.successMessage,
+          successSteps: steps,
           successFooter:
-            'You can return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore Master portal</a> from the landing page whenever you need to change your password.',
+            'Need the other realm? Return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore Master portal</a> any time to spin up Retail or Classic accounts from the same login.',
           debug: CONFIG.SOAP_DEBUG ? [{ label: 'soapLog', data: ensureResult?.soapLog || [] }] : [],
         })
       );
@@ -3175,11 +3308,35 @@ app.get('/classic/verify', async (req, res) => {
         );
     }
 
+    const portalUserId = await upsertPortalUser({
+      email: row.email,
+      password: row.password,
+      username: row.username,
+    });
+    if (!portalUserId) {
+      return res
+        .status(500)
+        .type('text/html')
+        .send(
+          VERIFY_PAGE({
+            cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
+            state: 'error',
+            title: 'Unable to save your portal login',
+            message: 'We could not link these Classic credentials to your DreamCore portal account. Please try again shortly.',
+            steps: [
+              'Submit the Classic registration form again to receive a new verification email.',
+              'If the issue repeats, open a support ticket so we can complete it manually.',
+            ],
+          })
+        );
+    }
+
     let ensureResult = null;
     try {
-      ensureResult = await ensureRetailAccount({
+      ensureResult = await ensureClassicAccount({
         soap: CLASSIC_SOAP,
         email: row.email,
+        username: row.username,
         password: row.password,
         debug: CONFIG.SOAP_DEBUG,
       });
@@ -3204,6 +3361,15 @@ app.get('/classic/verify', async (req, res) => {
 
     await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
 
+    const [byEmail, byUsername] = await Promise.all([
+      getGameAccountByEmail(row.email),
+      getAccountByUsername(row.username),
+    ]);
+    const classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+    if (classicAccountId != null) {
+      await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
+    }
+
     return res
       .type('text/html')
       .send(
@@ -3211,14 +3377,14 @@ app.get('/classic/verify', async (req, res) => {
           cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
           state: 'success',
           title: 'Your DreamCore Classic account is ready!',
-          message: 'Your credentials have been created on the Wrath of the Lich King realm.',
+          message: 'Your credentials have been created on the Wrath of the Lich King realm and tied to your DreamCore portal login.',
           successSteps: [
             {
               number: 'Step 2',
               title: 'Verification complete!',
               body: [
                 `Sign in with ${escapeHtml(row.email)} using the password you chose during sign-up.`,
-                'Classic portal login tools are coming soon—use these credentials in-game right away.',
+                'You can now hop back to the DreamCore Master portal any time to generate Retail or additional Classic logins.',
               ],
             },
             {
@@ -3232,7 +3398,7 @@ app.get('/classic/verify', async (req, res) => {
             },
           ],
           successFooter:
-            'Need to make changes later? The DreamCore Classic portal will introduce account management soon. Until then, keep this email handy.',
+            'Need the other realm? Return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore Master portal</a> to manage both Retail and Classic credentials from one place.',
           debug: CONFIG.SOAP_DEBUG ? [{ label: 'soapLog', data: ensureResult?.soapLog || [] }] : [],
         })
       );

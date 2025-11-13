@@ -158,6 +158,57 @@ export async function ensureRetailAccount({ soap, email, password, debug = false
   };
 }
 
+function normalizeClassicUsername(username, email) {
+  if (typeof username === "string" && username.trim()) {
+    return username.trim();
+  }
+  if (typeof email === "string" && email.trim()) {
+    const [local] = email.trim().split("@");
+    if (local) return local;
+    return email.trim();
+  }
+  return "player";
+}
+
+export async function ensureClassicAccount({ soap, email, username, password, debug = false }) {
+  if (!soap) throw new Error("Missing soap");
+  if (!password) throw new Error("Missing password");
+  const normEmail = normalizeEmail(email);
+  const baseUsername = normalizeClassicUsername(username, normEmail);
+  const safeUsername = sanitizeSoapArg(baseUsername, { label: "username" }).toUpperCase();
+  const safePass = sanitizeSoapArg(password, { label: "password" });
+
+  const soapLog = [];
+
+  const run = async (label, fn) => {
+    try {
+      const out = await fn();
+      soapLog.push({ label, ok: true, ret: out.ret ?? out.raw ?? String(out) });
+      return out;
+    } catch (err) {
+      soapLog.push({ label, ok: false, error: String(err?.message || err) });
+      throw err;
+    }
+  };
+
+  await run("account create", () => callSoap(soap, `account create ${safeUsername} ${safePass} ${safePass}`));
+
+  if (normEmail) {
+    const safeEmail = sanitizeSoapArg(normEmail, { label: "email" });
+    await run(
+      "account set email",
+      () => callSoap(soap, `account set email ${safeUsername} ${safeEmail} ${safeEmail}`)
+    );
+  }
+
+  return {
+    ok: true,
+    username: safeUsername,
+    email: normEmail,
+    soapLog,
+  };
+}
+
 export async function retailPasswordReset({ soap, email, newPassword }) {
   if (!soap) throw new Error("Missing soap");
   const normEmail = normalizeEmail(email);
