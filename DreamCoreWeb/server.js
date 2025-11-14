@@ -79,6 +79,9 @@ const CONFIG = {
     process.env.CLASSIC_GUIDE_URL ||
     process.env.GUIDE_URL ||
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
+  CLASSIC_CLIENT_DOWNLOAD_URL:
+    process.env.CLASSIC_CLIENT_DOWNLOAD_URL ||
+    'https://the-demiurge.com/Backup/WoWDC.zip',
   CLASSIC_BASE_URL:
     process.env.CLASSIC_BASE_URL ||
     `${process.env.BASE_URL || 'https://wow.the-demiurge.com'}/classic`,
@@ -436,101 +439,21 @@ const HOME_PAGE = () => `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DreamCore — Choose Your Realm</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
-  </style>
-</head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">DREAMCORE</div>
-  <div class="w-full max-w-5xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
-      <div class="px-6 pt-10 pb-12 sm:px-12">
-        <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-400 via-purple-400 to-blue-400 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-gray-900 shadow-lg shadow-indigo-900/30">Realms</span>
-        <h1 class="mt-6 text-4xl sm:text-5xl font-semibold tracking-tight text-white">Choose Your DreamCore Realm</h1>
-        <p class="mt-4 text-[15px] sm:text-base text-indigo-100/90 max-w-3xl">Welcome to the DreamCore network. Select the experience that matches your client and playstyle—whether you're joining us on the cutting edge retail realm or reliving the legends in Wrath of the Lich King.</p>
-
-        <div class="mt-10 grid gap-6 lg:grid-cols-2">
-          <section class="group relative overflow-hidden rounded-3xl border border-rose-400/40 bg-gray-900/70 p-8 shadow-inner shadow-rose-900/30 transition hover:border-rose-300/60">
-            <div class="absolute -top-24 -right-24 h-48 w-48 rounded-full bg-rose-500/30 blur-3xl transition group-hover:opacity-70"></div>
-            <div class="flex items-center gap-4">
-              <span class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-amber-400 text-lg font-semibold text-gray-900 shadow-lg shadow-rose-900/40">Classic</span>
-              <div>
-                <h2 class="text-2xl font-semibold text-white">${CONFIG.CLASSIC_BRAND_NAME}</h2>
-                <p class="mt-1 text-sm text-rose-100/80">Wrath of the Lich King (3.3.5) realm &mdash; create and manage accounts from the same DreamCore Master portal you use for retail.</p>
-              </div>
-            </div>
-            <p class="mt-6 text-sm text-indigo-100/80">Create your account now. Login tools are coming soon.</p>
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-3 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01]" href="/classic">Enter Classic Portal</a>
-              <span class="inline-flex items-center justify-center rounded-2xl border border-rose-300/40 bg-gray-900/60 px-5 py-3 text-sm font-semibold text-rose-100/70">Login coming soon</span>
-            </div>
-          </section>
-
-          <section class="group relative overflow-hidden rounded-3xl border border-indigo-400/40 bg-gray-900/70 p-8 shadow-inner shadow-indigo-900/30 transition hover:border-indigo-300/60">
-            <div class="absolute -top-24 -right-24 h-48 w-48 rounded-full bg-indigo-500/30 blur-3xl transition group-hover:opacity-70"></div>
-            <div class="flex items-center gap-4">
-              <span class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 via-purple-400 to-blue-400 text-lg font-semibold text-gray-900 shadow-lg shadow-indigo-900/40">Retail</span>
-              <div>
-                <h2 class="text-2xl font-semibold text-white">${CONFIG.BRAND_NAME}</h2>
-                <p class="mt-1 text-sm text-indigo-100/80">Retail-ready realm running on TrinityCore master. Manage your Battle.net-style login here.</p>
-              </div>
-            </div>
-            <p class="mt-6 text-sm text-indigo-100/80">Register new accounts or manage existing DreamCore Master credentials, plus spin up DreamCore Classic logins without leaving this portal.</p>
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:scale-[1.01]" href="/master">Open Master Portal</a>
-              <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-300/50 bg-gray-900/60 px-5 py-3 text-sm font-semibold text-indigo-100/90 hover:border-indigo-200 hover:text-white transition" href="/login">Log in</a>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-    <p class="text-center text-xs text-gray-500 mt-5">DreamCore Network · Retail &amp; Classic realms united.</p>
-  </div>
-</body>
-</html>`;
-
-const REG_PAGE = () => `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${CONFIG.HEADER_TITLE} — Create Account</title>
+  <title>Demi DreamCore — Account Portal</title>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
   <script>
     window.TURNSTILE_SITEKEY = ${JSON.stringify(CONFIG.TURNSTILE_SITEKEY)};
     window.REGISTER_ENDPOINT = '/api/register';
     window.REGISTRATION_HELPER_COPY = ${JSON.stringify({
       retail: {
-        title: `${CONFIG.BRAND_NAME} retail login`,
-        body:
-          'Provision a Battle.net-style login for DreamCore Master. Your characters sync to the modern roster dashboard automatically.',
-        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.BRAND_NAME} login.`,
+        title: 'DreamCore Current Retail account',
+        body: 'Retail accounts connect you to DreamCore Master using Battle.net-style credentials.',
+        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your DreamCore Current Retail login.`,
       },
       classic: {
-        title: `${CONFIG.CLASSIC_BRAND_NAME} Wrath login`,
-        body:
-          'Create DreamCore Classic credentials without leaving this secure portal. We keep them linked to your portal account for roster syncs.',
-        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.CLASSIC_BRAND_NAME} login.`,
+        title: 'DreamCore Classic account',
+        body: 'Classic accounts are for the Wrath of the Lich King realm using its dedicated Trinity database.',
+        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your DreamCore Classic login.`,
       },
     })};
   </script>
@@ -538,7 +461,7 @@ const REG_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.35), rgba(15, 23, 42, 0.95));
     }
     .aurora::before {
       content: "";
@@ -546,185 +469,69 @@ const REG_PAGE = () => `<!doctype html>
       inset: -30%;
       background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
       filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
-  </style>
-</head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
-  <div class="w-full max-w-xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
-      <div class="px-6 pt-8 pb-10 sm:px-10">
-        <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to ${CONFIG.BRAND_NAME}</h1>
-          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Create</span>
-        </div>
-        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Spin up your DreamCore login for <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> or <span class="font-semibold text-rose-300 drop-shadow">${CONFIG.CLASSIC_BRAND_NAME}</span> from the same secure portal.</p>
-
-        <div class="mt-8 space-y-8">
-          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex items-center gap-4">
-              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
-              <div>
-                <h2 class="text-lg font-semibold text-white">Step 1 · Create your account</h2>
-                <p class="text-[15px] text-indigo-100/90">Fill out the secure form below. A verification email will be sent to the address you provide.</p>
-              </div>
-            </div>
-            <form id="regForm" class="mt-6 space-y-5">
-              <div>
-                <label class="block text-sm font-medium text-indigo-200 mb-1" for="email">Email</label>
-                <input id="email" type="email" name="email" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
-                <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
-                <p id="passwordHint" class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
-              </div>
-              <div>
-                <span class="block text-sm font-medium text-indigo-200 mb-2">Choose your realm</span>
-                <div class="grid gap-3 sm:grid-cols-2" role="group" aria-label="Realm selector">
-                  <label class="block cursor-pointer">
-                    <input type="radio" name="gameType" value="retail" class="sr-only peer" checked />
-                    <div class="flex flex-col gap-1 rounded-2xl border border-indigo-500/40 bg-gray-900/60 p-4 transition peer-checked:border-white peer-checked:bg-indigo-500/10">
-                      <span class="text-sm font-semibold text-white">DreamCore Master (Retail)</span>
-                      <span class="text-xs text-indigo-200/80">Battle.net-style account with modern features.</span>
-                    </div>
-                  </label>
-                  <label class="block cursor-pointer">
-                    <input type="radio" name="gameType" value="classic" class="sr-only peer" />
-                    <div class="flex flex-col gap-1 rounded-2xl border border-rose-400/40 bg-gray-900/60 p-4 transition peer-checked:border-white peer-checked:bg-rose-500/10">
-                      <span class="text-sm font-semibold text-white">DreamCore Classic (Wrath)</span>
-                      <span class="text-xs text-rose-100/80">Create WotLK logins without leaving this portal.</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4" aria-live="polite">
-                <p id="gameHelperTitle" class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-300">DreamCore Master (Retail)</p>
-                <p id="gameHelperBody" class="mt-2 text-[15px] text-indigo-100/85">Provision a Battle.net-style login for DreamCore Master. Your characters sync to the modern roster dashboard automatically.</p>
-              </div>
-              <div class="pt-2" id="cf-box">
-                <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
-              </div>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Create account</button>
-                <a class="inline-flex w-full items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3.5 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] shadow-lg shadow-indigo-900/40" href="/login">Log in</a>
-              </div>
-            </form>
-            <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
-            <div class="mt-6 rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4 text-indigo-100 shadow-inner shadow-indigo-900/20">
-              <p class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-200">What happens next?</p>
-              <p class="mt-2 text-[15px] text-indigo-100/85">Check your inbox for our verification email. Once you confirm your address, we’ll finish provisioning your ${CONFIG.BRAND_NAME} or ${CONFIG.CLASSIC_BRAND_NAME} login—no extra forms required.</p>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore DemiDev Unit 2025 · DreamCore.exe shortcut by Azar </p>
-  </div>
-</body>
-</html>`;
-
-const CLASSIC_PAGE = () => `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${CONFIG.CLASSIC_HEADER_TITLE} — Create Account</title>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
-  <script>
-    window.TURNSTILE_SITEKEY = ${JSON.stringify(CONFIG.CLASSIC_TURNSTILE_SITEKEY)};
-    window.REGISTER_ENDPOINT = '/api/classic/register';
-  </script>
-  <script src="/client.js" defer></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(244, 114, 182, 0.35), rgba(249, 115, 22, 0.25), rgba(244, 63, 94, 0.35), rgba(244, 114, 182, 0.35));
-      filter: blur(120px);
       opacity: 0.45;
       animation: aurora-shift 24s linear infinite;
       z-index: 0;
       pointer-events: none;
     }
     @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
+      0% { transform: rotate(0deg) scale(1.05); }
+      50% { transform: rotate(180deg) scale(1.15); }
+      100% { transform: rotate(360deg) scale(1.05); }
     }
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-rose-300 drop-shadow-lg z-20 uppercase">${CONFIG.CLASSIC_CORNER_LOGO}</div>
+  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-rose-500/30 overflow-hidden">
+    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-indigo-500/30 overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
-        <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to ${CONFIG.CLASSIC_BRAND_NAME}</h1>
-          <span class="text-xs font-medium uppercase tracking-[0.4em] text-rose-300">Create</span>
-        </div>
-        <p class="mt-3 text-[15px] text-rose-100 drop-shadow-sm">Create your account for <span class="font-semibold text-rose-300 drop-shadow">${CONFIG.CLASSIC_BRAND_NAME}</span> and join the Wrath of the Lich King realm—this same portal can also spin up DreamCore Master (retail) credentials whenever you need them.</p>
+        <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to Demi DreamCore</h1>
+        <p class="mt-3 text-[15px] text-indigo-100/90">Choose which DreamCore server you are creating an account for, enter your credentials, and finish verification from your email.</p>
 
-        <div class="mt-8 space-y-8">
-          <section class="rounded-3xl border border-rose-400/40 bg-gray-900/60 p-6 shadow-inner shadow-rose-900/30">
-            <div class="flex items-center gap-4">
-              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 via-orange-400 to-amber-400 text-lg font-semibold text-gray-900 shadow-lg shadow-rose-900/40">1</span>
-              <div>
-                <h2 class="text-lg font-semibold text-white">Step 1 · Create your account</h2>
-                <p class="text-[15px] text-rose-100/90">Fill out the secure form below. You'll confirm via email before the account is activated.</p>
-              </div>
-            </div>
-            <form id="regForm" class="mt-6 space-y-5">
-              <input type="hidden" name="gameType" value="classic" />
-              <div>
-                <label class="block text-sm font-medium text-rose-100 mb-1" for="email">Email</label>
-                <input id="email" type="email" name="email" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-rose-400 focus:border-rose-300 p-3 text-[15px] font-semibold text-rose-100 focus:text-rose-50 transition placeholder-rose-200/60" placeholder="you@example.com" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-rose-100 mb-1" for="password">Password</label>
-                <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-rose-400 focus:border-rose-300 p-3 text-[15px] font-semibold text-rose-100 focus:text-rose-50 transition placeholder-rose-200/60" placeholder="••••••••" />
-                <p class="text-xs text-rose-100/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.CLASSIC_BRAND_NAME} login.</p>
-              </div>
-              <div class="pt-2" id="cf-box">
-                <div class="cf-turnstile" data-sitekey="${CONFIG.CLASSIC_TURNSTILE_SITEKEY}" data-theme="auto"></div>
-              </div>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-400 to-amber-400 hover:from-rose-400 hover:via-orange-300 hover:to-amber-300 focus:ring-2 focus:ring-rose-300 active:scale-[0.99] transition font-semibold text-[15px] text-gray-900 shadow-lg shadow-rose-900/50" type="submit">Create account</button>
-                <span class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-300/50 bg-gray-900/70 px-5 py-3.5 text-[15px] font-semibold text-rose-100/80">Login coming soon</span>
-              </div>
-            </form>
-            <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-rose-100 bg-gray-900/70 border border-rose-400/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
-            <div class="mt-6 rounded-2xl border border-rose-400/30 bg-gray-900/60 p-4 text-rose-100 shadow-inner shadow-rose-900/20">
-              <p class="text-sm font-semibold uppercase tracking-[0.25em] text-rose-200">What happens next?</p>
-              <p class="mt-2 text-[15px] text-rose-100/85">Check your inbox for our verification email. Once you confirm, we'll finish creating your DreamCore Classic login and keep it linked to the same portal account you can use for retail.</p>
-            </div>
-          </section>
-        </div>
+        <form id="regForm" class="mt-8 space-y-5">
+          <div>
+            <label class="block text-sm font-medium text-indigo-200 mb-1" for="gameType">Server type</label>
+            <select id="gameType" name="gameType" class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100">
+              <option value="retail">DreamCore Current Retail</option>
+              <option value="classic">DreamCore Classic</option>
+            </select>
+          </div>
+          <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4" aria-live="polite">
+            <p id="gameHelperTitle" class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-300">DreamCore Current Retail account</p>
+            <p id="gameHelperBody" class="mt-2 text-[15px] text-indigo-100/85">Retail accounts connect you to DreamCore Master using Battle.net-style credentials.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-indigo-200 mb-1" for="email">Email</label>
+            <input id="email" type="email" name="email" required
+                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60"
+                   placeholder="you@example.com" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
+            <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'"]+" title="No spaces or quotes"
+                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60"
+                   placeholder="••••••••" />
+            <p id="passwordHint" class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
+          </div>
+          <div class="pt-2" id="cf-box">
+            <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Register Account</button>
+            <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-500/40 bg-gray-900/60 px-5 py-3.5 text-[15px] font-semibold text-indigo-100/85 hover:border-indigo-300 hover:text-white transition" href="/login">Login</a>
+          </div>
+        </form>
+        <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
       </div>
     </div>
-    <p class="text-center text-xs text-gray-500 mt-5">Protected by Cloudflare · DreamCore Classic portal preview</p>
+    <p class="text-center text-xs text-gray-500 mt-5">DreamCore Network</p>
   </div>
 </body>
 </html>`;
 
+const REG_PAGE = HOME_PAGE;
+const CLASSIC_PAGE = HOME_PAGE;
 const clientScript = () => {
   const form = document.getElementById('regForm');
   const msg = document.getElementById('msg');
@@ -732,6 +539,7 @@ const clientScript = () => {
   const helperTitle = document.getElementById('gameHelperTitle');
   const helperBody = document.getElementById('gameHelperBody');
   const helperCopy = window.REGISTRATION_HELPER_COPY || {};
+  const gameTypeSelect = form ? form.querySelector('select[name="gameType"]') : null;
 
   function applyHelper(gameType) {
     const copy = helperCopy[gameType] || helperCopy.retail || {};
@@ -748,19 +556,28 @@ const clientScript = () => {
 
   function initHelper() {
     if (!form) return;
-    const current = form.querySelector('input[name="gameType"]:checked');
-    const selectedValue = current?.value || 'retail';
-    applyHelper(selectedValue);
-    form.querySelectorAll('input[name="gameType"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        if (input.checked) {
-          applyHelper(input.value);
-        }
+    let selectedValue = 'retail';
+    if (gameTypeSelect) {
+      selectedValue = gameTypeSelect.value || 'retail';
+      gameTypeSelect.addEventListener('change', () => {
+        applyHelper(gameTypeSelect.value || 'retail');
       });
-    });
+    } else {
+      const current = form.querySelector('input[name="gameType"]:checked');
+      selectedValue = current?.value || 'retail';
+      form.querySelectorAll('input[name="gameType"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            applyHelper(input.value);
+          }
+        });
+      });
+    }
+    applyHelper(selectedValue);
   }
 
   initHelper();
+  if (!form) return;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     msg.textContent = 'Submitting…';
@@ -776,13 +593,17 @@ const clientScript = () => {
     }
 
     let gameType = 'retail';
-    const selectedType = form.querySelector('input[name="gameType"]:checked');
-    if (selectedType && typeof selectedType.value === 'string') {
-      gameType = selectedType.value;
+    if (gameTypeSelect && typeof gameTypeSelect.value === 'string') {
+      gameType = gameTypeSelect.value;
     } else {
-      const fallbackType = form.querySelector('input[name="gameType"]');
-      if (fallbackType && typeof fallbackType.value === 'string') {
-        gameType = fallbackType.value;
+      const selectedType = form.querySelector('input[name="gameType"]:checked');
+      if (selectedType && typeof selectedType.value === 'string') {
+        gameType = selectedType.value;
+      } else {
+        const fallbackType = form.querySelector('input[name="gameType"]');
+        if (fallbackType && typeof fallbackType.value === 'string') {
+          gameType = fallbackType.value;
+        }
       }
     }
 
@@ -4427,29 +4248,24 @@ app.get('/classic/verify', async (req, res) => {
         VERIFY_PAGE({
           cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
           state: 'success',
-          title: 'Your DreamCore Classic account is ready!',
-          message: 'Your credentials have been created on the Wrath of the Lich King realm and tied to your DreamCore portal login.',
+          title: 'Verification Successful',
+          message: 'Your DreamCore Classic account is ready. Download the game client below to start playing.',
           successSteps: [
             {
-              number: 'Step 2',
-              title: 'Verification complete!',
+              number: 'Next',
+              title: 'Download the DreamCore Classic client',
               body: [
-                `Sign in with ${escapeHtml(row.email)} using the password you chose during sign-up.`,
-                'You can now hop back to the DreamCore Master portal any time to generate Retail or additional Classic logins.',
+                'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
+                'After installing, launch it and log in with the account you just verified.',
               ],
-            },
-            {
-              number: 'Step 3',
-              title: 'Install & connect',
-              body: ['Follow the installation guide below to configure your DreamCore Classic client.'],
               cta: {
-                href: CONFIG.CLASSIC_GUIDE_URL,
-                label: 'Open installation guide',
+                href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
+                label: 'Download Client',
               },
             },
           ],
           successFooter:
-            'Need the other realm? Return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore Master portal</a> to manage both Retail and Classic credentials from one place.',
+            'This client is already configured to connect to our server, you can now login with your account info.',
           debug: CONFIG.SOAP_DEBUG ? [{ label: 'soapLog', data: ensureResult?.soapLog || [] }] : [],
         })
       );
@@ -4644,5 +4460,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Classic portal URL: ${CONFIG.CLASSIC_BASE_URL}`);
   console.log(`   Classic SOAP endpoint: ${CLASSIC_SOAP.host}:${CLASSIC_SOAP.port}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
