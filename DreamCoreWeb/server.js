@@ -826,21 +826,31 @@ const loginScript = () => {
 };
 const LOGIN_JS = `(${loginScript.toString()})();`;
 
+function buildPortalLimitsScriptTag() {
+  const payload = {
+    minPass: CONFIG.MIN_PASS,
+    maxPass: CONFIG.MAX_PASS,
+    maxUser: CONFIG.MAX_USER,
+    brandName: CONFIG.BRAND_NAME,
+    classicBrandName: CONFIG.CLASSIC_BRAND_NAME,
+    familyLabels: {
+      retail: CONFIG.BRAND_NAME || 'DreamCore Master',
+      classic: CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic',
+    },
+  };
+  return `
+  <script>
+    window.PORTAL_LIMITS = ${JSON.stringify(payload)};
+  </script>`;
+}
+
 const ACCOUNT_PAGE = () => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${CONFIG.HEADER_TITLE} — Account Dashboard</title>
-  <script>
-    window.PORTAL_LIMITS = ${JSON.stringify({
-      minPass: CONFIG.MIN_PASS,
-      maxPass: CONFIG.MAX_PASS,
-      maxUser: CONFIG.MAX_USER,
-      brandName: CONFIG.BRAND_NAME,
-      classicBrandName: CONFIG.CLASSIC_BRAND_NAME,
-    })};
-  </script>
+  ${buildPortalLimitsScriptTag()}
   <script src="/account.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
@@ -1488,6 +1498,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${CONFIG.HEADER_TITLE} — My Characters</title>
+  ${buildPortalLimitsScriptTag()}
   <script src="/characters.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
@@ -1643,9 +1654,15 @@ const charactersScript = () => {
     24: 'Pandaren',
   };
 
+  const FAMILY_DEFAULTS = {
+    retail: 'DreamCore Master',
+    classic: 'DreamCore Classic',
+  };
+  const portalLimits = window.PORTAL_LIMITS || {};
+  const configuredLabels = portalLimits.familyLabels || {};
   const FAMILY_LABELS = {
-    retail: ${JSON.stringify(CONFIG.BRAND_NAME || 'DreamCore Master')},
-    classic: ${JSON.stringify(CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic')},
+    retail: configuredLabels.retail || portalLimits.brandName || FAMILY_DEFAULTS.retail,
+    classic: configuredLabels.classic || portalLimits.classicBrandName || FAMILY_DEFAULTS.classic,
   };
 
   function formatFamilyLabel(family) {
