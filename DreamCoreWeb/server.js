@@ -122,6 +122,62 @@ const CLASSIC_SOAP = makeSoapConfig({
 
 const RESET_TOKEN_TTL_MS = CONFIG.RESET_TOKEN_TTL_MIN * 60 * 1000;
 
+const SHARED_STYLES = `
+    :root {
+      --dc-border-gradient: linear-gradient(120deg, #a855f7, #6366f1, #0ea5e9);
+    }
+    h1, h2, h3, h4, label {
+      text-shadow: 0 12px 32px rgba(8, 7, 27, 0.55), 0 0 20px rgba(99, 102, 241, 0.4);
+    }
+    p, span, a, small {
+      text-shadow: 0 6px 18px rgba(8, 7, 27, 0.45);
+    }
+    .gradient-border {
+      border: 1px solid transparent;
+      border-image: var(--dc-border-gradient) 1;
+      box-shadow: 0 20px 45px rgba(8, 7, 27, 0.65), inset 0 0 25px rgba(79, 70, 229, 0.12);
+    }
+    .gradient-divider {
+      border: 0;
+      height: 1px;
+      background-image: var(--dc-border-gradient);
+      box-shadow: 0 12px 28px rgba(14, 165, 233, 0.35);
+      border-radius: 999px;
+    }
+    .glow-input {
+      background: rgba(255, 255, 255, 0.97);
+      color: #0f172a;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.3);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+    }
+    .glow-input:focus {
+      border-color: transparent;
+      box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.7), 0 20px 50px rgba(79, 70, 229, 0.4);
+      background: rgba(255, 255, 255, 0.99);
+    }
+    .glow-input::placeholder {
+      color: #475569;
+      opacity: 1;
+      text-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
+    }
+    .dark-select {
+      background: rgba(15, 23, 42, 0.9);
+      color: #f8fafc;
+      border: 1px solid rgba(99, 102, 241, 0.6);
+      box-shadow: 0 20px 45px rgba(8, 7, 27, 0.65);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+    }
+    .dark-select:focus {
+      border-color: rgba(14, 165, 233, 0.8);
+      box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.35), 0 22px 50px rgba(8, 7, 27, 0.8);
+    }
+    .dark-select option {
+      color: #f8fafc;
+      background-color: #0f172a;
+    }
+`;
+
 // ----- DB (MariaDB for pending verifications) -----
 const DB = {
   HOST: process.env.DB_HOST || '127.0.0.1',
@@ -479,12 +535,13 @@ const HOME_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.15); }
       100% { transform: rotate(360deg) scale(1.05); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
-    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-indigo-500/30 overflow-hidden">
+    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome to Demi DreamCore</h1>
         <p class="mt-3 text-[15px] text-indigo-100/90">Choose which DreamCore server you are creating an account for, enter your credentials, and finish verification from your email.</p>
@@ -492,25 +549,25 @@ const HOME_PAGE = () => `<!doctype html>
         <form id="regForm" class="mt-8 space-y-5">
           <div>
             <label class="block text-sm font-medium text-indigo-200 mb-1" for="gameType">Server type</label>
-            <select id="gameType" name="gameType" class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100">
+            <select id="gameType" name="gameType" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
               <option value="retail">DreamCore Current Retail</option>
               <option value="classic">DreamCore Classic</option>
             </select>
           </div>
-          <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4" aria-live="polite">
+          <div class="rounded-2xl gradient-border bg-gray-900/60 p-4" aria-live="polite">
             <p id="gameHelperTitle" class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-300">DreamCore Current Retail account</p>
             <p id="gameHelperBody" class="mt-2 text-[15px] text-indigo-100/85">Retail accounts connect you to DreamCore Master using Battle.net-style credentials.</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-indigo-200 mb-1" for="email">Email</label>
             <input id="email" type="email" name="email" required
-                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60"
+                   class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400"
                    placeholder="you@example.com" />
           </div>
           <div>
             <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
             <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'"]+" title="No spaces or quotes"
-                   class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60"
+                   class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400"
                    placeholder="••••••••" />
             <p id="passwordHint" class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
           </div>
@@ -519,10 +576,10 @@ const HOME_PAGE = () => `<!doctype html>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
             <button class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Register Account</button>
-            <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-500/40 bg-gray-900/60 px-5 py-3.5 text-[15px] font-semibold text-indigo-100/85 hover:border-indigo-300 hover:text-white transition" href="/login">Login</a>
+            <a class="inline-flex items-center justify-center rounded-2xl gradient-border bg-gray-900/60 px-5 py-3.5 text-[15px] font-semibold text-indigo-100/85 hover:border-indigo-300 hover:text-white transition" href="/login">Login</a>
           </div>
         </form>
-        <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+        <pre id="msg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
       </div>
     </div>
     <p class="text-center text-xs text-gray-500 mt-5">DreamCore Network</p>
@@ -658,12 +715,13 @@ const LOGIN_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex items-baseline justify-between">
           <h1 class="text-4xl font-semibold tracking-tight text-white">Welcome back</h1>
@@ -672,7 +730,7 @@ const LOGIN_PAGE = () => `<!doctype html>
         <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Sign in to manage your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> account and view your characters.</p>
 
         <div class="mt-8 space-y-8">
-          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+          <section class="rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
             <div class="flex items-center gap-4">
               <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
               <div>
@@ -684,12 +742,12 @@ const LOGIN_PAGE = () => `<!doctype html>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginIdentity">Email or username</label>
                 <input id="loginIdentity" type="text" name="identity" autocomplete="username" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com or player123" />
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="you@example.com or player123" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="loginPassword">Password</label>
                 <input id="loginPassword" type="password" name="password" autocomplete="current-password" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="••••••••" />
               </div>
               <button id="loginSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Sign in</button>
             </form>
@@ -697,7 +755,7 @@ const LOGIN_PAGE = () => `<!doctype html>
               <a class="text-sm font-medium text-indigo-200 hover:text-white transition" href="/reset-password">Forgot your password?</a>
               <a class="text-sm text-indigo-200/80 hover:text-white transition" href="/master">Need an account? Create one</a>
             </div>
-            <pre id="loginMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <pre id="loginMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
           </section>
         </div>
       </div>
@@ -805,12 +863,13 @@ const ACCOUNT_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-5xl relative z-10">
-    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-2xl">
@@ -818,11 +877,11 @@ const ACCOUNT_PAGE = () => `<!doctype html>
             <h1 class="mt-4 text-4xl font-semibold tracking-tight text-white">DreamCore account dashboard</h1>
             <p class="mt-3 text-[15px] text-indigo-100/90">Manage your secure portal login, provision game accounts for <span class="font-semibold text-indigo-300">${CONFIG.BRAND_NAME}</span> and <span class="font-semibold text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</span>, then jump into the roster.</p>
             <div class="mt-6 grid gap-4 sm:grid-cols-2">
-              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+              <div class="rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Portal email</p>
                 <p id="profileEmail" class="mt-2 text-lg font-semibold text-white break-words">Loading…</p>
               </div>
-              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+              <div class="rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Username</p>
                 <p id="profileUsername" class="mt-2 text-lg font-semibold text-white">—</p>
               </div>
@@ -830,8 +889,8 @@ const ACCOUNT_PAGE = () => `<!doctype html>
           </div>
           <div class="flex w-full max-w-sm flex-col gap-4">
             <div class="flex flex-wrap gap-3" id="statusBadges">
-              <span id="retailStatusBadge" class="inline-flex items-center rounded-full border border-indigo-500/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Retail · pending</span>
-              <span id="classicStatusBadge" class="inline-flex items-center rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-100">Classic · pending</span>
+              <span id="retailStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Retail · pending</span>
+              <span id="classicStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-100">Classic · pending</span>
             </div>
             <div class="flex flex-col gap-3 sm:flex-row">
               <a class="inline-flex flex-1 items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/characters">Open roster</a>
@@ -841,35 +900,35 @@ const ACCOUNT_PAGE = () => `<!doctype html>
         </div>
 
         <div class="mt-8 space-y-6">
-          <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Portal security</p>
                 <h2 class="text-2xl font-semibold text-white">Update your portal password</h2>
                 <p class="text-[15px] text-indigo-100/85">This password unlocks the dashboard and syncs to any linked game accounts.</p>
               </div>
-              <span class="rounded-full border border-indigo-500/30 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Step 1</span>
+              <span class="rounded-full gradient-border px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Step 1</span>
             </div>
             <form id="accountForm" class="mt-6 space-y-5">
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountEmail">Email</label>
                 <input id="accountEmail" type="email" name="email" readonly
-                       class="w-full rounded-2xl bg-gray-800/60 border border-gray-700 px-3 py-3 text-[15px] font-semibold text-indigo-200 focus:outline-none"
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold opacity-80 cursor-not-allowed"
                        value="" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountPassword">New password</label>
                 <input id="accountPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60"
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400"
                        placeholder="••••••••" />
                 <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
               </div>
               <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Save portal password</button>
             </form>
-            <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
           </section>
 
-          <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
             <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="retailPanel" aria-expanded="true">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
@@ -882,7 +941,7 @@ const ACCOUNT_PAGE = () => `<!doctype html>
               </div>
             </button>
             <div id="retailPanel" class="mt-6 space-y-5">
-              <div id="retailLinkedSummary" class="hidden rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+              <div id="retailLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-sm font-semibold text-white">Retail login linked</p>
                 <p class="text-sm text-indigo-200/80">Your portal password keeps this login in sync. Head to the roster for characters.</p>
                 <a class="mt-3 inline-flex items-center rounded-2xl border border-indigo-400/50 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400" href="/characters">View characters</a>
@@ -891,7 +950,7 @@ const ACCOUNT_PAGE = () => `<!doctype html>
                 <p class="text-sm text-indigo-200/80">Need an in-game login? Enter a password and we'll mint your ${CONFIG.BRAND_NAME} credentials instantly.</p>
                 <div>
                   <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
-                  <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-indigo-500/40 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60" placeholder="Choose a secure password" />
+                  <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Choose a secure password" />
                 </div>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p id="retailLinkMsg" class="text-sm text-indigo-200/90"></p>
@@ -901,7 +960,7 @@ const ACCOUNT_PAGE = () => `<!doctype html>
             </div>
           </section>
 
-          <section class="rounded-3xl border border-rose-500/30 bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
+          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
             <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="classicPanel" aria-expanded="false">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">DreamCore Classic</p>
@@ -914,7 +973,7 @@ const ACCOUNT_PAGE = () => `<!doctype html>
               </div>
             </button>
             <div id="classicPanel" class="mt-6 space-y-5 hidden">
-              <div id="classicLinkedSummary" class="hidden rounded-2xl border border-rose-500/30 bg-gray-900/60 p-4">
+              <div id="classicLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-sm font-semibold text-white">Classic login linked</p>
                 <p class="text-sm text-rose-100/80">Manage characters and resets from the roster dashboard. Portal password updates keep this login synced.</p>
                 <a class="mt-3 inline-flex items-center rounded-2xl border border-rose-400/50 px-4 py-2 text-sm font-semibold text-rose-50 hover:text-white hover:border-rose-200 hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300" href="/characters">Open roster</a>
@@ -923,11 +982,11 @@ const ACCOUNT_PAGE = () => `<!doctype html>
                 <p class="text-sm text-rose-100/85">Pick a username and password to mint DreamCore Classic credentials. We'll link them straight to this portal.</p>
                 <div>
                   <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkUsername">Classic username</label>
-                  <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Pick an account name" />
+                  <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="Pick an account name" />
                 </div>
                 <div>
                   <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkPassword">Account password</label>
-                  <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Choose a secure password" />
+                  <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="Choose a secure password" />
                 </div>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p id="classicLinkMsg" class="text-sm text-rose-100/90"></p>
@@ -1043,8 +1102,8 @@ const accountScript = () => {
       profileUsername.textContent = currentSession?.username || '—';
     }
 
-    updateBadge(retailStatusBadge, hasRetail, { label: 'Retail', border: 'border-indigo-500/40' });
-    updateBadge(classicStatusBadge, hasClassic, { label: 'Classic', border: 'border-rose-500/40' });
+    updateBadge(retailStatusBadge, hasRetail, { label: 'Retail', border: 'gradient-border' });
+    updateBadge(classicStatusBadge, hasClassic, { label: 'Classic', border: 'gradient-border' });
     if (retailStatusText) {
       retailStatusText.textContent = hasRetail ? 'Ready to play' : 'Link required';
     }
@@ -1246,12 +1305,13 @@ const RESET_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex items-baseline justify-between">
           <h1 class="text-4xl font-semibold tracking-tight text-white">Reset your password</h1>
@@ -1260,7 +1320,7 @@ const RESET_PAGE = () => `<!doctype html>
         <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Request a reset link or set a new password for your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> account.</p>
 
         <div class="mt-8 space-y-8">
-          <section id="resetRequest" class="hidden rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+          <section id="resetRequest" class="hidden rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
             <div class="flex items-center gap-4">
               <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
               <div>
@@ -1272,15 +1332,15 @@ const RESET_PAGE = () => `<!doctype html>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="resetEmail">Email</label>
                 <input id="resetEmail" type="email" name="email" required
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="you@example.com" />
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="you@example.com" />
               </div>
               <button id="requestSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Email me a reset link</button>
             </form>
-            <pre id="requestMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <pre id="requestMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <p class="mt-4 text-xs text-indigo-200/80">Need an account instead? <a class="font-semibold text-indigo-200 hover:text-white" href="/">Start registration</a>.</p>
           </section>
 
-          <section id="resetConfirm" class="hidden rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
+          <section id="resetConfirm" class="hidden rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
             <div class="flex items-center gap-4">
               <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">2</span>
               <div>
@@ -1292,16 +1352,16 @@ const RESET_PAGE = () => `<!doctype html>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="confirmPassword">New password</label>
                 <input id="confirmPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="••••••••" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="confirmPasswordAgain">Confirm password</label>
                 <input id="confirmPasswordAgain" type="password" name="passwordConfirm" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}"
-                       class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="Repeat password" />
+                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Repeat password" />
               </div>
               <button id="confirmSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Update password</button>
             </form>
-            <pre id="confirmMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
+            <pre id="confirmMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
             <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p class="text-xs text-indigo-200/80">Reset link token: <span id="tokenDisplay" class="font-semibold text-indigo-100"></span></p>
               <a class="text-sm font-medium text-indigo-200 hover:text-white transition" href="/login">Return to login</a>
@@ -1450,12 +1510,13 @@ const CHARACTERS_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-4xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -1472,10 +1533,10 @@ const CHARACTERS_PAGE = () => `<!doctype html>
           <div class="text-sm text-indigo-200/90">Total characters: <span id="totalCharacters" class="font-semibold text-indigo-100">0</span> · Realms: <span id="totalRealms" class="font-semibold text-indigo-100">0</span></div>
           <button id="refreshRoster" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
         </div>
-        <pre id="rosterStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition">Loading characters…</pre>
+        <pre id="rosterStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Loading characters…</pre>
         <div id="familySections" class="mt-6 space-y-6"></div>
         <div id="linkingPanel" class="mt-8 space-y-6 hidden">
-          <section id="retailLinkSection" class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/30">
+          <section id="retailLinkSection" class="rounded-3xl gradient-border bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/30">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
@@ -1486,7 +1547,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
             <form id="retailLinkForm" class="mt-4 space-y-4">
               <div>
                 <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
-                <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-indigo-500/40 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60" placeholder="Choose a secure password" />
+                <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Choose a secure password" />
                 <p class="mt-2 text-xs text-indigo-200/80">We'll sync this password across your portal and retail login.</p>
               </div>
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1495,7 +1556,7 @@ const CHARACTERS_PAGE = () => `<!doctype html>
               </div>
             </form>
           </section>
-          <section id="classicLinkSection" class="rounded-3xl border border-rose-500/40 bg-gray-900/70 p-5 shadow-inner shadow-rose-900/30">
+          <section id="classicLinkSection" class="rounded-3xl gradient-border bg-gray-900/70 p-5 shadow-inner shadow-rose-900/30">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-300">DreamCore Classic</p>
@@ -1506,11 +1567,11 @@ const CHARACTERS_PAGE = () => `<!doctype html>
             <form id="classicLinkForm" class="mt-4 space-y-4">
               <div>
                 <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkUsername">Classic username</label>
-                <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Pick an account name" />
+                <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="Pick an account name" />
               </div>
               <div>
                 <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkPassword">Account password</label>
-                <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Choose a secure password" />
+                <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="Choose a secure password" />
                 <p class="mt-2 text-xs text-rose-100/80">This password replaces any existing Classic login tied to your portal account.</p>
               </div>
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1609,7 +1670,7 @@ const charactersScript = () => {
     const realmName = character.realm?.name || 'Unknown realm';
     const lastPlayed = formatDate(character.lastLogin);
     return `
-      <article class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
+      <article class="rounded-3xl gradient-border bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
         <div class="flex items-baseline justify-between">
           <h3 class="text-xl font-semibold text-white">${escapeHtml(character.name)}</h3>
           <span class="text-sm font-semibold text-indigo-300">Lvl ${escapeHtml(character.level)}</span>
@@ -1632,7 +1693,7 @@ const charactersScript = () => {
       ? `<div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">${characters.map(renderCharacterCard).join('')}</div>`
       : `<p class="text-sm text-indigo-200/90">No characters linked to your ${escapeHtml(familyLabel)} accounts yet.</p>`;
     return `
-      <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/60 p-5 shadow-inner shadow-indigo-900/30">
+      <section class="rounded-3xl gradient-border bg-gray-900/60 p-5 shadow-inner shadow-indigo-900/30">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">${escapeHtml(familyLabel)}</p>
@@ -1944,7 +2005,7 @@ function renderTransactionalEmail({ title, intro, paragraphs = [], button, foote
         ${paragraphsHtml}
         ${buttonHtml}
         ${fallbackHtml}
-        <hr style="border:none;border-top:1px solid rgba(148,163,184,0.25);margin:28px 0;">
+        <hr style="border:none;height:1px;background-image:linear-gradient(120deg,#a855f7,#6366f1,#0ea5e9);box-shadow:0 12px 24px rgba(14,165,233,0.35);margin:28px 0;border-radius:999px;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">${brand} Support Team</p>
         ${footerHtml}
       </div>
@@ -4369,9 +4430,9 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
                   String(step.cta.label || 'Learn more')
                 )}</a>`
               : '';
-            const wrapperClasses = idx === 0
-              ? 'rounded-3xl border border-purple-500/40 bg-indigo-500/10 p-6 backdrop-blur-sm'
-              : 'rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30';
+              const wrapperClasses = idx === 0
+                ? 'rounded-3xl gradient-border bg-indigo-500/10 p-6 backdrop-blur-sm'
+                : 'rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30';
             return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${cta}</section>`;
           })
           .join('')}</div>`
@@ -4379,7 +4440,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
 
   const successFooterHtml =
     state === 'success' && successFooter
-      ? `<div class="mt-10 rounded-3xl border border-indigo-500/30 bg-gray-900/60 p-5 text-[15px] text-indigo-100/90 shadow-inner shadow-indigo-900/20">${successFooter}</div>`
+      ? `<div class="mt-10 rounded-3xl gradient-border bg-gray-900/60 p-5 text-[15px] text-indigo-100/90 shadow-inner shadow-indigo-900/20">${successFooter}</div>`
       : '';
 
   const safeMessage = message.replace(/<(?!\/?(a|strong)\b)[^>]*>/gi, '');
@@ -4411,6 +4472,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+${SHARED_STYLES}
   </style>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
