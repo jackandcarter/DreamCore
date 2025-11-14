@@ -519,6 +519,20 @@ const REG_PAGE = () => `<!doctype html>
   <script>
     window.TURNSTILE_SITEKEY = ${JSON.stringify(CONFIG.TURNSTILE_SITEKEY)};
     window.REGISTER_ENDPOINT = '/api/register';
+    window.REGISTRATION_HELPER_COPY = ${JSON.stringify({
+      retail: {
+        title: `${CONFIG.BRAND_NAME} retail login`,
+        body:
+          'Provision a Battle.net-style login for DreamCore Master. Your characters sync to the modern roster dashboard automatically.',
+        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.BRAND_NAME} login.`,
+      },
+      classic: {
+        title: `${CONFIG.CLASSIC_BRAND_NAME} Wrath login`,
+        body:
+          'Create DreamCore Classic credentials without leaving this secure portal. We keep them linked to your portal account for roster syncs.',
+        passwordHint: `${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.CLASSIC_BRAND_NAME} login.`,
+      },
+    })};
   </script>
   <script src="/client.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -574,7 +588,7 @@ const REG_PAGE = () => `<!doctype html>
                 <label class="block text-sm font-medium text-indigo-200 mb-1" for="password">Password</label>
                 <input id="password" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
                        class="w-full rounded-2xl bg-gray-800/80 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-200 focus:text-indigo-100 transition placeholder-indigo-300/60" placeholder="••••••••" />
-                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes. Your email becomes your ${CONFIG.BRAND_NAME} login.</p>
+                <p id="passwordHint" class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
               </div>
               <div>
                 <span class="block text-sm font-medium text-indigo-200 mb-2">Choose your realm</span>
@@ -594,6 +608,10 @@ const REG_PAGE = () => `<!doctype html>
                     </div>
                   </label>
                 </div>
+              </div>
+              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4" aria-live="polite">
+                <p id="gameHelperTitle" class="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-300">DreamCore Master (Retail)</p>
+                <p id="gameHelperBody" class="mt-2 text-[15px] text-indigo-100/85">Provision a Battle.net-style login for DreamCore Master. Your characters sync to the modern roster dashboard automatically.</p>
               </div>
               <div class="pt-2" id="cf-box">
                 <div class="cf-turnstile" data-sitekey="${CONFIG.TURNSTILE_SITEKEY}" data-theme="auto"></div>
@@ -710,6 +728,39 @@ const CLASSIC_PAGE = () => `<!doctype html>
 const clientScript = () => {
   const form = document.getElementById('regForm');
   const msg = document.getElementById('msg');
+  const passwordHint = document.getElementById('passwordHint');
+  const helperTitle = document.getElementById('gameHelperTitle');
+  const helperBody = document.getElementById('gameHelperBody');
+  const helperCopy = window.REGISTRATION_HELPER_COPY || {};
+
+  function applyHelper(gameType) {
+    const copy = helperCopy[gameType] || helperCopy.retail || {};
+    if (helperTitle && copy.title) {
+      helperTitle.textContent = copy.title;
+    }
+    if (helperBody && copy.body) {
+      helperBody.textContent = copy.body;
+    }
+    if (passwordHint && copy.passwordHint) {
+      passwordHint.textContent = copy.passwordHint;
+    }
+  }
+
+  function initHelper() {
+    if (!form) return;
+    const current = form.querySelector('input[name="gameType"]:checked');
+    const selectedValue = current?.value || 'retail';
+    applyHelper(selectedValue);
+    form.querySelectorAll('input[name="gameType"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (input.checked) {
+          applyHelper(input.value);
+        }
+      });
+    });
+  }
+
+  initHelper();
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     msg.textContent = 'Submitting…';
@@ -901,7 +952,16 @@ const ACCOUNT_PAGE = () => `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${CONFIG.HEADER_TITLE} — Account Management</title>
+  <title>${CONFIG.HEADER_TITLE} — Account Dashboard</title>
+  <script>
+    window.PORTAL_LIMITS = ${JSON.stringify({
+      minPass: CONFIG.MIN_PASS,
+      maxPass: CONFIG.MAX_PASS,
+      maxUser: CONFIG.MAX_USER,
+      brandName: CONFIG.BRAND_NAME,
+      classicBrandName: CONFIG.CLASSIC_BRAND_NAME,
+    })};
+  </script>
   <script src="/account.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
@@ -928,23 +988,46 @@ const ACCOUNT_PAGE = () => `<!doctype html>
 </head>
 <body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
   <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
-  <div class="w-full max-w-2xl relative z-10">
-    <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
+  <div class="w-full max-w-5xl relative z-10">
+    <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-indigo-500/20 overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
-        <div class="flex items-baseline justify-between">
-          <h1 class="text-4xl font-semibold tracking-tight text-white">User Account Management</h1>
-          <span class="text-xs font-medium uppercase tracking-[0.4em] text-indigo-400">Manage</span>
-        </div>
-        <p class="mt-3 text-[15px] text-gray-100 drop-shadow-sm">Update credentials and keep your <span class="font-semibold text-indigo-400 drop-shadow">${CONFIG.BRAND_NAME}</span> Battle.net account secure.</p>
-
-        <div class="mt-8 space-y-8">
-          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex items-center gap-4">
-              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">1</span>
-              <div>
-                <h2 class="text-lg font-semibold text-white">Reset your Battle.net password</h2>
-                <p class="text-[15px] text-indigo-100/90">Choose a new password below. This updates your in-game login immediately.</p>
+        <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-2xl">
+            <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-indigo-900/30">Portal profile</span>
+            <h1 class="mt-4 text-4xl font-semibold tracking-tight text-white">DreamCore account dashboard</h1>
+            <p class="mt-3 text-[15px] text-indigo-100/90">Manage your secure portal login, provision game accounts for <span class="font-semibold text-indigo-300">${CONFIG.BRAND_NAME}</span> and <span class="font-semibold text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</span>, then jump into the roster.</p>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2">
+              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Portal email</p>
+                <p id="profileEmail" class="mt-2 text-lg font-semibold text-white break-words">Loading…</p>
               </div>
+              <div class="rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Username</p>
+                <p id="profileUsername" class="mt-2 text-lg font-semibold text-white">—</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex w-full max-w-sm flex-col gap-4">
+            <div class="flex flex-wrap gap-3" id="statusBadges">
+              <span id="retailStatusBadge" class="inline-flex items-center rounded-full border border-indigo-500/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Retail · pending</span>
+              <span id="classicStatusBadge" class="inline-flex items-center rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-100">Classic · pending</span>
+            </div>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <a class="inline-flex flex-1 items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/characters">Open roster</a>
+              <button id="accountLogout" class="inline-flex flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 space-y-6">
+          <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Portal security</p>
+                <h2 class="text-2xl font-semibold text-white">Update your portal password</h2>
+                <p class="text-[15px] text-indigo-100/85">This password unlocks the dashboard and syncs to any linked game accounts.</p>
+              </div>
+              <span class="rounded-full border border-indigo-500/30 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Step 1</span>
             </div>
             <form id="accountForm" class="mt-6 space-y-5">
               <div>
@@ -960,20 +1043,77 @@ const ACCOUNT_PAGE = () => `<!doctype html>
                        placeholder="••••••••" />
                 <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
               </div>
-              <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Reset password</button>
+              <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Save portal password</button>
             </form>
             <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 border border-indigo-500/30 rounded-2xl p-4 min-h-[3rem] transition"></pre>
           </section>
 
-          <section class="rounded-3xl border border-indigo-500/40 bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <section class="rounded-3xl border border-indigo-500/30 bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="retailPanel" aria-expanded="true">
               <div>
-                <h2 class="text-lg font-semibold text-white">Need to view your characters?</h2>
-                <p class="text-[15px] text-indigo-100/90">Head to the roster dashboard to see every character linked to your account.</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
+                <h2 class="text-2xl font-semibold text-white">Retail account</h2>
+                <p class="text-sm text-indigo-200/80">Link a Battle.net-style login so your roster can sync instantly.</p>
               </div>
-              <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/characters">Open character roster</a>
+              <div class="flex items-center gap-4">
+                <span id="retailStatusText" class="text-sm font-semibold text-indigo-200">Pending</span>
+                <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-indigo-400/50 text-indigo-200" data-collapse-icon>▾</span>
+              </div>
+            </button>
+            <div id="retailPanel" class="mt-6 space-y-5">
+              <div id="retailLinkedSummary" class="hidden rounded-2xl border border-indigo-500/30 bg-gray-900/60 p-4">
+                <p class="text-sm font-semibold text-white">Retail login linked</p>
+                <p class="text-sm text-indigo-200/80">Your portal password keeps this login in sync. Head to the roster for characters.</p>
+                <a class="mt-3 inline-flex items-center rounded-2xl border border-indigo-400/50 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400" href="/characters">View characters</a>
+              </div>
+              <form id="retailLinkForm" class="space-y-4">
+                <p class="text-sm text-indigo-200/80">Need an in-game login? Enter a password and we'll mint your ${CONFIG.BRAND_NAME} credentials instantly.</p>
+                <div>
+                  <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
+                  <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-indigo-500/40 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 p-3 text-[15px] font-semibold text-indigo-100 placeholder-indigo-300/60" placeholder="Choose a secure password" />
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p id="retailLinkMsg" class="text-sm text-indigo-200/90"></p>
+                  <button id="retailLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Create retail login</button>
+                </div>
+              </form>
             </div>
-            <button id="accountLogout" class="mt-6 inline-flex items-center justify-center rounded-2xl border border-indigo-400/40 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400">Log out</button>
+          </section>
+
+          <section class="rounded-3xl border border-rose-500/30 bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
+            <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="classicPanel" aria-expanded="false">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">DreamCore Classic</p>
+                <h2 class="text-2xl font-semibold text-white">Classic account</h2>
+                <p class="text-sm text-rose-100/80">Provision Wrath credentials that stay linked to your portal profile.</p>
+              </div>
+              <div class="flex items-center gap-4">
+                <span id="classicStatusText" class="text-sm font-semibold text-rose-100">Pending</span>
+                <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-400/50 text-rose-100" data-collapse-icon>▸</span>
+              </div>
+            </button>
+            <div id="classicPanel" class="mt-6 space-y-5 hidden">
+              <div id="classicLinkedSummary" class="hidden rounded-2xl border border-rose-500/30 bg-gray-900/60 p-4">
+                <p class="text-sm font-semibold text-white">Classic login linked</p>
+                <p class="text-sm text-rose-100/80">Manage characters and resets from the roster dashboard. Portal password updates keep this login synced.</p>
+                <a class="mt-3 inline-flex items-center rounded-2xl border border-rose-400/50 px-4 py-2 text-sm font-semibold text-rose-50 hover:text-white hover:border-rose-200 hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300" href="/characters">Open roster</a>
+              </div>
+              <form id="classicLinkForm" class="space-y-4">
+                <p class="text-sm text-rose-100/85">Pick a username and password to mint DreamCore Classic credentials. We'll link them straight to this portal.</p>
+                <div>
+                  <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkUsername">Classic username</label>
+                  <input id="classicLinkUsername" type="text" required maxlength="${CONFIG.MAX_USER}" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Pick an account name" />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicLinkPassword">Account password</label>
+                  <input id="classicLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="w-full rounded-2xl bg-gray-900/80 border border-rose-500/40 focus:ring-2 focus:ring-rose-400 focus:border-rose-400 p-3 text-[15px] font-semibold text-rose-100 placeholder-rose-200/60" placeholder="Choose a secure password" />
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p id="classicLinkMsg" class="text-sm text-rose-100/90"></p>
+                  <button id="classicLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Create Classic login</button>
+                </div>
+              </form>
+            </div>
           </section>
         </div>
       </div>
@@ -984,12 +1124,36 @@ const ACCOUNT_PAGE = () => `<!doctype html>
 </html>`;
 
 const accountScript = () => {
+  const LIMITS = window.PORTAL_LIMITS || {};
+  const MIN_PASS = Number(LIMITS.minPass) || 8;
+  const profileEmail = document.getElementById('profileEmail');
+  const profileUsername = document.getElementById('profileUsername');
   const form = document.getElementById('accountForm');
   const emailInput = document.getElementById('accountEmail');
   const passwordInput = document.getElementById('accountPassword');
   const msg = document.getElementById('accountMsg');
   const submit = document.getElementById('resetSubmit');
   const logoutButton = document.getElementById('accountLogout');
+  const collapseButtons = document.querySelectorAll('[data-collapse-target]');
+  const retailStatusBadge = document.getElementById('retailStatusBadge');
+  const classicStatusBadge = document.getElementById('classicStatusBadge');
+  const retailStatusText = document.getElementById('retailStatusText');
+  const classicStatusText = document.getElementById('classicStatusText');
+  const retailPanel = document.getElementById('retailPanel');
+  const classicPanel = document.getElementById('classicPanel');
+  const retailLinkForm = document.getElementById('retailLinkForm');
+  const retailLinkPassword = document.getElementById('retailLinkPassword');
+  const retailLinkMsg = document.getElementById('retailLinkMsg');
+  const retailLinkSubmit = document.getElementById('retailLinkSubmit');
+  const retailLinkedSummary = document.getElementById('retailLinkedSummary');
+  const classicLinkForm = document.getElementById('classicLinkForm');
+  const classicLinkUsername = document.getElementById('classicLinkUsername');
+  const classicLinkPassword = document.getElementById('classicLinkPassword');
+  const classicLinkMsg = document.getElementById('classicLinkMsg');
+  const classicLinkSubmit = document.getElementById('classicLinkSubmit');
+  const classicLinkedSummary = document.getElementById('classicLinkedSummary');
+
+  let currentSession = null;
 
   function setLoading(state) {
     if (!submit) return;
@@ -997,22 +1161,106 @@ const accountScript = () => {
     submit.classList.toggle('opacity-60', state);
   }
 
-  async function loadSession() {
-    try {
-      const res = await fetch('/api/session', { credentials: 'same-origin' });
-      if (res.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
-      const data = await res.json().catch(() => ({}));
-      const email = data?.session?.email;
-      if (emailInput && email) {
-        emailInput.value = email;
-      }
-    } catch (err) {
-      console.error('Session lookup failed', err);
-      window.location.href = '/login';
+  function setLinkLoading(button, state) {
+    if (!button) return;
+    button.disabled = state;
+    button.classList.toggle('opacity-60', state);
+  }
+
+  function togglePanel(button, targetId) {
+    const target = document.getElementById(targetId);
+    if (!button || !target) return;
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    target.classList.toggle('hidden', expanded);
+    const icon = button.querySelector('[data-collapse-icon]');
+    if (icon) {
+      icon.textContent = expanded ? '▸' : '▾';
     }
+  }
+
+  collapseButtons.forEach((button) => {
+    const targetId = button.getAttribute('data-collapse-target');
+    button.addEventListener('click', () => togglePanel(button, targetId));
+  });
+
+  function updateBadge(el, isLinked, palette) {
+    if (!el) return;
+    el.classList.toggle('bg-gradient-to-r', isLinked);
+    el.classList.toggle('from-emerald-400', isLinked);
+    el.classList.toggle('to-indigo-400', isLinked);
+    el.classList.toggle('text-gray-900', isLinked);
+    el.classList.toggle('border', true);
+    if (!isLinked) {
+      el.classList.add(palette.border);
+      el.classList.remove('border-transparent');
+    } else {
+      el.classList.add('border-transparent');
+      el.classList.remove(palette.border);
+    }
+    el.textContent = isLinked ? `${palette.label} · linked` : `${palette.label} · pending`;
+  }
+
+  function deriveClassicUsername() {
+    if (classicLinkUsername && classicLinkUsername.value.trim()) {
+      return classicLinkUsername.value.trim();
+    }
+    const base = currentSession?.username || (currentSession?.email || '').split('@')[0] || '';
+    return base.trim();
+  }
+
+  function updateLinkingUI() {
+    const retailIds = Array.isArray(currentSession?.retailAccountIds) ? currentSession.retailAccountIds : [];
+    const classicIds = Array.isArray(currentSession?.classicAccountIds) ? currentSession.classicAccountIds : [];
+    const hasRetail = retailIds.length > 0;
+    const hasClassic = classicIds.length > 0;
+
+    if (profileEmail && currentSession?.email) {
+      profileEmail.textContent = currentSession.email;
+    }
+    if (profileUsername) {
+      profileUsername.textContent = currentSession?.username || '—';
+    }
+
+    updateBadge(retailStatusBadge, hasRetail, { label: 'Retail', border: 'border-indigo-500/40' });
+    updateBadge(classicStatusBadge, hasClassic, { label: 'Classic', border: 'border-rose-500/40' });
+    if (retailStatusText) {
+      retailStatusText.textContent = hasRetail ? 'Ready to play' : 'Link required';
+    }
+    if (classicStatusText) {
+      classicStatusText.textContent = hasClassic ? 'Ready to play' : 'Link required';
+    }
+
+    if (retailLinkForm) {
+      retailLinkForm.classList.toggle('hidden', hasRetail);
+    }
+    if (retailLinkedSummary) {
+      retailLinkedSummary.classList.toggle('hidden', !hasRetail);
+    }
+    if (classicLinkForm) {
+      classicLinkForm.classList.toggle('hidden', hasClassic);
+    }
+    if (classicLinkedSummary) {
+      classicLinkedSummary.classList.toggle('hidden', !hasClassic);
+    }
+
+    if (classicLinkUsername && !classicLinkUsername.value.trim() && currentSession) {
+      classicLinkUsername.value = deriveClassicUsername();
+    }
+  }
+
+  async function refreshSession() {
+    const res = await fetch('/api/session', { credentials: 'same-origin' });
+    if (res.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    currentSession = data?.session || null;
+    if (emailInput && currentSession?.email) {
+      emailInput.value = currentSession.email;
+    }
+    updateLinkingUI();
   }
 
   form?.addEventListener('submit', async (event) => {
@@ -1027,8 +1275,8 @@ const accountScript = () => {
       msg.textContent = 'Password cannot contain spaces or quotes.';
       return;
     }
-    if (newPassword.length < CONFIG.MIN_PASS) {
-      msg.textContent = `Password must be at least ${CONFIG.MIN_PASS} characters.`;
+    if (newPassword.length < MIN_PASS) {
+      msg.textContent = `Password must be at least ${MIN_PASS} characters.`;
       return;
     }
 
@@ -1059,6 +1307,79 @@ const accountScript = () => {
     }
   });
 
+  retailLinkForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const passwordValue = retailLinkPassword?.value || '';
+    if (!passwordValue) {
+      retailLinkMsg.textContent = 'Enter a password to continue.';
+      return;
+    }
+    retailLinkMsg.textContent = 'Provisioning retail login…';
+    setLinkLoading(retailLinkSubmit, true);
+    try {
+      const res = await fetch('/api/account/link/retail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: passwordValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        retailLinkMsg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to link retail login.';
+        return;
+      }
+      retailLinkMsg.textContent = `${LIMITS.brandName || 'Retail'} login created! Password synced with your portal.`;
+      if (retailLinkPassword) {
+        retailLinkPassword.value = '';
+      }
+      await refreshSession();
+    } catch (err) {
+      console.error('Retail link failed', err);
+      retailLinkMsg.textContent = 'Network error while linking retail login.';
+    } finally {
+      setLinkLoading(retailLinkSubmit, false);
+    }
+  });
+
+  classicLinkForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const usernameValue = classicLinkUsername?.value.trim() || '';
+    const passwordValue = classicLinkPassword?.value || '';
+    if (!usernameValue) {
+      classicLinkMsg.textContent = 'Enter a Classic username to continue.';
+      return;
+    }
+    if (!passwordValue) {
+      classicLinkMsg.textContent = 'Enter a password to continue.';
+      return;
+    }
+    classicLinkMsg.textContent = 'Provisioning Classic login…';
+    setLinkLoading(classicLinkSubmit, true);
+    try {
+      const res = await fetch('/api/account/link/classic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ username: usernameValue, password: passwordValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        classicLinkMsg.textContent = data?.error ? 'Error: ' + data.error : 'Unable to link Classic login.';
+        return;
+      }
+      classicLinkMsg.textContent = `${LIMITS.classicBrandName || 'Classic'} login created! Password synced across the portal.`;
+      if (classicLinkPassword) {
+        classicLinkPassword.value = '';
+      }
+      await refreshSession();
+    } catch (err) {
+      console.error('Classic link failed', err);
+      classicLinkMsg.textContent = 'Network error while linking Classic login.';
+    } finally {
+      setLinkLoading(classicLinkSubmit, false);
+    }
+  });
+
   logoutButton?.addEventListener('click', async () => {
     try {
       await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
@@ -1069,7 +1390,10 @@ const accountScript = () => {
     }
   });
 
-  loadSession();
+  refreshSession().catch((err) => {
+    console.error('Session lookup failed', err);
+    window.location.href = '/login';
+  });
 };
 const ACCOUNT_JS = `(${accountScript.toString()})();`;
 
@@ -1631,11 +1955,11 @@ const charactersScript = () => {
     retailLinkMsg.textContent = 'Provisioning retail login…';
     setLinkLoading(retailLinkSubmit, true);
     try {
-      const res = await fetch('/api/account/link-game', {
+      const res = await fetch('/api/account/link/retail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ gameType: 'retail', password: passwordValue }),
+        body: JSON.stringify({ password: passwordValue }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1671,11 +1995,11 @@ const charactersScript = () => {
     classicLinkMsg.textContent = 'Provisioning Classic login…';
     setLinkLoading(classicLinkSubmit, true);
     try {
-      const res = await fetch('/api/account/link-game', {
+      const res = await fetch('/api/account/link/classic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ gameType: 'classic', password: passwordValue, username: usernameValue }),
+        body: JSON.stringify({ password: passwordValue, username: usernameValue }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1749,6 +2073,12 @@ app.get('/characters.js', (req, res) => res.type('application/javascript').send(
 
 // ----- Helpers -----
 function badRequest(res, error) { return res.status(400).json({ error }); }
+class PortalHttpError extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => (
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
@@ -3039,6 +3369,78 @@ async function applyLinkedPasswordUpdate({ portalUser, newPassword }) {
   }
 }
 
+async function linkPortalAccounts({ portalUserId, password, username, gameType }) {
+  if (!isValidPassword(password)) {
+    throw new PortalHttpError('Invalid password');
+  }
+  const portalUser = await getPortalUserById(portalUserId);
+  if (!portalUser) {
+    throw new PortalHttpError('Portal account not found.', 404);
+  }
+  const targetType = gameType === 'classic' ? 'classic' : 'retail';
+  const retailIds = Array.isArray(portalUser.retailAccountIds) ? [...portalUser.retailAccountIds] : [];
+  const classicIds = Array.isArray(portalUser.classicAccountIds) ? [...portalUser.classicAccountIds] : [];
+
+  if (targetType === 'retail') {
+    if (retailIds.length) {
+      throw new PortalHttpError('A retail account is already linked to this portal user.');
+    }
+    await ensureRetailAccount({
+      soap: SOAP,
+      email: portalUser.email,
+      password,
+      debug: CONFIG.SOAP_DEBUG,
+    });
+    const [createdPrimary, createdFallback] = await Promise.all([
+      getAuthAccountByEmail(portalUser.email),
+      getGameAccountByEmail(portalUser.email),
+    ]);
+    const retailAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
+    if (retailAccountId == null) {
+      throw new Error('Retail account provisioning completed but no ID was returned.');
+    }
+    retailIds.push(retailAccountId);
+    await linkPortalUserToRetailAccount(portalUser.id, retailAccountId, { linkedAt: Date.now() });
+  } else {
+    if (classicIds.length) {
+      throw new PortalHttpError('A classic account is already linked to this portal user.');
+    }
+    const fallbackUsername =
+      normalizePortalUsername(username) ||
+      normalizePortalUsername(portalUser.username) ||
+      normalizePortalUsername((portalUser.email || '').split('@')[0]);
+    if (!fallbackUsername) {
+      throw new PortalHttpError('Username is required for Classic accounts.');
+    }
+    await ensureClassicAccount({
+      soap: CLASSIC_SOAP,
+      email: portalUser.email,
+      username: fallbackUsername,
+      password,
+      debug: CONFIG.SOAP_DEBUG,
+    });
+    const [byUsername, byEmail] = await Promise.all([
+      getAccountByUsername(fallbackUsername),
+      getGameAccountByEmail(portalUser.email),
+    ]);
+    const classicAccountId = byUsername?.id ?? byEmail?.id ?? null;
+    if (classicAccountId == null) {
+      throw new Error('Classic account provisioning completed but no ID was returned.');
+    }
+    classicIds.push(classicAccountId);
+    portalUser.username = portalUser.username || fallbackUsername;
+    await linkPortalUserToClassicAccount(portalUser.id, classicAccountId, { linkedAt: Date.now() });
+  }
+
+  portalUser.retailAccountIds = retailIds;
+  portalUser.classicAccountIds = classicIds;
+
+  await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
+  await setPortalUserPassword(portalUser.id, password);
+
+  return { portalUser, linked: targetType, retailAccountIds: retailIds, classicAccountIds: classicIds };
+}
+
 async function getAuthAccountByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
@@ -3383,92 +3785,45 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
   }
 });
 
-app.post('/api/account/link-game', requireSession, linkAccountLimiter, async (req, res) => {
+async function handleLinkAccountRequest(req, res, forcedGameType) {
   try {
-    const { password, username: rawUsername, gameType: rawGameType } = req.body || {};
-    if (!isValidPassword(password)) {
-      return badRequest(res, 'Invalid password');
-    }
     const portalUserId = req.session?.portal_user_id;
     if (portalUserId == null) {
       return res.status(400).json({ error: 'Missing portal session.' });
     }
-    const portalUser = await getPortalUserById(portalUserId);
-    if (!portalUser) {
-      return res.status(404).json({ error: 'Portal account not found.' });
-    }
-    const gameType = typeof rawGameType === 'string' && rawGameType.trim().toLowerCase() === 'classic'
+    const { password, username, gameType: rawGameType } = req.body || {};
+    const resolvedType = forcedGameType || (typeof rawGameType === 'string' && rawGameType.trim().toLowerCase() === 'classic'
       ? 'classic'
-      : 'retail';
-    const retailIds = Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : [];
-    const classicIds = Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : [];
-
-    if (gameType === 'retail') {
-      if (retailIds.length) {
-        return badRequest(res, 'A retail account is already linked to this portal user.');
-      }
-      await ensureRetailAccount({
-        soap: SOAP,
-        email: portalUser.email,
-        password,
-        debug: CONFIG.SOAP_DEBUG,
-      });
-      const [createdPrimary, createdFallback] = await Promise.all([
-        getAuthAccountByEmail(portalUser.email),
-        getGameAccountByEmail(portalUser.email),
-      ]);
-      const retailAccountId = createdPrimary?.id ?? createdFallback?.id ?? null;
-      if (retailAccountId == null) {
-        throw new Error('Retail account provisioning completed but no ID was returned.');
-      }
-      retailIds.push(retailAccountId);
-      await linkPortalUserToRetailAccount(portalUser.id, retailAccountId, { linkedAt: Date.now() });
-    } else {
-      if (classicIds.length) {
-        return badRequest(res, 'A classic account is already linked to this portal user.');
-      }
-      const fallbackUsername = normalizePortalUsername(rawUsername)
-        || normalizePortalUsername(portalUser.username)
-        || normalizePortalUsername((portalUser.email || '').split('@')[0]);
-      if (!fallbackUsername) {
-        return badRequest(res, 'Username is required for Classic accounts.');
-      }
-      await ensureClassicAccount({
-        soap: CLASSIC_SOAP,
-        email: portalUser.email,
-        username: fallbackUsername,
-        password,
-        debug: CONFIG.SOAP_DEBUG,
-      });
-      const [byUsername, byEmail] = await Promise.all([
-        getAccountByUsername(fallbackUsername),
-        getGameAccountByEmail(portalUser.email),
-      ]);
-      const classicAccountId = byUsername?.id ?? byEmail?.id ?? null;
-      if (classicAccountId == null) {
-        throw new Error('Classic account provisioning completed but no ID was returned.');
-      }
-      classicIds.push(classicAccountId);
-      portalUser.username = portalUser.username || fallbackUsername;
-      await linkPortalUserToClassicAccount(portalUser.id, classicAccountId, { linkedAt: Date.now() });
-    }
-
-    portalUser.retailAccountIds = retailIds;
-    portalUser.classicAccountIds = classicIds;
-
-    await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
-    await setPortalUserPassword(portalUser.id, password);
-    await updateSessionAccountLinks(req.session, {
-      retailAccountIds: retailIds,
-      classicAccountIds: classicIds,
+      : 'retail');
+    const result = await linkPortalAccounts({
+      portalUserId,
+      password,
+      username,
+      gameType: resolvedType,
     });
-
-    return res.json({ ok: true, linked: gameType });
-  } catch (e) {
-    console.error('Link account failed', e);
+    await updateSessionAccountLinks(req.session, {
+      retailAccountIds: result.retailAccountIds,
+      classicAccountIds: result.classicAccountIds,
+    });
+    return res.json({ ok: true, linked: result.linked });
+  } catch (err) {
+    if (err instanceof PortalHttpError) {
+      return res.status(err.statusCode || 400).json({ error: err.message });
+    }
+    console.error('Link account failed', err);
     return res.status(500).json({ error: 'Unable to link account right now.' });
   }
-});
+}
+
+app.post('/api/account/link/retail', requireSession, linkAccountLimiter, (req, res) =>
+  handleLinkAccountRequest(req, res, 'retail')
+);
+app.post('/api/account/link/classic', requireSession, linkAccountLimiter, (req, res) =>
+  handleLinkAccountRequest(req, res, 'classic')
+);
+app.post('/api/account/link-game', requireSession, linkAccountLimiter, (req, res) =>
+  handleLinkAccountRequest(req, res)
+);
 
 app.get('/api/characters', requireSession, async (req, res) => {
   try {
