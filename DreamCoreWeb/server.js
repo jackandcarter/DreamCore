@@ -3347,31 +3347,34 @@ async function getAuthAccountByEmail(email) {
   for (const table of tables) {
     try {
       const [rows] = await authPool.execute(
-        `SELECT id, email, sha_pass_hash, salt, verifier FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
+        `SELECT id, email FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
         [normalized]
       );
       if (rows.length) return rows[0];
     } catch (err) {
+      if (err?.code === 'ER_NO_SUCH_TABLE') {
+        continue;
+      }
       if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        // Older schema variants sometimes omit auth columns such as sha_pass_hash.
+        // Fall back to a minimal column set so the lookup still succeeds.
         try {
           const [fallbackRows] = await authPool.execute(
-            `SELECT id, email, salt, verifier FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
+            `SELECT id FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
             [normalized]
           );
           if (fallbackRows.length) {
             const row = fallbackRows[0];
-            row.sha_pass_hash = null;
+            row.email = normalized;
             return row;
           }
         } catch (inner) {
           if (inner?.code === 'ER_NO_SUCH_TABLE') continue;
           throw inner;
         }
-      } else if (err?.code === 'ER_NO_SUCH_TABLE') {
         continue;
-      } else {
-        throw err;
       }
+      throw err;
     }
   }
   return null;
@@ -3382,7 +3385,7 @@ async function getGameAccountByEmail(email) {
   if (!normalized) return null;
   try {
     const [rows] = await authPool.execute(
-      'SELECT id, username, email, sha_pass_hash, salt, verifier FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+      'SELECT id, username, email FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
       [normalized]
     );
     if (rows.length) return rows[0];
@@ -3390,13 +3393,12 @@ async function getGameAccountByEmail(email) {
     if (err?.code === 'ER_BAD_FIELD_ERROR') {
       try {
         const [fallbackRows] = await authPool.execute(
-          'SELECT id, username, email, sha_pass_hash FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+          'SELECT id, username FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
           [normalized]
         );
         if (fallbackRows.length) {
           const row = fallbackRows[0];
-          row.salt = null;
-          row.verifier = null;
+          row.email = normalized;
           return row;
         }
       } catch (inner) {
