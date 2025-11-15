@@ -170,26 +170,8 @@ function normalizeClassicUsername(username, email) {
   return "player";
 }
 
-const CLASSIC_EXPANSION_LEVEL = 2;
-
-function parseClassicAccountId(text) {
-  if (!text) return null;
-  const cleaned = String(text);
-  const bracketMatch = cleaned.match(/\[(?:id|ID)[:=]\s*(\d+)\]/);
-  if (bracketMatch) return Number(bracketMatch[1]);
-  const idMatch = cleaned.match(/\bID[:\s]+(\d+)/i);
-  if (idMatch) return Number(idMatch[1]);
-  const fallback = cleaned.match(/account\s+(\d+)/i);
-  if (fallback) return Number(fallback[1]);
-  return null;
-}
-
 async function classicAccountCreate(soap, username, password) {
   return callSoap(soap, ["account", "create", username, password].join(" "));
-}
-
-async function classicAccountSetAddon(soap, username, expansion) {
-  return callSoap(soap, `account set addon ${username} ${expansion}`);
 }
 
 export async function ensureClassicAccount({ soap, email, username, password, debug = false }) {
@@ -201,7 +183,7 @@ export async function ensureClassicAccount({ soap, email, username, password, de
   const safePass = sanitizeSoapArg(password, { label: "password" });
   const soapLog = [];
 
-  const run = async (label, fn) => {
+  const run = async (label, fn, { allowFailure = false } = {}) => {
     try {
       const out = await fn();
       const ret = out.ret ?? out.raw ?? String(out ?? "");
@@ -210,22 +192,37 @@ export async function ensureClassicAccount({ soap, email, username, password, de
         logEntry.ok = false;
         logEntry.error = ret;
         soapLog.push(logEntry);
-        const err = new Error(`${label} failed: ${ret}`);
-        err.soapLog = soapLog;
-        throw err;
+        if (!allowFailure) {
+          const err = new Error(`${label} failed: ${ret}`);
+          err.soapLog = soapLog;
+          throw err;
+        }
+        if (debug) {
+          console.warn(`${label} returned error but continuing`, ret);
+        }
+        return null;
       }
       logEntry.ok = true;
       soapLog.push(logEntry);
       return { ...out, ret };
     } catch (err) {
-      soapLog.push({ label, ok: false, error: String(err?.message || err) });
-      throw err;
+      const entry = { label, ok: false, error: String(err?.message || err) };
+      soapLog.push(entry);
+      if (!allowFailure) {
+        throw err;
+      }
+      if (debug) {
+        console.warn(`${label} failed but continuing`, err);
+      }
+      return null;
     }
   };
 
   await run("account create", () => classicAccountCreate(soap, safeUsername, safePass));
-  const addonResult = await run("account set addon", () => classicAccountSetAddon(soap, safeUsername, CLASSIC_EXPANSION_LEVEL));
-  const accountId = parseClassicAccountId(addonResult.ret);
+  // Classic account creation succeeds as soon as the username/password is registered.
+  // The optional addon/build steps that retail SOAP flows require are not necessary
+  // for Classic 3.3.5 accounts and frequently fail in practice, so skip them.
+  const accountId = null;
 
   if (debug) {
     console.debug("Classic SOAP log", soapLog);
