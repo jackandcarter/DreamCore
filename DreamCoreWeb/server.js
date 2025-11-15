@@ -81,7 +81,7 @@ const CONFIG = {
     'https://hissing-polonium-8c0.notion.site/Guide-to-install-and-play-DreamCore-2a22305ea64f80a58008c5024bfe8555',
   CLASSIC_CLIENT_DOWNLOAD_URL:
     process.env.CLASSIC_CLIENT_DOWNLOAD_URL ||
-    'https://the-demiurge.com/Backup/WoWDC.zip',
+    'https://cdn.the-demiurge.com/WoWDC.zip',
   CLASSIC_BASE_URL:
     process.env.CLASSIC_BASE_URL ||
     `${process.env.BASE_URL || 'https://wow.the-demiurge.com'}/classic`,
@@ -4148,16 +4148,21 @@ app.get('/verify', async (req, res) => {
       },
       {
         number: 'Step 3',
-        title: 'Install & connect',
+        title: isClassic ? 'Download & connect' : 'Install & connect',
         body: [
           isClassic
-            ? 'Follow the installation guide below to configure your DreamCore Classic client.'
+            ? 'Download the DreamCore Classic client below, extract it, and log in with your new credentials.'
             : 'Follow the installation guide below to set up DreamCore on your system.',
         ],
-        cta: {
-          href: brandConfig.guideUrl,
-          label: 'Open installation guide',
-        },
+        cta: isClassic
+          ? {
+              href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
+              label: 'Download DreamCore Classic client',
+            }
+          : {
+              href: brandConfig.guideUrl,
+              label: 'Open installation guide',
+            },
       },
     ];
 

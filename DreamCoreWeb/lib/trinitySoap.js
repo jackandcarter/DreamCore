@@ -184,15 +184,8 @@ function parseClassicAccountId(text) {
   return null;
 }
 
-async function classicAccountCreate(soap, username, password, email) {
-  const args = ["account", "create", username, password];
-  if (email) args.push(email);
-  return callSoap(soap, args.join(" "));
-}
-
-async function classicAccountSetEmail(soap, username, email) {
-  if (!email) return null;
-  return callSoap(soap, `account set email ${username} ${email} ${email}`);
+async function classicAccountCreate(soap, username, password) {
+  return callSoap(soap, ["account", "create", username, password].join(" "));
 }
 
 async function classicAccountSetAddon(soap, username, expansion) {
@@ -206,8 +199,6 @@ export async function ensureClassicAccount({ soap, email, username, password, de
   const baseUsername = normalizeClassicUsername(username, normEmail);
   const safeUsername = sanitizeSoapArg(baseUsername, { label: "username" }).toUpperCase();
   const safePass = sanitizeSoapArg(password, { label: "password" });
-  const safeEmail = normEmail ? sanitizeSoapArg(normEmail, { label: "email" }) : null;
-
   const soapLog = [];
 
   const run = async (label, fn) => {
@@ -232,10 +223,7 @@ export async function ensureClassicAccount({ soap, email, username, password, de
     }
   };
 
-  await run("account create", () => classicAccountCreate(soap, safeUsername, safePass, safeEmail));
-  if (safeEmail) {
-    await run("account set email", () => classicAccountSetEmail(soap, safeUsername, safeEmail));
-  }
+  await run("account create", () => classicAccountCreate(soap, safeUsername, safePass));
   const addonResult = await run("account set addon", () => classicAccountSetAddon(soap, safeUsername, CLASSIC_EXPANSION_LEVEL));
   const accountId = parseClassicAccountId(addonResult.ret);
 
