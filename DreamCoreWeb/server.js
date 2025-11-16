@@ -529,7 +529,64 @@ async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('pending', "game_type VARCHAR(16) NOT NULL DEFAULT 'retail' AFTER email");
 }
 
+async function hydratePortalAccountLinks() {
+  try {
+    const [portalRows] = await pool.query('SELECT id, email, username FROM portal_users');
+    if (!Array.isArray(portalRows) || !portalRows.length) {
+      return;
+    }
+    const [retailLinkRows] = await pool.query('SELECT portal_user_id FROM portal_user_retail_accounts');
+    const [classicLinkRows] = await pool.query('SELECT portal_user_id FROM portal_user_classic_accounts');
+    const linkedRetail = new Set(retailLinkRows.map((row) => toSafeNumber(row.portal_user_id)).filter((id) => id != null));
+    const linkedClassic = new Set(
+      classicLinkRows.map((row) => toSafeNumber(row.portal_user_id)).filter((id) => id != null)
+    );
+    let linkedRetailCount = 0;
+    let linkedClassicCount = 0;
+    for (const portalRow of portalRows) {
+      const portalUserId = toSafeNumber(portalRow.id);
+      if (portalUserId == null) continue;
+      const normalizedEmail = normalizeEmail(portalRow.email);
+      if (!linkedRetail.has(portalUserId) && normalizedEmail) {
+        const [primary, fallback] = await Promise.all([
+          getAuthAccountByEmail(normalizedEmail),
+          getGameAccountByEmail(normalizedEmail),
+        ]);
+        const retailAccountId = primary?.id ?? fallback?.id ?? null;
+        if (retailAccountId != null) {
+          await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: Date.now() });
+          linkedRetail.add(portalUserId);
+          linkedRetailCount += 1;
+        }
+      }
+      if (!linkedClassic.has(portalUserId)) {
+        const resolvedClassic = await resolveClassicAccountLink({
+          username: portalRow.username,
+          email: normalizedEmail,
+        });
+        if (resolvedClassic?.accountId != null) {
+          await linkPortalUserToClassicAccount(portalUserId, resolvedClassic.accountId, { linkedAt: Date.now() });
+          linkedClassic.add(portalUserId);
+          linkedClassicCount += 1;
+          if (!portalRow.username && resolvedClassic.username) {
+            await pool.execute('UPDATE portal_users SET username = ? WHERE id = ? AND username IS NULL', [
+              resolvedClassic.username,
+              portalUserId,
+            ]);
+          }
+        }
+      }
+    }
+    console.log(
+      `Hydrated portal account links: ${linkedRetailCount} retail, ${linkedClassicCount} classic updates applied`
+    );
+  } catch (err) {
+    console.error('Failed to hydrate portal account links', err);
+  }
+}
+
 await ensurePortalSchemaUpgrades();
+await hydratePortalAccountLinks();
 
 // ----- Mailer -----
 const transporter = nodemailer.createTransport({
@@ -5251,6 +5308,7 @@ app.get('/verify', async (req, res) => {
     }
 
     let ensureResult = null;
+    let reusedClassicAccount = false;
     try {
       if (isClassic) {
         ensureResult = await ensureClassicAccount({
@@ -5269,24 +5327,56 @@ app.get('/verify', async (req, res) => {
         });
       }
     } catch (e) {
-      console.error('SOAP create failed:', e);
-      return res
-        .status(502)
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            cornerLogo: brandConfig.cornerLogo,
-            state: 'error',
-            title: 'Unable to finalize your account',
-            message: isClassic
-              ? 'We could not create your DreamCore Classic account. Please try again in a minute.'
-              : 'We could not create your Battle.net account. Please try again in a minute.',
-            steps: [
-              'If it keeps failing, open a support ticket and include this error:',
-              String(e?.message || e),
-            ],
-          })
-        );
+      if (isClassic && e?.code === 'CLASSIC_ACCOUNT_EXISTS') {
+        reusedClassicAccount = true;
+        const existingClassic = await resolveClassicAccountLink({
+          username: row.username,
+          email: row.email,
+        });
+        if (existingClassic?.accountId != null) {
+          ensureResult = {
+            accountId: existingClassic.accountId,
+            username: existingClassic.username || row.username,
+          };
+        } else {
+          console.error('Classic account reported as existing but could not be located');
+          return res
+            .status(502)
+            .type('text/html')
+            .send(
+              VERIFY_PAGE({
+                cornerLogo: brandConfig.cornerLogo,
+                state: 'error',
+                title: 'Classic account already exists',
+                message:
+                  'We detected an existing DreamCore Classic account for this email but could not link it automatically. Please open a support ticket so we can connect it for you.',
+                steps: [
+                  'Include the email used for registration and let us know you saw this message.',
+                  'We will attach your Classic login to the DreamCore portal manually.',
+                ],
+              })
+            );
+        }
+      } else {
+        console.error('SOAP create failed:', e);
+        return res
+          .status(502)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              cornerLogo: brandConfig.cornerLogo,
+              state: 'error',
+              title: 'Unable to finalize your account',
+              message: isClassic
+                ? 'We could not create your DreamCore Classic account. Please try again in a minute.'
+                : 'We could not create your Battle.net account. Please try again in a minute.',
+              steps: [
+                'If it keeps failing, open a support ticket and include this error:',
+                String(e?.message || e),
+              ],
+            })
+          );
+      }
     }
 
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
@@ -5319,13 +5409,20 @@ app.get('/verify', async (req, res) => {
       }
     }
 
+    const verificationSuccessMessage =
+      isClassic && reusedClassicAccount
+        ? 'Your DreamCore Classic login was already active. We linked it to your portal account so you can manage it from the dashboard.'
+        : brandConfig.successMessage;
+
     const steps = [
       {
         number: 'Step 2',
         title: 'Verification complete!',
         body: isClassic
           ? [
-              `Sign in with ${escapeHtml(row.email)} using the password you chose during sign-up.`,
+              reusedClassicAccount
+                ? 'These DreamCore Classic credentials already existed, so we linked them to your portal automatically.'
+                : `Sign in with ${escapeHtml(row.email)} using the password you chose during sign-up.`,
               'Your DreamCore portal login now manages both Classic and Retail credentials.',
             ]
           : [
@@ -5360,7 +5457,7 @@ app.get('/verify', async (req, res) => {
           cornerLogo: brandConfig.cornerLogo,
           state: 'success',
           title: brandConfig.successTitle,
-          message: brandConfig.successMessage,
+          message: verificationSuccessMessage,
           successSteps: steps,
           successFooter:
             'Need the other realm? Return to the <a class="font-semibold text-indigo-200 hover:text-white" href="/login">DreamCore Master portal</a> any time to spin up Retail or Classic accounts from the same login.',
@@ -5471,6 +5568,7 @@ app.get('/classic/verify', async (req, res) => {
     }
 
     let ensureResult = null;
+    let reusedClassicAccount = false;
     try {
       ensureResult = await ensureClassicAccount({
         soap: CLASSIC_SOAP,
@@ -5480,22 +5578,54 @@ app.get('/classic/verify', async (req, res) => {
         debug: CONFIG.SOAP_DEBUG,
       });
     } catch (e) {
-      console.error('Classic SOAP create failed:', e);
-      return res
-        .status(502)
-        .type('text/html')
-        .send(
-          VERIFY_PAGE({
-            cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
-            state: 'error',
-            title: 'Unable to finalize your account',
-            message: 'We could not create your DreamCore Classic account. Please try again in a minute.',
-            steps: [
-              'If it keeps failing, open a support ticket and include this error:',
-              String(e?.message || e),
-            ],
-          })
-        );
+      if (e?.code === 'CLASSIC_ACCOUNT_EXISTS') {
+        reusedClassicAccount = true;
+        const existingClassic = await resolveClassicAccountLink({
+          username: row.username,
+          email: row.email,
+        });
+        if (existingClassic?.accountId != null) {
+          ensureResult = {
+            accountId: existingClassic.accountId,
+            username: existingClassic.username || row.username,
+          };
+        } else {
+          console.error('Classic account reported as existing but could not be located');
+          return res
+            .status(502)
+            .type('text/html')
+            .send(
+              VERIFY_PAGE({
+                cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
+                state: 'error',
+                title: 'Classic account already exists',
+                message:
+                  'We detected an existing DreamCore Classic account for this email but could not link it automatically. Please open a support ticket so we can connect it for you.',
+                steps: [
+                  'Include the email used for registration and mention this message so the support team can relink it.',
+                  'We will attach your Classic login to the DreamCore portal manually.',
+                ],
+              })
+            );
+        }
+      } else {
+        console.error('Classic SOAP create failed:', e);
+        return res
+          .status(502)
+          .type('text/html')
+          .send(
+            VERIFY_PAGE({
+              cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
+              state: 'error',
+              title: 'Unable to finalize your account',
+              message: 'We could not create your DreamCore Classic account. Please try again in a minute.',
+              steps: [
+                'If it keeps failing, open a support ticket and include this error:',
+                String(e?.message || e),
+              ],
+            })
+          );
+      }
     }
 
     await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
@@ -5521,6 +5651,10 @@ app.get('/classic/verify', async (req, res) => {
       classicAccount?.username || row.username || row.email || ''
     );
 
+    const successMessage = reusedClassicAccount
+      ? 'Your DreamCore Classic login was already active. We linked it to your portal account so you can jump in immediately.'
+      : 'Your DreamCore Classic account is ready. Download the game client below to start playing.';
+
     return res
       .type('text/html')
       .send(
@@ -5528,13 +5662,15 @@ app.get('/classic/verify', async (req, res) => {
           cornerLogo: CONFIG.CLASSIC_CORNER_LOGO,
           state: 'success',
           title: 'Verification Successful',
-          message: 'Your DreamCore Classic account is ready. Download the game client below to start playing.',
+          message: successMessage,
           successSteps: [
             {
               number: 'Next',
               title: 'Download the DreamCore Classic client',
               body: [
-                'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
+                reusedClassicAccount
+                  ? 'We detected that these Classic credentials already existed and simply linked them to your portal account.'
+                  : 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
                 'After installing, launch it and log in with the account you just verified.',
               ],
               notice: clientLoginUsername

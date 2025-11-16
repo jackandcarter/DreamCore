@@ -148,6 +148,15 @@ function isErrorReturn(ret) {
   return patterns.some((fragment) => value.includes(fragment));
 }
 
+function markClassicAccountExists(err, source) {
+  if (!err) return err;
+  const text = typeof source === "string" ? source.toLowerCase() : "";
+  if (text.includes("already") && text.includes("exist")) {
+    err.code = "CLASSIC_ACCOUNT_EXISTS";
+  }
+  return err;
+}
+
 // ---------- High-level flows (confirm via DB, not text) ----------
 export async function ensureRetailAccount({ soap, email, password, debug = false }) {
   if (!soap) throw new Error("Missing soap");
@@ -212,7 +221,7 @@ export async function ensureClassicAccount({ soap, email, username, password, de
         logEntry.error = ret;
         soapLog.push(logEntry);
         if (!allowFailure) {
-          const err = new Error(`${label} failed: ${ret}`);
+          const err = markClassicAccountExists(new Error(`${label} failed: ${ret}`), ret);
           err.soapLog = soapLog;
           throw err;
         }
@@ -227,6 +236,7 @@ export async function ensureClassicAccount({ soap, email, username, password, de
     } catch (err) {
       const entry = { label, ok: false, error: String(err?.message || err) };
       soapLog.push(entry);
+      markClassicAccountExists(err, err?.message || err);
       if (!allowFailure) {
         throw err;
       }
