@@ -374,6 +374,8 @@ await pool.query(`
     username VARCHAR(64) DEFAULT NULL,
     retail_accounts_json TEXT DEFAULT NULL,
     classic_accounts_json TEXT DEFAULT NULL,
+    retail_gmlevel_json TEXT DEFAULT NULL,
+    classic_gmlevel_json TEXT DEFAULT NULL,
     created_at BIGINT NOT NULL,
     expires_at BIGINT NOT NULL,
     last_ip VARCHAR(64) DEFAULT NULL,
@@ -482,6 +484,8 @@ async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('sessions', 'username VARCHAR(64) DEFAULT NULL AFTER email');
   await addColumnIfMissing('sessions', 'retail_accounts_json TEXT DEFAULT NULL AFTER username');
   await addColumnIfMissing('sessions', 'classic_accounts_json TEXT DEFAULT NULL AFTER retail_accounts_json');
+  await addColumnIfMissing('sessions', 'retail_gmlevel_json TEXT DEFAULT NULL AFTER classic_accounts_json');
+  await addColumnIfMissing('sessions', 'classic_gmlevel_json TEXT DEFAULT NULL AFTER retail_gmlevel_json');
   await addIndexIfMissing('sessions', 'ADD KEY idx_session_portal_user (portal_user_id)');
   await addColumnIfMissing('pending', "game_type VARCHAR(16) NOT NULL DEFAULT 'retail' AFTER email");
 }
@@ -3035,6 +3039,125 @@ function sanitizeAccountIdList(values) {
   return clean;
 }
 
+function createEmptyGmInfo() {
+  return { maxLevel: 0, highestRealms: [], entries: [] };
+}
+
+function normalizeGmInfo(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return createEmptyGmInfo();
+  }
+  const maxLevel = toSafeNumber(raw.maxLevel);
+  const highestRealms = Array.isArray(raw.highestRealms)
+    ? raw.highestRealms
+        .map((value) => toSafeNumber(value))
+        .filter((value) => value != null)
+    : [];
+  const entries = Array.isArray(raw.entries)
+    ? raw.entries
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const gmLevel = toSafeNumber(entry.gmLevel);
+          if (gmLevel == null) return null;
+          return {
+            accountId: toSafeNumber(entry.accountId),
+            gmLevel,
+            realmId: toSafeNumber(entry.realmId),
+          };
+        })
+        .filter(Boolean)
+    : [];
+  return {
+    maxLevel: maxLevel == null ? 0 : maxLevel,
+    highestRealms,
+    entries,
+  };
+}
+
+function cloneGmInfo(value) {
+  const normalized = normalizeGmInfo(value);
+  return {
+    maxLevel: normalized.maxLevel,
+    highestRealms: normalized.highestRealms.slice(),
+    entries: normalized.entries.map((entry) => ({ ...entry })),
+  };
+}
+
+function encodeGmInfo(info) {
+  return JSON.stringify(normalizeGmInfo(info));
+}
+
+function decodeGmInfo(raw) {
+  if (!raw) {
+    return createEmptyGmInfo();
+  }
+  if (typeof raw === 'string') {
+    try {
+      return normalizeGmInfo(JSON.parse(raw));
+    } catch (err) {
+      return createEmptyGmInfo();
+    }
+  }
+  return normalizeGmInfo(raw);
+}
+
+function buildGmInfoFromRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return createEmptyGmInfo();
+  }
+  const info = createEmptyGmInfo();
+  const highestRealmSet = new Set();
+  for (const row of rows) {
+    const gmLevel = toSafeNumber(row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel);
+    if (gmLevel == null) continue;
+    const entry = {
+      accountId: toSafeNumber(row?.id ?? row?.account_id ?? row?.accountId),
+      gmLevel,
+      realmId: toSafeNumber(row?.RealmID ?? row?.realmId ?? row?.realmID ?? row?.RealmId),
+    };
+    info.entries.push(entry);
+    if (gmLevel > info.maxLevel) {
+      info.maxLevel = gmLevel;
+      highestRealmSet.clear();
+      if (entry.realmId != null) {
+        highestRealmSet.add(entry.realmId);
+      }
+    } else if (gmLevel === info.maxLevel && entry.realmId != null) {
+      highestRealmSet.add(entry.realmId);
+    }
+  }
+  info.highestRealms = Array.from(highestRealmSet);
+  return normalizeGmInfo(info);
+}
+
+async function fetchAccountGmRows(dbPool, accountIds) {
+  const ids = sanitizeAccountIdList(accountIds);
+  if (!ids.length) {
+    return createEmptyGmInfo();
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  try {
+    const [rows] = await dbPool.query(
+      `SELECT id, gmlevel, RealmID FROM account_access WHERE id IN (${placeholders})`,
+      ids
+    );
+    return buildGmInfoFromRows(rows);
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return createEmptyGmInfo();
+    }
+    throw err;
+  }
+}
+
+async function getRetailGmInfo(accountIds) {
+  return fetchAccountGmRows(authPool, accountIds);
+}
+
+async function getClassicGmInfo(accountIds) {
+  return fetchAccountGmRows(classicAuthPool, accountIds);
+}
+
 function pickPrimaryAccountId(portalUser) {
   if (!portalUser || typeof portalUser !== 'object') {
     return 0;
@@ -3075,22 +3198,43 @@ function attachSessionHelpers(session) {
   const classicAccountIds = sanitizeAccountIdList(
     session.classicAccountIds ?? decodeAccountIdList(session.classic_accounts_json)
   );
+  const retailGmInfo = normalizeGmInfo(session.retailGmInfo ?? decodeGmInfo(session.retail_gmlevel_json));
+  const classicGmInfo = normalizeGmInfo(
+    session.classicGmInfo ?? decodeGmInfo(session.classic_gmlevel_json)
+  );
   session.retailAccountIds = retailAccountIds;
   session.classicAccountIds = classicAccountIds;
+  session.retailGmInfo = retailGmInfo;
+  session.classicGmInfo = classicGmInfo;
   delete session.retail_accounts_json;
   delete session.classic_accounts_json;
+  delete session.retail_gmlevel_json;
+  delete session.classic_gmlevel_json;
   Object.defineProperty(session, 'getRetailAccountIds', {
-    value: () => retailAccountIds.slice(),
+    value: () => (Array.isArray(session.retailAccountIds) ? session.retailAccountIds.slice() : []),
     enumerable: false,
     configurable: true,
   });
   Object.defineProperty(session, 'getClassicAccountIds', {
-    value: () => classicAccountIds.slice(),
+    value: () => (Array.isArray(session.classicAccountIds) ? session.classicAccountIds.slice() : []),
     enumerable: false,
     configurable: true,
   });
   Object.defineProperty(session, 'getPrimaryRetailAccountId', {
-    value: () => (retailAccountIds.length ? retailAccountIds[0] : null),
+    value: () =>
+      Array.isArray(session.retailAccountIds) && session.retailAccountIds.length
+        ? session.retailAccountIds[0]
+        : null,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(session, 'getRetailGmInfo', {
+    value: () => cloneGmInfo(session.retailGmInfo),
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(session, 'getClassicGmInfo', {
+    value: () => cloneGmInfo(session.classicGmInfo),
     enumerable: false,
     configurable: true,
   });
@@ -3104,7 +3248,7 @@ async function loadSession(req) {
   const now = Date.now();
   const [rows] = await pool.execute(
     `SELECT id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
-            created_at, expires_at
+            retail_gmlevel_json, classic_gmlevel_json, created_at, expires_at
        FROM sessions
       WHERE id = ? AND expires_at > ?
       LIMIT 1`,
@@ -3136,17 +3280,27 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
   const expiresAt = now + CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
   const userAgent = (req.headers['user-agent'] || '').slice(0, 255);
   const ip = (req.ip || req.headers['x-forwarded-for'] || '').toString().slice(0, 64);
-    const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
-    const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
-    const primaryAccountId = pickPrimaryAccountId({
-      retailAccountIds: sanitizedRetailIds,
-      classicAccountIds: sanitizedClassicIds,
-    });
+  const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
+  const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
+  const primaryAccountId = pickPrimaryAccountId({
+    retailAccountIds: sanitizedRetailIds,
+    classicAccountIds: sanitizedClassicIds,
+  });
+  let retailGmInfo = createEmptyGmInfo();
+  let classicGmInfo = createEmptyGmInfo();
+  try {
+    [retailGmInfo, classicGmInfo] = await Promise.all([
+      getRetailGmInfo(sanitizedRetailIds),
+      getClassicGmInfo(sanitizedClassicIds),
+    ]);
+  } catch (err) {
+    console.error('Failed to load GM metadata for session', err);
+  }
   const sessionUsername = normalizePortalUsername(username);
   await pool.execute(
     `REPLACE INTO sessions (id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
-                            created_at, expires_at, last_ip, last_user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            retail_gmlevel_json, classic_gmlevel_json, created_at, expires_at, last_ip, last_user_agent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       hashed,
       safePortalId,
@@ -3155,6 +3309,8 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
       sessionUsername,
       encodeAccountIdList(sanitizedRetailIds),
       encodeAccountIdList(sanitizedClassicIds),
+      encodeGmInfo(retailGmInfo),
+      encodeGmInfo(classicGmInfo),
       now,
       expiresAt,
       ip || null,
@@ -3171,13 +3327,31 @@ async function updateSessionAccountLinks(session, { retailAccountIds, classicAcc
   const hashed = hashSessionToken(session.token);
   const nextRetail = retailAccountIds != null ? sanitizeAccountIdList(retailAccountIds) : session.retailAccountIds || [];
   const nextClassic = classicAccountIds != null ? sanitizeAccountIdList(classicAccountIds) : session.classicAccountIds || [];
+  let retailGmInfo = session.retailGmInfo || createEmptyGmInfo();
+  let classicGmInfo = session.classicGmInfo || createEmptyGmInfo();
+  try {
+    [retailGmInfo, classicGmInfo] = await Promise.all([
+      getRetailGmInfo(nextRetail),
+      getClassicGmInfo(nextClassic),
+    ]);
+  } catch (err) {
+    console.error('Failed to refresh GM metadata for session update', err);
+  }
   try {
     await pool.execute(
-      'UPDATE sessions SET retail_accounts_json = ?, classic_accounts_json = ? WHERE id = ?',
-      [encodeAccountIdList(nextRetail), encodeAccountIdList(nextClassic), hashed]
+      'UPDATE sessions SET retail_accounts_json = ?, classic_accounts_json = ?, retail_gmlevel_json = ?, classic_gmlevel_json = ? WHERE id = ?',
+      [
+        encodeAccountIdList(nextRetail),
+        encodeAccountIdList(nextClassic),
+        encodeGmInfo(retailGmInfo),
+        encodeGmInfo(classicGmInfo),
+        hashed,
+      ]
     );
     session.retailAccountIds = nextRetail;
     session.classicAccountIds = nextClassic;
+    session.retailGmInfo = retailGmInfo;
+    session.classicGmInfo = classicGmInfo;
   } catch (err) {
     console.error('Failed to update session account links', err);
   }
@@ -3195,6 +3369,31 @@ async function requireSession(req, res, next) {
     console.error('Session lookup failed', e);
     return res.status(500).json({ error: 'Session lookup failed' });
   }
+}
+
+function hasGmAccess(session, realm, minLevel = 1) {
+  if (!session) {
+    return false;
+  }
+  const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
+  const targetLevel = toSafeNumber(minLevel) ?? 1;
+  const info = normalizedRealm === 'classic' ? session.classicGmInfo : session.retailGmInfo;
+  const gmLevel = toSafeNumber(info?.maxLevel) ?? 0;
+  return gmLevel >= targetLevel;
+}
+
+function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
+  const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
+  const requiredLevel = toSafeNumber(minLevel) ?? 1;
+  return (req, res, next) => {
+    if (!req.session) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!hasGmAccess(req.session, normalizedRealm, requiredLevel)) {
+      return res.status(403).json({ error: 'GM access required' });
+    }
+    return next();
+  };
 }
 
 async function recordPortalAuditEvent({ portalUserId, action, details }) {
@@ -3862,6 +4061,10 @@ app.get('/api/session', requireSession, (req, res) => {
       username: req.session.username,
       retailAccountIds,
       classicAccountIds,
+      gmAccess: {
+        retail: cloneGmInfo(req.session.retailGmInfo),
+        classic: cloneGmInfo(req.session.classicGmInfo),
+      },
       expiresAt: req.session.expires_at,
     },
   });
