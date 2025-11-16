@@ -2919,6 +2919,17 @@ function sanitizeAccountIdList(values) {
   return clean;
 }
 
+function pickPrimaryAccountId(portalUser) {
+  if (!portalUser || typeof portalUser !== 'object') {
+    return 0;
+  }
+  const retailIds = Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : [];
+  const classicIds = Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : [];
+  const raw = (retailIds.length ? retailIds[0] : null) ?? (classicIds.length ? classicIds[0] : null);
+  const id = toSafeNumber(raw);
+  return id == null ? 0 : id;
+}
+
 function encodeAccountIdList(values) {
   const clean = sanitizeAccountIdList(values);
   return clean.length ? JSON.stringify(clean) : null;
@@ -3009,9 +3020,12 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
   const expiresAt = now + CONFIG.SESSION_TTL_HOURS * 60 * 60 * 1000;
   const userAgent = (req.headers['user-agent'] || '').slice(0, 255);
   const ip = (req.ip || req.headers['x-forwarded-for'] || '').toString().slice(0, 64);
-  const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
-  const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
-  const primaryAccountId = sanitizedRetailIds.length ? sanitizedRetailIds[0] : null;
+    const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
+    const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
+    const primaryAccountId = pickPrimaryAccountId({
+      retailAccountIds: sanitizedRetailIds,
+      classicAccountIds: sanitizedClassicIds,
+    });
   const sessionUsername = normalizePortalUsername(username);
   await pool.execute(
     `REPLACE INTO sessions (id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
