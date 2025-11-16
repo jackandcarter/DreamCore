@@ -37,8 +37,10 @@ import {
   ensureClassicAccount,
   classicPasswordReset,
   executeRetailCommand,
+  executeClassicCommand,
   normalizeEmail,
   retailPasswordReset,
+  sanitizeSoapCommand,
 } from './lib/trinitySoap.js';
 
 // ----- CONFIG (read from env or inline defaults for dev) -----
@@ -244,6 +246,14 @@ const CHAR_DB = {
   NAME: process.env.CHAR_DB_NAME || 'characters',
 };
 
+const CLASSIC_CHAR_DB = {
+  HOST: process.env.CLASSIC_CHAR_DB_HOST || process.env.CLASSIC_DB_HOST || CHAR_DB.HOST,
+  PORT: Number(process.env.CLASSIC_CHAR_DB_PORT || process.env.CLASSIC_DB_PORT || CHAR_DB.PORT || 3306),
+  USER: process.env.CLASSIC_CHAR_DB_USER || process.env.CLASSIC_DB_USER || CHAR_DB.USER || 'trinity',
+  PASS: process.env.CLASSIC_CHAR_DB_PASS || process.env.CLASSIC_DB_PASS || CHAR_DB.PASS || DEFAULT_DB_PASS,
+  NAME: process.env.CLASSIC_CHAR_DB_NAME || 'tc_characters_335',
+};
+
 function makeAuthPoolFromEnv(prefix) {
   const normalized = String(prefix || '').toUpperCase();
   const lookup = {
@@ -324,6 +334,24 @@ const charPool = await mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
+
+const classicCharPool =
+  CHAR_DB.HOST === CLASSIC_CHAR_DB.HOST &&
+  CHAR_DB.PORT === CLASSIC_CHAR_DB.PORT &&
+  CHAR_DB.USER === CLASSIC_CHAR_DB.USER &&
+  CHAR_DB.PASS === CLASSIC_CHAR_DB.PASS &&
+  CHAR_DB.NAME === CLASSIC_CHAR_DB.NAME
+    ? charPool
+    : await mysql.createPool({
+        host: CLASSIC_CHAR_DB.HOST,
+        port: CLASSIC_CHAR_DB.PORT,
+        user: CLASSIC_CHAR_DB.USER,
+        password: CLASSIC_CHAR_DB.PASS,
+        database: CLASSIC_CHAR_DB.NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        namedPlaceholders: true,
+      });
 
 const REALM_DB_CONFIGS = loadRealmDbConfigs();
 const REALM_POOL_ENTRIES = buildRealmPoolEntries(REALM_DB_CONFIGS);
@@ -536,6 +564,8 @@ const linkAccountLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const requireGmCommandAccess = requireRequestGm({ source: 'body', key: 'realm' });
 
 // ----- UI (modern, minimal, responsive) -----
 const HOME_PAGE = () => `<!doctype html>
@@ -1418,7 +1448,8 @@ const accountScript = () => {
         classicOnlineStatus.textContent = `${total} online`;
       }
       if (classicOnlineUpdated) {
-        classicOnlineUpdated.textContent = new Date().toLocaleTimeString();
+        const refreshedAt = data?.refreshedAtIso || data?.refreshedAt || Date.now();
+        classicOnlineUpdated.textContent = new Date(refreshedAt).toLocaleTimeString();
       }
     } catch (err) {
       console.error('Classic online fetch failed', err);
@@ -3843,6 +3874,13 @@ function hasGmAccess(session, realm, minLevel = 1) {
   return gmLevel >= targetLevel;
 }
 
+function normalizeRealmInput(value, fallback = null) {
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (text === 'classic') return 'classic';
+  if (text === 'retail') return 'retail';
+  return fallback;
+}
+
 function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
   const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
   const requiredLevel = toSafeNumber(minLevel) ?? 1;
@@ -3853,6 +3891,32 @@ function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
     if (!hasGmAccess(req.session, normalizedRealm, requiredLevel)) {
       return res.status(403).json({ error: 'GM access required' });
     }
+    return next();
+  };
+}
+
+function requireRequestGm({ source = 'body', key = 'realm', fallbackRealm = null, minLevel = 1 } = {}) {
+  const requiredLevel = toSafeNumber(minLevel) ?? 1;
+  return (req, res, next) => {
+    if (!req.session) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let realmValue = null;
+    if (source === 'query') {
+      realmValue = req.query?.[key];
+    } else if (source === 'params') {
+      realmValue = req.params?.[key];
+    } else {
+      realmValue = req.body?.[key];
+    }
+    const resolvedRealm = normalizeRealmInput(realmValue, fallbackRealm);
+    if (!resolvedRealm) {
+      return res.status(400).json({ error: 'Invalid realm selection' });
+    }
+    if (!hasGmAccess(req.session, resolvedRealm, requiredLevel)) {
+      return res.status(403).json({ error: 'GM access required' });
+    }
+    req.gmRealm = resolvedRealm;
     return next();
   };
 }
@@ -4637,6 +4701,125 @@ app.get('/api/characters', requireSession, async (req, res) => {
   } catch (e) {
     console.error('Character roster lookup failed', e);
     return res.status(500).json({ error: 'Unable to load characters' });
+  }
+});
+
+app.post('/api/gm/command', requireSession, requireGmCommandAccess, async (req, res) => {
+  const realm = req.gmRealm || normalizeRealmInput(req.body?.realm, 'retail') || 'retail';
+  const { context } = req.body || {};
+  let safeCommand;
+  try {
+    safeCommand = sanitizeSoapCommand(req.body?.command);
+  } catch (err) {
+    return res.status(400).json({ error: err?.message || 'Invalid command' });
+  }
+  const sanitizedContext = typeof context === 'string' ? context.trim().slice(0, 200) : null;
+  const exec = realm === 'classic' ? executeClassicCommand : executeRetailCommand;
+  const soapConfig = realm === 'classic' ? CLASSIC_SOAP : SOAP;
+  const portalUserId = req.session?.portal_user_id;
+  const buildResponsePayload = (result) => ({
+    return: result?.ret ?? result?.return ?? null,
+    raw: result?.raw ?? null,
+  });
+  try {
+    const result = await exec({ soap: soapConfig, command: safeCommand });
+    await recordPortalAuditEvent({
+      portalUserId,
+      action: 'gm:command',
+      details: {
+        realm,
+        command: safeCommand,
+        context: sanitizedContext || undefined,
+        ok: true,
+        ret: typeof result?.ret === 'string' ? result.ret.slice(0, 512) : result?.ret ?? null,
+      },
+    });
+    return res.json({
+      ok: true,
+      realm,
+      command: safeCommand,
+      response: buildResponsePayload(result),
+    });
+  } catch (err) {
+    console.error('GM SOAP command failed', err);
+    const soapFault = typeof err?.soapBody === 'string' ? err.soapBody : null;
+    await recordPortalAuditEvent({
+      portalUserId,
+      action: 'gm:command',
+      details: {
+        realm,
+        command: safeCommand,
+        context: sanitizedContext || undefined,
+        ok: false,
+        error: err?.message || 'SOAP fault',
+      },
+    });
+    const status = err?.name === 'SOAPFault' ? 400 : 500;
+    return res.status(status).json({
+      error: err?.message || 'Command failed',
+      realm,
+      command: safeCommand,
+      response: soapFault ? { raw: soapFault } : undefined,
+    });
+  }
+});
+
+app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  try {
+    if (!classicCharPool) {
+      return res.status(503).json({ error: 'Classic character database unavailable' });
+    }
+    const limit = Math.max(Number(CONFIG.GM_CLASSIC_ONLINE_LIMIT) || 12, 1);
+    const [rows] = await classicCharPool.execute(
+      'SELECT name, account, race, class, level FROM characters WHERE online = 1 ORDER BY name ASC LIMIT ?',
+      [limit]
+    );
+    const accountIds = [...new Set(rows.map((row) => toSafeNumber(row.account)).filter((id) => id != null))];
+    const accountMeta = new Map();
+    if (accountIds.length) {
+      const placeholders = accountIds.map(() => '?').join(',');
+      const [accounts] = await classicAuthPool.execute(
+        `SELECT a.id, a.username, COALESCE(MAX(aa.gmlevel), 0) AS gmlevel
+           FROM account a
+           LEFT JOIN account_access aa ON aa.id = a.id
+          WHERE a.id IN (${placeholders})
+          GROUP BY a.id`,
+        accountIds
+      );
+      for (const row of accounts) {
+        const id = toSafeNumber(row.id);
+        if (id == null) continue;
+        accountMeta.set(id, {
+          accountName: row.username || null,
+          gmLevel: toSafeNumber(row.gmlevel) ?? null,
+        });
+      }
+    }
+    const now = Date.now();
+    const characters = rows.map((row) => {
+      const accountId = toSafeNumber(row.account);
+      const meta = accountId != null ? accountMeta.get(accountId) : null;
+      return {
+        name: row.name,
+        accountId,
+        accountName: meta?.accountName || null,
+        gmLevel: meta?.gmLevel ?? null,
+        race: toSafeNumber(row.race) ?? null,
+        class: toSafeNumber(row.class) ?? null,
+        level: toSafeNumber(row.level) ?? null,
+      };
+    });
+    return res.json({
+      ok: true,
+      realm: 'classic',
+      count: characters.length,
+      refreshedAt: now,
+      refreshedAtIso: new Date(now).toISOString(),
+      characters,
+    });
+  } catch (err) {
+    console.error('Classic GM online lookup failed', err);
+    return res.status(500).json({ error: 'Unable to load Classic roster.' });
   }
 });
 
@@ -5459,5 +5642,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Classic portal URL: ${CONFIG.CLASSIC_BASE_URL}`);
   console.log(`   Classic SOAP endpoint: ${CLASSIC_SOAP.host}:${CLASSIC_SOAP.port}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CLASSIC_AUTH_DB_HOST=${CLASSIC_AUTH_DB.HOST}\nEnvironment=CLASSIC_AUTH_DB_PORT=${CLASSIC_AUTH_DB.PORT}\nEnvironment=CLASSIC_AUTH_DB_USER=${CLASSIC_AUTH_DB.USER}\nEnvironment=CLASSIC_AUTH_DB_PASS=${CLASSIC_AUTH_DB.PASS}\nEnvironment=CLASSIC_AUTH_DB_NAME=${CLASSIC_AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CLASSIC_AUTH_DB_HOST=${CLASSIC_AUTH_DB.HOST}\nEnvironment=CLASSIC_AUTH_DB_PORT=${CLASSIC_AUTH_DB.PORT}\nEnvironment=CLASSIC_AUTH_DB_USER=${CLASSIC_AUTH_DB.USER}\nEnvironment=CLASSIC_AUTH_DB_PASS=${CLASSIC_AUTH_DB.PASS}\nEnvironment=CLASSIC_AUTH_DB_NAME=${CLASSIC_AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=CLASSIC_CHAR_DB_HOST=${CLASSIC_CHAR_DB.HOST}\nEnvironment=CLASSIC_CHAR_DB_PORT=${CLASSIC_CHAR_DB.PORT}\nEnvironment=CLASSIC_CHAR_DB_USER=${CLASSIC_CHAR_DB.USER}\nEnvironment=CLASSIC_CHAR_DB_PASS=${CLASSIC_CHAR_DB.PASS}\nEnvironment=CLASSIC_CHAR_DB_NAME=${CLASSIC_CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
