@@ -31,6 +31,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import mysql from 'mysql2/promise';
 import {
+  makeAuthPool,
   makeSoapConfig,
   ensureRetailAccount,
   ensureClassicAccount,
@@ -203,6 +204,14 @@ const AUTH_DB = {
   NAME: process.env.AUTH_DB_NAME || 'auth',
 };
 
+const CLASSIC_AUTH_DB = {
+  HOST: process.env.CLASSIC_AUTH_DB_HOST || process.env.AUTH_DB_HOST || '127.0.0.1',
+  PORT: Number(process.env.CLASSIC_AUTH_DB_PORT || process.env.AUTH_DB_PORT || 3306),
+  USER: process.env.CLASSIC_AUTH_DB_USER || process.env.AUTH_DB_USER || 'trinity',
+  PASS: process.env.CLASSIC_AUTH_DB_PASS || process.env.AUTH_DB_PASS || 'trinity_password',
+  NAME: process.env.CLASSIC_AUTH_DB_NAME || 'tc_auth_335',
+};
+
 const CHAR_DB = {
   HOST: process.env.CHAR_DB_HOST || '127.0.0.1',
   PORT: Number(process.env.CHAR_DB_PORT || 3306),
@@ -210,6 +219,25 @@ const CHAR_DB = {
   PASS: process.env.CHAR_DB_PASS || 'trinity_password',
   NAME: process.env.CHAR_DB_NAME || 'characters',
 };
+
+function makeAuthPoolFromEnv(prefix) {
+  const normalized = String(prefix || '').toUpperCase();
+  const lookup = {
+    AUTH_DB,
+    CLASSIC_AUTH_DB,
+  };
+  const config = lookup[normalized];
+  if (!config) {
+    throw new Error(`Unknown auth DB prefix: ${prefix}`);
+  }
+  return makeAuthPool({
+    host: config.HOST,
+    port: config.PORT,
+    user: config.USER,
+    password: config.PASS,
+    database: config.NAME,
+  });
+}
 
 // Bootstrap: ensure database exists using a one-off connection
 const admin = await mysql.createConnection({
@@ -258,16 +286,8 @@ const classicPool = await mysql.createPool({
   multipleStatements: true,
 });
 
-const authPool = await mysql.createPool({
-  host: AUTH_DB.HOST,
-  port: AUTH_DB.PORT,
-  user: AUTH_DB.USER,
-  password: AUTH_DB.PASS,
-  database: AUTH_DB.NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  namedPlaceholders: true,
-});
+const authPool = makeAuthPoolFromEnv('AUTH_DB');
+const classicAuthPool = makeAuthPoolFromEnv('CLASSIC_AUTH_DB');
 
 // Character DB pool reserved for future character-based endpoints.
 const charPool = await mysql.createPool({
@@ -3159,7 +3179,14 @@ async function linkPortalUserToRetailAccount(portalUserId, accountId, { linkedAt
 async function linkPortalUserToClassicAccount(portalUserId, accountId, { linkedAt } = {}) {
   const safePortalId = toSafeNumber(portalUserId);
   const safeAccountId = toSafeNumber(accountId);
-  if (safePortalId == null || safeAccountId == null) return;
+  if (safePortalId == null) return;
+  if (safeAccountId == null) {
+    console.warn('Skipping classic account link due to invalid account id', {
+      portalUserId,
+      accountId,
+    });
+    return;
+  }
   const timestamp = toSafeNumber(linkedAt) ?? Date.now();
   try {
     await pool.execute(
@@ -3417,19 +3444,52 @@ async function getGameAccountByEmail(email) {
   return null;
 }
 
-async function getAccountByUsername(username) {
+async function getClassicAccountByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  try {
+    const [rows] = await classicAuthPool.execute(
+      'SELECT id, username, email FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+      [normalized]
+    );
+    if (rows.length) return rows[0];
+  } catch (err) {
+    if (err?.code === 'ER_BAD_FIELD_ERROR') {
+      try {
+        const [fallbackRows] = await classicAuthPool.execute(
+          'SELECT id, username FROM `account` WHERE UPPER(email) = UPPER(?) LIMIT 1',
+          [normalized]
+        );
+        if (fallbackRows.length) {
+          const row = fallbackRows[0];
+          row.email = normalized;
+          return row;
+        }
+        return null;
+      } catch (inner) {
+        if (inner?.code === 'ER_NO_SUCH_TABLE') {
+          return null;
+        }
+        throw inner;
+      }
+    }
+    if (err?.code === 'ER_NO_SUCH_TABLE') return null;
+    throw err;
+  }
+  return null;
+}
+
+async function getClassicAccountByUsername(username) {
   if (typeof username !== 'string' || !username.trim()) return null;
   const normalized = username.trim();
   try {
-    const [rows] = await authPool.execute(
+    const [rows] = await classicAuthPool.execute(
       'SELECT id, username, email FROM `account` WHERE UPPER(username) = UPPER(?) LIMIT 1',
       [normalized]
     );
     if (rows.length) return rows[0];
   } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      return null;
-    }
+    if (err?.code === 'ER_NO_SUCH_TABLE') return null;
     throw err;
   }
   return null;
@@ -3438,29 +3498,35 @@ async function getAccountByUsername(username) {
 async function resolveClassicAccountLink({ username, email }) {
   const normalizedUsername = normalizePortalUsername(username);
   if (normalizedUsername) {
-    const byUsername = await getAccountByUsername(normalizedUsername);
+    const byUsername = await getClassicAccountByUsername(normalizedUsername);
     if (byUsername?.id != null) {
-      return { accountId: byUsername.id, username: byUsername.username ?? normalizedUsername };
+      return {
+        accountId: byUsername.id,
+        username: byUsername.username ?? normalizedUsername,
+      };
     }
   }
+
   const normalizedEmail = normalizeEmail(email);
   if (normalizedEmail) {
-    const byEmail = await getGameAccountByEmail(normalizedEmail);
+    const byEmail = await getClassicAccountByEmail(normalizedEmail);
     if (byEmail?.id != null) {
-      return { accountId: byEmail.id, username: byEmail.username ?? normalizedUsername ?? null };
+      return {
+        accountId: byEmail.id,
+        username: byEmail.username ?? normalizedUsername ?? null,
+      };
     }
   }
+
   return null;
 }
 
 async function loadClassicAccountCredentials(accountIds) {
   const sanitized = sanitizeAccountIdList(accountIds);
-  if (!sanitized.length) {
-    return [];
-  }
+  if (!sanitized.length) return [];
   const placeholders = sanitized.map(() => '?').join(',');
   try {
-    const [rows] = await authPool.execute(
+    const [rows] = await classicAuthPool.execute(
       `SELECT id, username, email FROM \`account\` WHERE id IN (${placeholders})`,
       sanitized
     );
@@ -3470,9 +3536,7 @@ async function loadClassicAccountCredentials(accountIds) {
       email: row.email,
     }));
   } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      return [];
-    }
+    if (err?.code === 'ER_NO_SUCH_TABLE') return [];
     throw err;
   }
 }
@@ -4574,5 +4638,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Classic portal URL: ${CONFIG.CLASSIC_BASE_URL}`);
   console.log(`   Classic SOAP endpoint: ${CLASSIC_SOAP.host}:${CLASSIC_SOAP.port}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CLASSIC_AUTH_DB_HOST=${CLASSIC_AUTH_DB.HOST}\nEnvironment=CLASSIC_AUTH_DB_PORT=${CLASSIC_AUTH_DB.PORT}\nEnvironment=CLASSIC_AUTH_DB_USER=${CLASSIC_AUTH_DB.USER}\nEnvironment=CLASSIC_AUTH_DB_PASS=${CLASSIC_AUTH_DB.PASS}\nEnvironment=CLASSIC_AUTH_DB_NAME=${CLASSIC_AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
