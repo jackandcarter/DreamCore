@@ -197,11 +197,13 @@ const SHARED_STYLES = `
 `;
 
 // ----- DB (MariaDB for pending verifications) -----
+const DEFAULT_DB_PASS = process.env.CHAR_DB_PASS || '';
+
 const DB = {
   HOST: process.env.DB_HOST || '127.0.0.1',
   PORT: Number(process.env.DB_PORT || 3306),
   USER: process.env.DB_USER || 'trinity',
-  PASS: process.env.DB_PASS || 'trinity_password',
+  PASS: process.env.DB_PASS || DEFAULT_DB_PASS,
   NAME: process.env.DB_NAME || 'tc_register',
 };
 
@@ -209,7 +211,7 @@ const CLASSIC_DB = {
   HOST: process.env.CLASSIC_DB_HOST || '127.0.0.1',
   PORT: Number(process.env.CLASSIC_DB_PORT || 3306),
   USER: process.env.CLASSIC_DB_USER || 'trinity',
-  PASS: process.env.CLASSIC_DB_PASS || 'trinity_password',
+  PASS: process.env.CLASSIC_DB_PASS || DEFAULT_DB_PASS,
   NAME: process.env.CLASSIC_DB_NAME || 'tc_register_classic',
 };
 
@@ -217,7 +219,7 @@ const AUTH_DB = {
   HOST: process.env.AUTH_DB_HOST || '127.0.0.1',
   PORT: Number(process.env.AUTH_DB_PORT || 3306),
   USER: process.env.AUTH_DB_USER || 'trinity',
-  PASS: process.env.AUTH_DB_PASS || 'trinity_password',
+  PASS: process.env.AUTH_DB_PASS || DEFAULT_DB_PASS,
   NAME: process.env.AUTH_DB_NAME || 'auth',
 };
 
@@ -225,7 +227,7 @@ const CLASSIC_AUTH_DB = {
   HOST: process.env.CLASSIC_AUTH_DB_HOST || process.env.AUTH_DB_HOST || '127.0.0.1',
   PORT: Number(process.env.CLASSIC_AUTH_DB_PORT || process.env.AUTH_DB_PORT || 3306),
   USER: process.env.CLASSIC_AUTH_DB_USER || process.env.AUTH_DB_USER || 'trinity',
-  PASS: process.env.CLASSIC_AUTH_DB_PASS || process.env.AUTH_DB_PASS || 'trinity_password',
+  PASS: process.env.CLASSIC_AUTH_DB_PASS || process.env.AUTH_DB_PASS || DEFAULT_DB_PASS,
   NAME: process.env.CLASSIC_AUTH_DB_NAME || 'tc_auth_335',
 };
 
@@ -233,7 +235,7 @@ const CHAR_DB = {
   HOST: process.env.CHAR_DB_HOST || AUTH_DB.HOST || '127.0.0.1',
   PORT: Number(process.env.CHAR_DB_PORT || AUTH_DB.PORT || 3306),
   USER: process.env.CHAR_DB_USER || AUTH_DB.USER || 'trinity',
-  PASS: process.env.CHAR_DB_PASS || AUTH_DB.PASS || 'trinity_password',
+  PASS: process.env.CHAR_DB_PASS || AUTH_DB.PASS || DEFAULT_DB_PASS,
   NAME: process.env.CHAR_DB_NAME || 'characters',
 };
 
@@ -2298,6 +2300,25 @@ if (CHARACTER_CACHE_TTL > 0) {
   sweepInterval.unref?.();
 }
 
+function parseBooleanFlag(value, fallback = false) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return fallback;
+    return value !== 0;
+  }
+  if (value == null) return fallback;
+  return Boolean(value);
+}
+
 function loadRealmDbConfigs() {
   const fallbackName = process.env.DEFAULT_REALM_NAME || `${CONFIG.BRAND_NAME || 'DreamCore'} Realm`;
   const fallback = [
@@ -2323,6 +2344,15 @@ function loadRealmDbConfigs() {
       return fallback;
     }
     return parsed.map((item, idx) => {
+      const useDefaultPool = parseBooleanFlag(
+        item.useDefaultPool ??
+          item.use_default_pool ??
+          item.useDefault ??
+          item.use_default ??
+          item.useSharedPool ??
+          item.use_shared_pool,
+        false
+      );
       const cfg = {
         key: String(item.key || item.name || item.realmId || idx),
         realmId: item.realmId ?? item.realmID ?? null,
@@ -2334,7 +2364,7 @@ function loadRealmDbConfigs() {
         database: item.database || item.db || CHAR_DB.NAME,
         charactersTable: item.charactersTable || item.table || 'characters',
         charDbLabel: item.charDb || item.char_db || null,
-        useDefaultPool: false,
+        useDefaultPool,
       };
       if (!Number.isFinite(cfg.port) || cfg.port <= 0) cfg.port = CHAR_DB.PORT;
       if (cfg.charDbLabel == null || cfg.charDbLabel === '') {
@@ -2352,7 +2382,7 @@ function buildRealmPoolEntries(configs) {
   return configs.map((cfg, idx) => {
     const key = cfg.key || `realm-${idx}`;
     const reuseDefault =
-      cfg.useDefaultPool ||
+      cfg.useDefaultPool === true ||
       (idx === 0 &&
         cfg.host === CHAR_DB.HOST &&
         cfg.port === CHAR_DB.PORT &&
@@ -2646,7 +2676,7 @@ async function loadBattleNetCharacters(bnetAccountIds) {
   }
 
   for (const group of groups.values()) {
-    if (!group.accountIds.length) continue;
+    if (!group.entry?.pool || !group.accountIds.length) continue;
     const placeholders = group.accountIds.map(() => '?').join(', ');
     const tableName = entryCharactersTable(group.entry);
     try {

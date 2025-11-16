@@ -2,11 +2,13 @@
 import mysql from 'mysql2/promise';
 import { normalizeEmail } from '../lib/trinitySoap.js';
 
+const DEFAULT_DB_PASS = process.env.CHAR_DB_PASS || '';
+
 const DB = {
   HOST: process.env.DB_HOST || '127.0.0.1',
   PORT: Number(process.env.DB_PORT || 3306),
   USER: process.env.DB_USER || 'trinity',
-  PASS: process.env.DB_PASS || 'trinity_password',
+  PASS: process.env.DB_PASS || DEFAULT_DB_PASS,
   NAME: process.env.DB_NAME || 'tc_register',
 };
 
