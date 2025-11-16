@@ -2003,6 +2003,18 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
   ));
 }
+
+function formatClassicClientUsername(value) {
+  if (value == null) {
+    return '';
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return '';
+  }
+  const [localPart] = trimmed.split('@');
+  return localPart || trimmed;
+}
 function renderTransactionalEmail({ title, intro, paragraphs = [], button, footerLines = [] }) {
   const brand = escapeHtml(CONFIG.BRAND_NAME || 'DreamCore');
   const corner = escapeHtml(CONFIG.CORNER_LOGO || brand);
@@ -4433,6 +4445,10 @@ app.get('/classic/verify', async (req, res) => {
       await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
     }
 
+    const clientLoginUsername = formatClassicClientUsername(
+      classicAccount?.username || row.username || row.email || ''
+    );
+
     return res
       .type('text/html')
       .send(
@@ -4449,6 +4465,14 @@ app.get('/classic/verify', async (req, res) => {
                 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
                 'After installing, launch it and log in with the account you just verified.',
               ],
+              notice: clientLoginUsername
+                ? {
+                    label: 'Client Login Username',
+                    value: clientLoginUsername,
+                    description:
+                      'Do not log in with an email address in the Classic client. Use this username exactly as shown.',
+                  }
+                : null,
               cta: {
                 href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
                 label: 'Download Client',
@@ -4551,6 +4575,21 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
                 )}</p>`;
               })
               .join('');
+            const notice = step.notice && (step.notice.label || step.notice.value || step.notice.description)
+              ? step.notice
+              : null;
+            const noticeHtml = notice
+              ? `<div class="mt-5 rounded-2xl border border-indigo-400/40 bg-gray-900/70 p-4 text-sm text-indigo-100/90">
+                  <p class="font-semibold text-indigo-200">${escapeHtml(String(notice.label || 'Note'))}${
+                    notice.value ? `: <span class="text-white">${escapeHtml(String(notice.value))}</span>` : ''
+                  }</p>
+                  ${
+                    notice.description
+                      ? `<p class="mt-2 text-xs text-indigo-200/80">${escapeHtml(String(notice.description))}</p>`
+                      : ''
+                  }
+                </div>`
+              : '';
             const cta = step.cta && step.cta.href
               ? `<a class="mt-5 inline-flex items-center justify-center rounded-2xl ${
                   idx === 0
@@ -4563,7 +4602,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
               const wrapperClasses = idx === 0
                 ? 'rounded-3xl gradient-border bg-indigo-500/10 p-6 backdrop-blur-sm'
                 : 'rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30';
-            return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${cta}</section>`;
+            return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${noticeHtml}${cta}</section>`;
           })
           .join('')}</div>`
       : '';
