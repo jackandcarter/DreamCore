@@ -105,6 +105,8 @@ const CONFIG = {
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || 'dreamcore_session',
   COOKIE_SECURE: (process.env.COOKIE_SECURE || 'true').toLowerCase() === 'true',
   CHARACTER_CACHE_TTL_MS: Number(process.env.CHARACTER_CACHE_TTL_MS || 30 * 1000),
+  GM_ONLINE_POLL_MS: Number(process.env.GM_ONLINE_POLL_MS || 20 * 1000),
+  GM_CLASSIC_ONLINE_LIMIT: Number(process.env.GM_CLASSIC_ONLINE_LIMIT || 12),
 };
 
 const SOAP = makeSoapConfig({
@@ -883,6 +885,10 @@ function buildPortalLimitsScriptTag() {
       retail: CONFIG.BRAND_NAME || 'DreamCore Master',
       classic: CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic',
     },
+    gmOnlinePollMs: CONFIG.GM_ONLINE_POLL_MS,
+    gmClassicOnlineLimit: CONFIG.GM_CLASSIC_ONLINE_LIMIT,
+    gmClassicOnlineEndpoint: '/api/gm/online/classic',
+    gmCommandEndpoint: '/api/gm/command',
   };
   return `
   <script>
@@ -987,7 +993,27 @@ ${SHARED_STYLES}
             <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
           </section>
 
-          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+          <section class="rounded-3xl gradient-border bg-gray-900/70 p-3 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-wrap gap-2" role="tablist" aria-label="Account sections">
+              <button type="button" role="tab" aria-selected="true" aria-controls="retailTabPanel"
+                      data-tab-target="retailTabPanel"
+                      class="flex-1 min-w-[120px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                Retail
+              </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="classicTabPanel"
+                      data-tab-target="classicTabPanel"
+                      class="flex-1 min-w-[120px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                Classic
+              </button>
+              <button id="gmTabButton" type="button" role="tab" aria-selected="false" aria-controls="gmToolkitSection"
+                      data-tab-target="gmToolkitSection"
+                      class="hidden flex-1 min-w-[140px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                GM toolkit
+              </button>
+            </div>
+          </section>
+
+          <section id="retailTabPanel" data-tab-panel class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
             <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="retailPanel" aria-expanded="true">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
@@ -1024,7 +1050,7 @@ ${SHARED_STYLES}
             </div>
           </section>
 
-          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
+          <section id="classicTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
             <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="classicPanel" aria-expanded="false">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">DreamCore Classic</p>
@@ -1060,6 +1086,69 @@ ${SHARED_STYLES}
                   <button id="classicLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Create Classic login</button>
                 </div>
               </form>
+            </div>
+          </section>
+
+          <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
+            <div class="flex flex-col gap-6 lg:flex-row">
+              <div class="flex-1 space-y-5">
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">GM toolkit</p>
+                      <h2 class="text-2xl font-semibold text-white">SOAP command console</h2>
+                      <p class="text-sm text-indigo-100/80">Send live commands to ${CONFIG.BRAND_NAME} and ${CONFIG.CLASSIC_BRAND_NAME} realms.</p>
+                    </div>
+                    <span class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">Secure</span>
+                  </div>
+                  <form id="gmCommandForm" class="mt-5 space-y-4">
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label class="block text-sm font-medium text-indigo-200 mb-1" for="gmRealmSelect">Realm</label>
+                        <select id="gmRealmSelect" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                          <option value="">GM access required</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-indigo-200 mb-1" for="gmCommandContext">Target context</label>
+                        <input id="gmCommandContext" type="text" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Realm or character (optional)" />
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-indigo-200 mb-1" for="gmCommandInput">SOAP command</label>
+                      <textarea id="gmCommandInput" rows="3" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder=".server info"></textarea>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p id="gmCommandMsg" class="text-sm text-indigo-200/90">Only GMs can run these commands.</p>
+                      <button id="gmCommandSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Send command</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-white">Response log</h3>
+                    <span class="text-xs font-medium uppercase tracking-[0.35em] text-indigo-200/80">Live</span>
+                  </div>
+                  <div id="gmResponseLog" role="log" aria-live="polite" class="mt-4 max-h-72 space-y-3 overflow-y-auto rounded-2xl bg-black/30 p-4 text-sm text-indigo-100/90">
+                    <p id="gmResponseEmpty" class="text-sm text-indigo-200/70">No commands sent this session.</p>
+                  </div>
+                </div>
+              </div>
+              <aside class="space-y-4 lg:w-80">
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</p>
+                      <h3 class="text-lg font-semibold text-white">Classic online characters</h3>
+                    </div>
+                    <span id="classicOnlineUpdated" class="text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/70">—</span>
+                  </div>
+                  <p id="classicOnlineStatus" class="mt-2 text-xs text-indigo-200/80">Classic GM access required.</p>
+                  <div id="classicOnlineList" class="mt-4 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-indigo-100/85">
+                    <p class="text-sm text-indigo-200/70">Waiting for GM access…</p>
+                  </div>
+                </div>
+              </aside>
             </div>
           </section>
         </div>
@@ -1101,8 +1190,30 @@ const accountScript = () => {
   const classicLinkSubmit = document.getElementById('classicLinkSubmit');
   const classicLinkedSummary = document.getElementById('classicLinkedSummary');
   const classicDownloadButton = document.getElementById('classicDownloadButton');
+  const tabButtons = document.querySelectorAll('[data-tab-target]');
+  const tabPanels = document.querySelectorAll('[data-tab-panel]');
+  const gmTabButton = document.getElementById('gmTabButton');
+  const gmCommandForm = document.getElementById('gmCommandForm');
+  const gmRealmSelect = document.getElementById('gmRealmSelect');
+  const gmCommandInput = document.getElementById('gmCommandInput');
+  const gmCommandMsg = document.getElementById('gmCommandMsg');
+  const gmCommandSubmit = document.getElementById('gmCommandSubmit');
+  const gmCommandContext = document.getElementById('gmCommandContext');
+  const gmResponseLog = document.getElementById('gmResponseLog');
+  const gmResponseEmpty = document.getElementById('gmResponseEmpty');
+  const classicOnlineList = document.getElementById('classicOnlineList');
+  const classicOnlineStatus = document.getElementById('classicOnlineStatus');
+  const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
+
+  const gmClassicOnlineEndpoint = LIMITS.gmClassicOnlineEndpoint || '/api/gm/online/classic';
+  const gmCommandEndpoint = LIMITS.gmCommandEndpoint || '/api/gm/command';
+  const gmOnlinePollMs = Math.max(Number(LIMITS.gmOnlinePollMs) || 20000, 5000);
+  const gmClassicOnlineLimit = Math.max(Number(LIMITS.gmClassicOnlineLimit) || 12, 1);
 
   let currentSession = null;
+  let activeTabId = 'retailTabPanel';
+  let gmClassicAccessible = false;
+  let classicOnlineTimer = null;
 
   function setLoading(state) {
     if (!submit) return;
@@ -1114,6 +1225,288 @@ const accountScript = () => {
     if (!button) return;
     button.disabled = state;
     button.classList.toggle('opacity-60', state);
+  }
+
+  function realmLabel(realm) {
+    const labels = LIMITS.familyLabels || {};
+    return realm === 'classic'
+      ? labels.classic || 'Classic'
+      : labels.retail || 'Retail';
+  }
+
+  function normalizeGmPayload(value) {
+    if (!value || typeof value !== 'object') {
+      return { retail: {}, classic: {} };
+    }
+    const normalize = (info) => (info && typeof info === 'object' ? info : {});
+    return {
+      retail: normalize(value.retail),
+      classic: normalize(value.classic),
+    };
+  }
+
+  function makeClassicOnlineMessage(text) {
+    const msg = document.createElement('p');
+    msg.className = 'text-sm text-indigo-200/80';
+    msg.textContent = text;
+    return msg;
+  }
+
+  function setClassicOnlinePlaceholder(message) {
+    if (!classicOnlineList) return;
+    classicOnlineList.innerHTML = '';
+    classicOnlineList.appendChild(makeClassicOnlineMessage(message));
+  }
+
+  function renderClassicOnlineList(items) {
+    if (!classicOnlineList) return;
+    classicOnlineList.innerHTML = '';
+    const list = Array.isArray(items) ? items.slice(0, gmClassicOnlineLimit) : [];
+    if (!list.length) {
+      classicOnlineList.appendChild(makeClassicOnlineMessage('No Classic characters online right now.'));
+      return;
+    }
+    list.forEach((entry) => {
+      const container = document.createElement('div');
+      container.className = 'rounded-2xl border border-white/5 bg-gray-900/80 p-3 text-sm text-indigo-100/90';
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between gap-2';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'font-semibold text-white';
+      nameEl.textContent = entry?.name || entry?.characterName || entry?.player || 'Unknown';
+      const levelEl = document.createElement('span');
+      levelEl.className = 'text-xs uppercase tracking-[0.25em] text-indigo-200/70';
+      const levelValue = Number(entry?.level ?? entry?.Level);
+      levelEl.textContent = Number.isFinite(levelValue) && levelValue > 0 ? `Lv ${levelValue}` : '';
+      header.appendChild(nameEl);
+      header.appendChild(levelEl);
+      container.appendChild(header);
+
+      const meta = document.createElement('p');
+      meta.className = 'text-xs text-indigo-200/80';
+      const account = entry?.accountName || entry?.account || entry?.username || null;
+      const accountId = entry?.accountId ?? entry?.account_id;
+      const zone = entry?.zone || entry?.zoneName || entry?.map || entry?.area || '';
+      const gmLevel = entry?.gmLevel ?? entry?.gmlevel;
+      const parts = [];
+      if (account) parts.push(account);
+      if (accountId != null) parts.push(`#${accountId}`);
+      if (zone) parts.push(zone);
+      if (gmLevel != null) parts.push(`GM${gmLevel}`);
+      meta.textContent = parts.length ? parts.join(' · ') : '—';
+      container.appendChild(meta);
+
+      classicOnlineList.appendChild(container);
+    });
+  }
+
+  function updateGmRealmOptions(realms) {
+    if (!gmRealmSelect) return;
+    const available = Array.isArray(realms) ? realms : [];
+    gmRealmSelect.innerHTML = '';
+    if (!available.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'GM access required';
+      gmRealmSelect.appendChild(option);
+      gmRealmSelect.disabled = true;
+      if (gmCommandMsg) {
+        gmCommandMsg.textContent = 'GM access is required to send SOAP commands.';
+      }
+      return;
+    }
+    gmRealmSelect.disabled = available.length === 1;
+    available.forEach((realm, index) => {
+      const option = document.createElement('option');
+      option.value = realm;
+      option.textContent = `${realmLabel(realm)} GM`;
+      if (index === 0) {
+        option.selected = true;
+      }
+      gmRealmSelect.appendChild(option);
+    });
+    if (gmCommandMsg) {
+      gmCommandMsg.textContent = 'Enter a command and send it to the selected realm.';
+    }
+  }
+
+  function setGmSubmitting(state) {
+    if (!gmCommandSubmit) return;
+    gmCommandSubmit.disabled = state;
+    gmCommandSubmit.classList.toggle('opacity-60', state);
+  }
+
+  function formatLogMessage(payload) {
+    if (payload == null) {
+      return 'No response payload.';
+    }
+    if (typeof payload === 'string') {
+      return payload;
+    }
+    try {
+      return JSON.stringify(payload, null, 2);
+    } catch (err) {
+      return String(payload);
+    }
+  }
+
+  function appendGmLogEntry({ command, realm, context, ok, message }) {
+    if (!gmResponseLog || !command) return;
+    if (gmResponseEmpty && gmResponseEmpty.parentElement) {
+      gmResponseEmpty.parentElement.removeChild(gmResponseEmpty);
+    }
+    const entry = document.createElement('article');
+    entry.className = 'rounded-2xl border border-white/5 bg-gray-900/80 p-3 space-y-2';
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between text-xs uppercase tracking-[0.3em]';
+    const status = document.createElement('span');
+    status.className = ok ? 'text-emerald-300' : 'text-rose-300';
+    status.textContent = ok ? 'Success' : 'Fault';
+    const meta = document.createElement('span');
+    meta.className = 'text-indigo-200/80';
+    meta.textContent = `${realmLabel(realm)} · ${new Date().toLocaleTimeString()}`;
+    header.appendChild(status);
+    header.appendChild(meta);
+    entry.appendChild(header);
+
+    const commandLine = document.createElement('pre');
+    commandLine.className = 'whitespace-pre-wrap text-[13px] font-mono text-indigo-100/90';
+    commandLine.textContent = `> ${command}`;
+    entry.appendChild(commandLine);
+
+    if (context) {
+      const contextLine = document.createElement('p');
+      contextLine.className = 'text-xs text-indigo-200/75';
+      contextLine.textContent = `Context: ${context}`;
+      entry.appendChild(contextLine);
+    }
+
+    const body = document.createElement('pre');
+    body.className = 'whitespace-pre-wrap text-[13px] text-indigo-100/90';
+    body.textContent = message || 'No response body.';
+    entry.appendChild(body);
+
+    gmResponseLog.prepend(entry);
+    while (gmResponseLog.childElementCount > 20) {
+      const last = gmResponseLog.lastElementChild;
+      if (!last) break;
+      gmResponseLog.removeChild(last);
+    }
+  }
+
+  async function loadClassicOnlineSnapshot() {
+    if (!gmClassicOnlineEndpoint || !gmClassicAccessible) {
+      return;
+    }
+    if (classicOnlineStatus) {
+      classicOnlineStatus.textContent = 'Refreshing…';
+    }
+    try {
+      const res = await fetch(gmClassicOnlineEndpoint, { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to load roster.');
+      }
+      const online = Array.isArray(data?.characters)
+        ? data.characters
+        : Array.isArray(data?.online)
+          ? data.online
+          : [];
+      renderClassicOnlineList(online);
+      if (classicOnlineStatus) {
+        const total = typeof data?.count === 'number' ? data.count : online.length;
+        classicOnlineStatus.textContent = `${total} online`;
+      }
+      if (classicOnlineUpdated) {
+        classicOnlineUpdated.textContent = new Date().toLocaleTimeString();
+      }
+    } catch (err) {
+      console.error('Classic online fetch failed', err);
+      if (classicOnlineStatus) {
+        classicOnlineStatus.textContent = 'Unable to load online characters.';
+      }
+      if (classicOnlineList && !classicOnlineList.childElementCount) {
+        setClassicOnlinePlaceholder('Unable to load roster right now.');
+      }
+    }
+  }
+
+  function syncClassicOnlinePolling() {
+    const shouldPoll =
+      gmClassicAccessible &&
+      activeTabId === 'gmToolkitSection' &&
+      classicOnlineList &&
+      gmClassicOnlineEndpoint;
+    if (shouldPoll && classicOnlineTimer == null) {
+      loadClassicOnlineSnapshot();
+      classicOnlineTimer = window.setInterval(loadClassicOnlineSnapshot, gmOnlinePollMs);
+    } else if (!shouldPoll && classicOnlineTimer != null) {
+      window.clearInterval(classicOnlineTimer);
+      classicOnlineTimer = null;
+    }
+  }
+
+  function setActiveTab(targetId) {
+    if (!targetId) return;
+    const nextPanel = document.getElementById(targetId);
+    if (!nextPanel) return;
+    activeTabId = targetId;
+    tabPanels.forEach((panel) => {
+      panel.classList.toggle('hidden', panel.id !== targetId);
+    });
+    tabButtons.forEach((button) => {
+      const matches = button.getAttribute('data-tab-target') === targetId;
+      button.setAttribute('aria-selected', matches ? 'true' : 'false');
+      button.classList.toggle('bg-gradient-to-r', matches);
+      button.classList.toggle('from-indigo-500', matches);
+      button.classList.toggle('via-purple-500', matches);
+      button.classList.toggle('to-blue-500', matches);
+      button.classList.toggle('text-gray-900', matches);
+      button.classList.toggle('text-indigo-100', matches);
+      button.classList.toggle('border-transparent', matches);
+      button.classList.toggle('bg-gray-900/60', !matches);
+      button.classList.toggle('text-indigo-100/70', !matches);
+      button.classList.toggle('border-white/10', !matches);
+    });
+    if (classicOnlineStatus && gmClassicAccessible) {
+      classicOnlineStatus.textContent =
+        targetId === 'gmToolkitSection'
+          ? 'Refreshing…'
+          : 'Open the GM tab to load the roster.';
+    }
+    syncClassicOnlinePolling();
+  }
+
+  function updateGmAccessUI() {
+    const gmAccess = normalizeGmPayload(currentSession?.gmAccess);
+    const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
+    const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
+    const realms = [];
+    if (retailMax > 0) realms.push('retail');
+    if (classicMax > 0) realms.push('classic');
+    const hasGm = realms.length > 0;
+    gmClassicAccessible = classicMax > 0;
+
+    if (gmTabButton) {
+      gmTabButton.classList.toggle('hidden', !hasGm);
+      gmTabButton.setAttribute('aria-hidden', hasGm ? 'false' : 'true');
+    }
+    if (!hasGm && activeTabId === 'gmToolkitSection') {
+      setActiveTab('retailTabPanel');
+    }
+
+    updateGmRealmOptions(realms);
+
+    if (!gmClassicAccessible) {
+      if (classicOnlineUpdated) classicOnlineUpdated.textContent = '—';
+      if (classicOnlineStatus) classicOnlineStatus.textContent = 'Classic GM access required.';
+      setClassicOnlinePlaceholder('Classic GM access required.');
+    } else if (classicOnlineStatus && activeTabId !== 'gmToolkitSection') {
+      classicOnlineStatus.textContent = 'Open the GM tab to load the roster.';
+      setClassicOnlinePlaceholder('Open the GM tab to load the roster.');
+    }
+
+    syncClassicOnlinePolling();
   }
 
   function togglePanel(button, targetId) {
@@ -1132,6 +1525,18 @@ const accountScript = () => {
     const targetId = button.getAttribute('data-collapse-target');
     button.addEventListener('click', () => togglePanel(button, targetId));
   });
+
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.classList.contains('hidden')) return;
+      const targetId = button.getAttribute('data-tab-target');
+      if (targetId) {
+        setActiveTab(targetId);
+      }
+    });
+  });
+
+  setActiveTab(activeTabId);
 
   function updateBadge(el, isLinked, palette) {
     if (!el) return;
@@ -1211,11 +1616,16 @@ const accountScript = () => {
       return;
     }
     const data = await res.json().catch(() => ({}));
-    currentSession = data?.session || null;
+    const sessionData = data?.session || null;
+    if (sessionData) {
+      sessionData.gmAccess = normalizeGmPayload(sessionData.gmAccess);
+    }
+    currentSession = sessionData;
     if (emailInput && currentSession?.email) {
       emailInput.value = currentSession.email;
     }
     updateLinkingUI();
+    updateGmAccessUI();
   }
 
   form?.addEventListener('submit', async (event) => {
@@ -1332,6 +1742,57 @@ const accountScript = () => {
       classicLinkMsg.textContent = 'Network error while linking Classic login.';
     } finally {
       setLinkLoading(classicLinkSubmit, false);
+    }
+  });
+
+  gmCommandForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const command = gmCommandInput?.value.trim() || '';
+    const realm = gmRealmSelect?.value || '';
+    const context = gmCommandContext?.value.trim() || '';
+    if (!realm) {
+      if (gmCommandMsg) gmCommandMsg.textContent = 'Select a realm to send the command to.';
+      return;
+    }
+    if (!command) {
+      if (gmCommandMsg) gmCommandMsg.textContent = 'Enter a SOAP command to send.';
+      return;
+    }
+    if (gmCommandMsg) {
+      gmCommandMsg.textContent = `Sending command to ${realmLabel(realm)}…`;
+    }
+    setGmSubmitting(true);
+    try {
+      const res = await fetch(gmCommandEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          command,
+          realm,
+          context: context || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorMessage = data?.error || 'Unable to run command.';
+        if (gmCommandMsg) gmCommandMsg.textContent = 'Error: ' + errorMessage;
+        appendGmLogEntry({ command, realm, context, ok: false, message: errorMessage });
+        return;
+      }
+      const payload = data?.response || data?.result || data?.ret || data;
+      const formatted = formatLogMessage(payload);
+      if (gmCommandMsg) gmCommandMsg.textContent = 'Command executed successfully.';
+      appendGmLogEntry({ command, realm, context, ok: true, message: formatted });
+      if (gmCommandInput) {
+        gmCommandInput.value = '';
+      }
+    } catch (err) {
+      console.error('GM command failed', err);
+      if (gmCommandMsg) gmCommandMsg.textContent = 'Network error while sending command.';
+      appendGmLogEntry({ command, realm, context, ok: false, message: 'Network error. Please try again.' });
+    } finally {
+      setGmSubmitting(false);
     }
   });
 
