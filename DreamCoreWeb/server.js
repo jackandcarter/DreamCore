@@ -999,7 +999,12 @@ ${SHARED_STYLES}
               <div id="retailLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-sm font-semibold text-white">Retail login linked</p>
                 <p class="text-sm text-indigo-200/80">Your portal password keeps this login in sync. Head to the roster for characters.</p>
-                <a class="mt-3 inline-flex items-center rounded-2xl border border-indigo-400/50 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400" href="/characters">View characters</a>
+                <div class="mt-3 flex flex-wrap gap-3">
+                  <a class="inline-flex items-center rounded-2xl border border-indigo-400/50 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400" href="/characters">View characters</a>
+                  ${CONFIG.GUIDE_URL
+                    ? `<a id="retailGuideButton" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400" href="${CONFIG.GUIDE_URL}" target="_blank" rel="noopener">Open retail install guide</a>`
+                    : ''}
+                </div>
               </div>
               <form id="retailLinkForm" class="space-y-4">
                 <p class="text-sm text-indigo-200/80">Need an in-game login? Enter a password and we'll mint your ${CONFIG.BRAND_NAME} credentials instantly.</p>
@@ -1031,7 +1036,10 @@ ${SHARED_STYLES}
               <div id="classicLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-sm font-semibold text-white">Classic login linked</p>
                 <p class="text-sm text-rose-100/80">Manage characters and resets from the roster dashboard. Portal password updates keep this login synced.</p>
-                <a class="mt-3 inline-flex items-center rounded-2xl border border-rose-400/50 px-4 py-2 text-sm font-semibold text-rose-50 hover:text-white hover:border-rose-200 hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300" href="/characters">Open roster</a>
+                <div class="mt-3 flex flex-wrap gap-3">
+                  <a class="inline-flex items-center rounded-2xl border border-rose-400/50 px-4 py-2 text-sm font-semibold text-rose-50 hover:text-white hover:border-rose-200 hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300" href="/characters">Open roster</a>
+                  <a id="classicDownloadButton" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400" href="${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}" target="_blank" rel="noopener">Download Classic client</a>
+                </div>
               </div>
               <form id="classicLinkForm" class="space-y-4">
                 <p class="text-sm text-rose-100/85">Pick a username and password to mint DreamCore Classic credentials. We'll link them straight to this portal.</p>
@@ -1081,12 +1089,14 @@ const accountScript = () => {
   const retailLinkMsg = document.getElementById('retailLinkMsg');
   const retailLinkSubmit = document.getElementById('retailLinkSubmit');
   const retailLinkedSummary = document.getElementById('retailLinkedSummary');
+  const retailGuideButton = document.getElementById('retailGuideButton');
   const classicLinkForm = document.getElementById('classicLinkForm');
   const classicLinkUsername = document.getElementById('classicLinkUsername');
   const classicLinkPassword = document.getElementById('classicLinkPassword');
   const classicLinkMsg = document.getElementById('classicLinkMsg');
   const classicLinkSubmit = document.getElementById('classicLinkSubmit');
   const classicLinkedSummary = document.getElementById('classicLinkedSummary');
+  const classicDownloadButton = document.getElementById('classicDownloadButton');
 
   let currentSession = null;
 
@@ -1172,11 +1182,17 @@ const accountScript = () => {
     if (retailLinkedSummary) {
       retailLinkedSummary.classList.toggle('hidden', !hasRetail);
     }
+    if (retailGuideButton) {
+      retailGuideButton.classList.toggle('hidden', !hasRetail);
+    }
     if (classicLinkForm) {
       classicLinkForm.classList.toggle('hidden', hasClassic);
     }
     if (classicLinkedSummary) {
       classicLinkedSummary.classList.toggle('hidden', !hasClassic);
+    }
+    if (classicDownloadButton) {
+      classicDownloadButton.classList.toggle('hidden', !hasClassic);
     }
 
     if (classicLinkUsername && !classicLinkUsername.value.trim() && currentSession) {
@@ -1581,6 +1597,7 @@ ${SHARED_STYLES}
             <p class="mt-3 text-[15px] text-indigo-100/90">Welcome back, <span id="sessionEmail" class="font-semibold text-indigo-200">loading…</span>. Here's your latest roster across DreamCore realms.</p>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-2.5 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/account">← Back to portal</a>
             <a class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-2.5 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/reset-password">Reset password</a>
             <button id="logoutBtn" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
           </div>
@@ -2789,12 +2806,46 @@ async function loadClassicCharacters(classicAccountIds) {
   const accountMetadata = await fetchClassicAccountMetadata(uniqueIds);
   const characters = [];
   const realmMetaMap = new Map();
+  const realmDirectory = await ensureRealmDirectory();
+  const realmLookupById = new Map();
+  const realmLookupByCharDb = new Map();
+  if (Array.isArray(realmDirectory)) {
+    for (const realm of realmDirectory) {
+      const id = toSafeNumber(realm.id);
+      if (id != null && !realmLookupById.has(id)) {
+        realmLookupById.set(id, realm);
+      }
+      if (realm.charDb) {
+        const normalizedDb = String(realm.charDb).toLowerCase();
+        if (normalizedDb && !realmLookupByCharDb.has(normalizedDb)) {
+          realmLookupByCharDb.set(normalizedDb, realm);
+        }
+      }
+    }
+  }
+
+  function resolveClassicRealm(entry) {
+    if (!entry) return null;
+    const entryRealmId = toSafeNumber(entry?.config?.realmId);
+    if (entryRealmId != null && realmLookupById.has(entryRealmId)) {
+      return realmLookupById.get(entryRealmId);
+    }
+    const label = typeof entry?.config?.charDbLabel === 'string' ? entry.config.charDbLabel : '';
+    if (label) {
+      const normalized = label.toLowerCase();
+      if (realmLookupByCharDb.has(normalized)) {
+        return realmLookupByCharDb.get(normalized);
+      }
+    }
+    return null;
+  }
 
   for (const entry of REALM_POOL_ENTRIES) {
     if (!entry?.pool) continue;
     const tableName = entryCharactersTable(entry);
-    const realmId = toSafeNumber(entry?.config?.realmId);
-    const realmName = entry?.config?.name || 'Realm';
+    const resolvedRealm = resolveClassicRealm(entry);
+    const realmId = toSafeNumber(resolvedRealm?.id ?? entry?.config?.realmId);
+    const realmName = resolvedRealm?.name || entry?.config?.name || 'Realm';
     const placeholders = uniqueIds.map(() => '?').join(', ');
     if (!placeholders) continue;
     const realmKey = `${entry.key}#${realmId ?? 'null'}`;
