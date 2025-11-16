@@ -3318,16 +3318,16 @@ async function linkPortalAccounts({ portalUserId, password, username, gameType }
       password,
       debug: CONFIG.SOAP_DEBUG,
     });
-    const [byUsername, byEmail] = await Promise.all([
-      getAccountByUsername(fallbackUsername),
-      getGameAccountByEmail(portalUser.email),
-    ]);
-    const classicAccountId = byUsername?.id ?? byEmail?.id ?? null;
+    const resolvedClassicAccount = await resolveClassicAccountLink({
+      username: fallbackUsername,
+      email: portalUser.email,
+    });
+    const classicAccountId = resolvedClassicAccount?.accountId ?? null;
     if (classicAccountId == null) {
       throw new Error('Classic account provisioning completed but no ID was returned.');
     }
     classicIds.push(classicAccountId);
-    portalUser.username = portalUser.username || fallbackUsername;
+    portalUser.username = portalUser.username || resolvedClassicAccount?.username || fallbackUsername;
     await linkPortalUserToClassicAccount(portalUser.id, classicAccountId, { linkedAt: Date.now() });
   }
 
@@ -3431,6 +3431,24 @@ async function getAccountByUsername(username) {
       return null;
     }
     throw err;
+  }
+  return null;
+}
+
+async function resolveClassicAccountLink({ username, email }) {
+  const normalizedUsername = normalizePortalUsername(username);
+  if (normalizedUsername) {
+    const byUsername = await getAccountByUsername(normalizedUsername);
+    if (byUsername?.id != null) {
+      return { accountId: byUsername.id, username: byUsername.username ?? normalizedUsername };
+    }
+  }
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail) {
+    const byEmail = await getGameAccountByEmail(normalizedEmail);
+    if (byEmail?.id != null) {
+      return { accountId: byEmail.id, username: byEmail.username ?? normalizedUsername ?? null };
+    }
   }
   return null;
 }
@@ -4112,14 +4130,19 @@ app.get('/verify', async (req, res) => {
     await pool.execute('DELETE FROM pending WHERE token = ?', [token]);
 
     if (isClassic) {
-      let classicAccountId = ensureResult?.accountId ?? null;
-      if (classicAccountId == null) {
-        const [byEmail, byUsername] = await Promise.all([
-          getGameAccountByEmail(row.email),
-          getAccountByUsername(row.username),
-        ]);
-        classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+      let classicAccount = null;
+      if (ensureResult?.accountId != null) {
+        classicAccount = {
+          accountId: ensureResult.accountId,
+          username: ensureResult.username || row.username,
+        };
+      } else {
+        classicAccount = await resolveClassicAccountLink({
+          username: row.username,
+          email: row.email,
+        });
       }
+      const classicAccountId = classicAccount?.accountId ?? null;
       if (classicAccountId != null) {
         await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
       }
@@ -4315,14 +4338,19 @@ app.get('/classic/verify', async (req, res) => {
 
     await classicPool.execute('DELETE FROM pending_classic WHERE token = ?', [token]);
 
-    let classicAccountId = ensureResult?.accountId ?? null;
-    if (classicAccountId == null) {
-      const [byEmail, byUsername] = await Promise.all([
-        getGameAccountByEmail(row.email),
-        getAccountByUsername(row.username),
-      ]);
-      classicAccountId = byEmail?.id ?? byUsername?.id ?? null;
+    let classicAccount = null;
+    if (ensureResult?.accountId != null) {
+      classicAccount = {
+        accountId: ensureResult.accountId,
+        username: ensureResult.username || row.username,
+      };
+    } else {
+      classicAccount = await resolveClassicAccountLink({
+        username: row.username,
+        email: row.email,
+      });
     }
+    const classicAccountId = classicAccount?.accountId ?? null;
     if (classicAccountId != null) {
       await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
     }
