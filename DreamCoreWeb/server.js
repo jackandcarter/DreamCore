@@ -197,7 +197,10 @@ const SHARED_STYLES = `
 `;
 
 // ----- DB (MariaDB for pending verifications) -----
-const DEFAULT_DB_PASS = process.env.CHAR_DB_PASS || '';
+// All TrinityCore-related databases (auth + characters) share the same default
+// credentials in our local MariaDB installs. Default to "trinity" unless the
+// environment overrides it.
+const DEFAULT_DB_PASS = process.env.CHAR_DB_PASS || 'trinity';
 
 const DB = {
   HOST: process.env.DB_HOST || '127.0.0.1',
