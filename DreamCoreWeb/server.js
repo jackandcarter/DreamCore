@@ -355,7 +355,16 @@ const classicCharPool =
 
 const REALM_DB_CONFIGS = loadRealmDbConfigs();
 const REALM_POOL_ENTRIES = buildRealmPoolEntries(REALM_DB_CONFIGS);
-const REALM_LOOKUP = createRealmLookup(REALM_POOL_ENTRIES);
+const REALM_FAMILY_MAP = {
+  retail: REALM_POOL_ENTRIES.filter((entry) => entry?.config?.family !== 'classic'),
+  classic: REALM_POOL_ENTRIES.filter((entry) => entry?.config?.family === 'classic'),
+};
+const REALM_LOOKUP = createRealmLookup(
+  REALM_FAMILY_MAP.retail.length ? REALM_FAMILY_MAP.retail : REALM_POOL_ENTRIES
+);
+const CLASSIC_REALM_LOOKUP = createRealmLookup(
+  REALM_FAMILY_MAP.classic.length ? REALM_FAMILY_MAP.classic : REALM_POOL_ENTRIES
+);
 
 // Ensure table exists (and de-dupe by email)
 await pool.query(`
@@ -2835,13 +2844,34 @@ function parseBooleanFlag(value, fallback = false) {
   return Boolean(value);
 }
 
+function determineRealmFamily(value) {
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (['classic', 'wotlk', '335', '3.3.5'].includes(text)) {
+    return 'classic';
+  }
+  return 'retail';
+}
+
+function isSameDbConfig(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.HOST === b.HOST &&
+    a.PORT === b.PORT &&
+    a.USER === b.USER &&
+    a.PASS === b.PASS &&
+    a.NAME === b.NAME
+  );
+}
+
 function loadRealmDbConfigs() {
-  const fallbackName = process.env.DEFAULT_REALM_NAME || `${CONFIG.BRAND_NAME || 'DreamCore'} Realm`;
-  const fallback = [
+  const fallbackRetailName = process.env.DEFAULT_REALM_NAME || `${CONFIG.BRAND_NAME || 'DreamCore'} Realm`;
+  const fallbackClassicName =
+    process.env.CLASSIC_REALM_NAME || `${CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic'} Realm`;
+  const fallbackEntries = [
     {
-      key: 'default',
+      key: 'retail-default',
       realmId: null,
-      name: fallbackName,
+      name: fallbackRetailName,
       host: CHAR_DB.HOST,
       port: CHAR_DB.PORT,
       user: CHAR_DB.USER,
@@ -2850,16 +2880,39 @@ function loadRealmDbConfigs() {
       charactersTable: 'characters',
       charDbLabel: CHAR_DB.NAME,
       useDefaultPool: true,
+      family: 'retail',
     },
   ];
+  const classicDiffers = !isSameDbConfig(CHAR_DB, CLASSIC_CHAR_DB);
+  if (classicDiffers) {
+    fallbackEntries.push({
+      key: 'classic-default',
+      realmId: null,
+      name: fallbackClassicName,
+      host: CLASSIC_CHAR_DB.HOST,
+      port: CLASSIC_CHAR_DB.PORT,
+      user: CLASSIC_CHAR_DB.USER,
+      password: CLASSIC_CHAR_DB.PASS,
+      database: CLASSIC_CHAR_DB.NAME,
+      charactersTable: 'characters',
+      charDbLabel: CLASSIC_CHAR_DB.NAME,
+      useDefaultPool:
+        CLASSIC_CHAR_DB.HOST === CHAR_DB.HOST &&
+        CLASSIC_CHAR_DB.PORT === CHAR_DB.PORT &&
+        CLASSIC_CHAR_DB.USER === CHAR_DB.USER &&
+        CLASSIC_CHAR_DB.PASS === CHAR_DB.PASS &&
+        CLASSIC_CHAR_DB.NAME === CHAR_DB.NAME,
+      family: 'classic',
+    });
+  }
   const raw = process.env.REALM_DATABASES;
-  if (!raw) return fallback;
+  if (!raw) return fallbackEntries;
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || !parsed.length) {
-      return fallback;
+      return fallbackEntries;
     }
-    return parsed.map((item, idx) => {
+    const normalized = parsed.map((item, idx) => {
       const useDefaultPool = parseBooleanFlag(
         item.useDefaultPool ??
           item.use_default_pool ??
@@ -2869,10 +2922,13 @@ function loadRealmDbConfigs() {
           item.use_shared_pool,
         false
       );
+      const family = determineRealmFamily(
+        item.family ?? item.gameType ?? item.realmType ?? item.branch ?? null
+      );
       const cfg = {
         key: String(item.key || item.name || item.realmId || idx),
         realmId: item.realmId ?? item.realmID ?? null,
-        name: item.name || fallbackName,
+        name: item.name || (family === 'classic' ? fallbackClassicName : fallbackRetailName),
         host: item.host || CHAR_DB.HOST,
         port: Number(item.port || CHAR_DB.PORT),
         user: item.user || item.username || CHAR_DB.USER,
@@ -2881,6 +2937,7 @@ function loadRealmDbConfigs() {
         charactersTable: item.charactersTable || item.table || 'characters',
         charDbLabel: item.charDb || item.char_db || null,
         useDefaultPool,
+        family,
       };
       if (!Number.isFinite(cfg.port) || cfg.port <= 0) cfg.port = CHAR_DB.PORT;
       if (cfg.charDbLabel == null || cfg.charDbLabel === '') {
@@ -2888,15 +2945,24 @@ function loadRealmDbConfigs() {
       }
       return cfg;
     });
+    const seenFamilies = new Set(normalized.map((cfg) => cfg.family));
+    for (const fallback of fallbackEntries) {
+      if (!seenFamilies.has(fallback.family)) {
+        normalized.push(fallback);
+        seenFamilies.add(fallback.family);
+      }
+    }
+    return normalized;
   } catch (err) {
     console.warn('Failed to parse REALM_DATABASES', err?.message || err);
-    return fallback;
+    return fallbackEntries;
   }
 }
 
 function buildRealmPoolEntries(configs) {
   return configs.map((cfg, idx) => {
     const key = cfg.key || `realm-${idx}`;
+    const family = cfg.family === 'classic' ? 'classic' : 'retail';
     const reuseDefault =
       cfg.useDefaultPool === true ||
       (idx === 0 &&
@@ -2924,6 +2990,7 @@ function buildRealmPoolEntries(configs) {
       config: {
         ...cfg,
         key,
+        family,
         charactersTable: String(cfg.charactersTable || 'characters'),
         charDbLabel: normalizedCharDb,
       },
@@ -2950,17 +3017,25 @@ function createRealmLookup(entries) {
   return lookup;
 }
 
-function resolveRealmEntry({ realmId, realmCharDb }) {
+function getRealmEntriesForFamily(family) {
+  if (family === 'classic') {
+    return REALM_FAMILY_MAP.classic.length ? REALM_FAMILY_MAP.classic : REALM_POOL_ENTRIES;
+  }
+  return REALM_FAMILY_MAP.retail.length ? REALM_FAMILY_MAP.retail : REALM_POOL_ENTRIES;
+}
+
+function resolveRealmEntry({ realmId, realmCharDb }, lookup = REALM_LOOKUP) {
+  const activeLookup = lookup || REALM_LOOKUP;
   const numericRealmId = toSafeNumber(realmId);
-  if (numericRealmId != null && REALM_LOOKUP.byId?.has(numericRealmId)) {
-    return REALM_LOOKUP.byId.get(numericRealmId);
+  if (numericRealmId != null && activeLookup.byId?.has(numericRealmId)) {
+    return activeLookup.byId.get(numericRealmId);
   }
   if (realmCharDb) {
     const key = String(realmCharDb).toLowerCase();
-    const byCharDb = REALM_LOOKUP.byCharDb?.get(key);
+    const byCharDb = activeLookup.byCharDb?.get(key);
     if (byCharDb) return byCharDb;
   }
-  return REALM_LOOKUP.default || null;
+  return activeLookup.default || null;
 }
 
 function toSafeNumber(value) {
@@ -3012,6 +3087,32 @@ async function ensureRealmDirectory() {
     }
   }
   return REALM_DIRECTORY_CACHE;
+}
+
+let CLASSIC_REALM_DIRECTORY_CACHE = null;
+
+async function ensureClassicRealmDirectory() {
+  if (CLASSIC_REALM_DIRECTORY_CACHE) return CLASSIC_REALM_DIRECTORY_CACHE;
+  if (!classicAuthPool) {
+    CLASSIC_REALM_DIRECTORY_CACHE = [];
+    return CLASSIC_REALM_DIRECTORY_CACHE;
+  }
+  try {
+    const [rows] = await classicAuthPool.query('SELECT id, name, char_db FROM `realmlist`');
+    CLASSIC_REALM_DIRECTORY_CACHE = rows.map((row) => ({
+      id: toSafeNumber(row.id),
+      name: row.name || null,
+      charDb: row.char_db || row.charDb || null,
+    }));
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      CLASSIC_REALM_DIRECTORY_CACHE = [];
+    } else {
+      console.error('Failed to load classic realm directory', err);
+      CLASSIC_REALM_DIRECTORY_CACHE = [];
+    }
+  }
+  return CLASSIC_REALM_DIRECTORY_CACHE;
 }
 
 async function fetchGameAccountsForBnet(bnetAccountId) {
@@ -3142,7 +3243,7 @@ async function loadBattleNetCharacters(bnetAccountIds) {
   for (const bnetAccountId of normalizedIds) {
     const gameAccounts = await fetchGameAccountsForBnet(bnetAccountId);
     for (const account of gameAccounts) {
-      const realmEntry = resolveRealmEntry(account);
+      const realmEntry = resolveRealmEntry(account, REALM_LOOKUP);
       if (!realmEntry) continue;
       const realmId = toSafeNumber(account.realmId);
       const realmName = account.realmName || realmEntry.config.name || 'Realm';
@@ -3272,7 +3373,7 @@ async function fetchClassicAccountMetadata(accountIds) {
   }
   const placeholders = accountIds.map(() => '?').join(', ');
   try {
-    const [rows] = await authPool.query(
+    const [rows] = await classicAuthPool.query(
       `SELECT id, username FROM \`account\` WHERE id IN (${placeholders})`,
       accountIds
     );
@@ -3302,7 +3403,7 @@ async function loadClassicCharacters(classicAccountIds) {
   const accountMetadata = await fetchClassicAccountMetadata(uniqueIds);
   const characters = [];
   const realmMetaMap = new Map();
-  const realmDirectory = await ensureRealmDirectory();
+  const realmDirectory = await ensureClassicRealmDirectory();
   const realmLookupById = new Map();
   const realmLookupByCharDb = new Map();
   if (Array.isArray(realmDirectory)) {
@@ -3320,6 +3421,10 @@ async function loadClassicCharacters(classicAccountIds) {
     }
   }
 
+  const fallbackRealmName = CONFIG.CLASSIC_BRAND_NAME
+    ? `${CONFIG.CLASSIC_BRAND_NAME} Realm`
+    : `${CONFIG.BRAND_NAME || 'DreamCore'} Realm`;
+
   function resolveClassicRealm(entry) {
     if (!entry) return null;
     const entryRealmId = toSafeNumber(entry?.config?.realmId);
@@ -3333,10 +3438,26 @@ async function loadClassicCharacters(classicAccountIds) {
         return realmLookupByCharDb.get(normalized);
       }
     }
+    const fallbackEntry = resolveRealmEntry({ realmId: entryRealmId, realmCharDb: label }, CLASSIC_REALM_LOOKUP);
+    if (fallbackEntry?.config) {
+      return {
+        id: toSafeNumber(fallbackEntry.config.realmId),
+        name: fallbackEntry.config.name || fallbackRealmName,
+        charDb: fallbackEntry.config.charDbLabel || null,
+      };
+    }
+    if (entry?.config) {
+      return {
+        id: entryRealmId,
+        name: entry.config.name || fallbackRealmName,
+        charDb: label || null,
+      };
+    }
     return null;
   }
 
-  for (const entry of REALM_POOL_ENTRIES) {
+  const classicEntries = getRealmEntriesForFamily('classic');
+  for (const entry of classicEntries) {
     if (!entry?.pool) continue;
     const tableName = entryCharactersTable(entry);
     const resolvedRealm = resolveClassicRealm(entry);
