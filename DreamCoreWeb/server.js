@@ -134,9 +134,26 @@ const SHARED_STYLES = `
       text-shadow: 0 6px 18px rgba(8, 7, 27, 0.45);
     }
     .gradient-border {
+      position: relative;
       border: 1px solid transparent;
-      border-image: var(--dc-border-gradient) 1;
       box-shadow: 0 20px 45px rgba(8, 7, 27, 0.65), inset 0 0 25px rgba(79, 70, 229, 0.12);
+    }
+    .gradient-border::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: var(--dc-border-gradient);
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
     }
     .gradient-divider {
       border: 0;
@@ -213,10 +230,10 @@ const CLASSIC_AUTH_DB = {
 };
 
 const CHAR_DB = {
-  HOST: process.env.CHAR_DB_HOST || '127.0.0.1',
-  PORT: Number(process.env.CHAR_DB_PORT || 3306),
-  USER: process.env.CHAR_DB_USER || 'trinity',
-  PASS: process.env.CHAR_DB_PASS || 'trinity_password',
+  HOST: process.env.CHAR_DB_HOST || AUTH_DB.HOST || '127.0.0.1',
+  PORT: Number(process.env.CHAR_DB_PORT || AUTH_DB.PORT || 3306),
+  USER: process.env.CHAR_DB_USER || AUTH_DB.USER || 'trinity',
+  PASS: process.env.CHAR_DB_PASS || AUTH_DB.PASS || 'trinity_password',
   NAME: process.env.CHAR_DB_NAME || 'characters',
 };
 
@@ -875,7 +892,10 @@ const ACCOUNT_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
