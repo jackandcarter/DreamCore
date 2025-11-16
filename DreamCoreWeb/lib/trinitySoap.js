@@ -57,6 +57,25 @@ function sanitizeSoapArg(value, { label } = {}) {
   return raw;
 }
 
+const MAX_SOAP_COMMAND_LENGTH = 2048;
+
+export function sanitizeSoapCommand(command) {
+  const text = typeof command === 'string' ? command.trim() : '';
+  if (!text) {
+    throw new Error('SOAP command is required');
+  }
+  if (text.length > MAX_SOAP_COMMAND_LENGTH) {
+    throw new Error('SOAP command is too long');
+  }
+  if (/[<>]/.test(text)) {
+    throw new Error('SOAP command cannot contain angle brackets');
+  }
+  if (/[\u0000-\u001f]/.test(text)) {
+    throw new Error('SOAP command contains invalid control characters');
+  }
+  return text;
+}
+
 function q(value) {
   if (value == null) {
     throw new Error("Missing value");
@@ -261,6 +280,13 @@ export async function retailPasswordReset({ soap, email, newPassword }) {
 }
 
 export async function executeRetailCommand({ soap, command }) {
-  if (!soap || !command) throw new Error("Missing soap/command");
-  return callSoap(soap, command);
+  if (!soap) throw new Error("Missing soap");
+  const safeCommand = sanitizeSoapCommand(command);
+  return callSoap(soap, safeCommand);
+}
+
+export async function executeClassicCommand({ soap, command }) {
+  if (!soap) throw new Error("Missing soap");
+  const safeCommand = sanitizeSoapCommand(command);
+  return callSoap(soap, safeCommand);
 }
