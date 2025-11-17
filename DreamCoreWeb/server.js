@@ -684,7 +684,10 @@ const HOME_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.35), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
