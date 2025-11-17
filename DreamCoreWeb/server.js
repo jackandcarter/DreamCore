@@ -1679,7 +1679,8 @@ const accountScript = () => {
       const account = entry?.accountName || entry?.account || entry?.username || null;
       const accountId = entry?.accountId ?? entry?.account_id;
       const zone = entry?.zone || entry?.zoneName || entry?.map || entry?.area || '';
-      const gmLevel = entry?.gmLevel ?? entry?.gmlevel;
+      const gmLevel =
+        entry?.gmLevel ?? entry?.gmlevel ?? entry?.GMLevel ?? entry?.securitylevel ?? entry?.SecurityLevel;
       const parts = [];
       if (account) parts.push(account);
       if (accountId != null) parts.push(`#${accountId}`);
@@ -2091,11 +2092,25 @@ const accountScript = () => {
         ? charactersPayload.gmAccounts || {}
         : {};
     const gmRetailFromRoster = Object.values(gmAccountFlags?.retail || {}).some((entry) => {
-      const level = Number(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel) || 0;
+      const level =
+        Number(
+          entry?.gmlevel ??
+            entry?.gmLevel ??
+            entry?.GMLevel ??
+            entry?.securitylevel ??
+            entry?.SecurityLevel
+        ) || 0;
       return level > 0;
     });
     const gmClassicFromRoster = Object.values(gmAccountFlags?.classic || {}).some((entry) => {
-      const level = Number(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel) || 0;
+      const level =
+        Number(
+          entry?.gmlevel ??
+            entry?.gmLevel ??
+            entry?.GMLevel ??
+            entry?.securitylevel ??
+            entry?.SecurityLevel
+        ) || 0;
       return level > 0;
     });
     const realms = [];
@@ -4427,11 +4442,8 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
     : columnNames.includes('account_id')
     ? 'account_id'
     : null;
-  const gmCol = columnNames.includes('gmlevel')
-    ? 'gmlevel'
-    : columnNames.includes('gmLevel')
-    ? 'gmLevel'
-    : null;
+  const gmColCandidates = ['gmlevel', 'gmLevel', 'GMLevel', 'securitylevel', 'SecurityLevel'];
+  const gmCol = gmColCandidates.find((name) => columnNames.includes(name)) || null;
   const realmColCandidates = ['RealmID', 'realmId', 'realmID', 'realm_id'];
   const realmCol = realmColCandidates.find((name) => columnNames.includes(name)) || null;
 
@@ -4454,7 +4466,10 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
     const id = toSafeNumber(row?.accountId);
     if (id == null) continue;
     result[id] = {
-      gmlevel: toSafeNumber(row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel) ?? 0,
+      gmlevel:
+        toSafeNumber(
+          row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel ?? row?.securitylevel ?? row?.SecurityLevel
+        ) ?? 0,
       realmId: toSafeNumber(row?.realmId ?? row?.RealmID ?? row?.RealmId) ?? -1,
     };
   }
@@ -4472,7 +4487,9 @@ function hasAnyGmFlags(flags) {
     return false;
   }
   return Object.values(flags).some((entry) => {
-    const gmLevel = toSafeNumber(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel);
+    const gmLevel = toSafeNumber(
+      entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel ?? entry?.securitylevel ?? entry?.SecurityLevel
+    );
     return gmLevel != null && gmLevel > 0;
   });
 }
@@ -4546,7 +4563,9 @@ function buildGmInfoFromRows(rows) {
   const info = createEmptyGmInfo();
   const highestRealmSet = new Set();
   for (const row of rows) {
-    const gmLevel = toSafeNumber(row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel);
+    const gmLevel = toSafeNumber(
+      row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel ?? row?.securitylevel ?? row?.SecurityLevel
+    );
     if (gmLevel == null) continue;
     const entry = {
       accountId: toSafeNumber(row?.id ?? row?.account_id ?? row?.accountId),
@@ -4582,7 +4601,9 @@ async function fetchAccountGmRows(dbPool, accountIds, { realm = 'retail' } = {})
   const placeholders = ids.map(() => '?').join(', ');
   const queries = [
     `SELECT AccountID AS id, gmlevel, RealmID FROM account_access WHERE AccountID IN (${placeholders})`,
+    `SELECT AccountID AS id, SecurityLevel AS gmlevel, RealmID FROM account_access WHERE AccountID IN (${placeholders})`,
     `SELECT id, gmlevel, RealmID FROM account_access WHERE id IN (${placeholders})`,
+    `SELECT id, SecurityLevel AS gmlevel, RealmID FROM account_access WHERE id IN (${placeholders})`,
   ];
   let lastError = null;
   for (const sql of queries) {
@@ -5812,11 +5833,7 @@ app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }
     if (accountIds.length) {
       const placeholders = accountIds.map(() => '?').join(',');
       const [accounts] = await classicAuthPool.execute(
-        `SELECT a.id, a.username, COALESCE(MAX(aa.gmlevel), 0) AS gmlevel
-           FROM account a
-           LEFT JOIN account_access aa ON aa.id = a.id
-          WHERE a.id IN (${placeholders})
-          GROUP BY a.id`,
+        `SELECT id, username FROM account WHERE id IN (${placeholders})`,
         accountIds
       );
       for (const row of accounts) {
@@ -5824,7 +5841,21 @@ app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }
         if (id == null) continue;
         accountMeta.set(id, {
           accountName: row.username || null,
-          gmLevel: toSafeNumber(row.gmlevel) ?? null,
+          gmLevel: null,
+        });
+      }
+      const gmFlags = await loadGmFlagsForAccounts({ type: 'classic', accountIds });
+      for (const [rawId, info] of Object.entries(gmFlags || {})) {
+        const id = toSafeNumber(rawId);
+        if (id == null) continue;
+        const gmLevel =
+          toSafeNumber(
+            info?.gmlevel ?? info?.gmLevel ?? info?.GMLevel ?? info?.securitylevel ?? info?.SecurityLevel
+          ) ?? 0;
+        const existing = accountMeta.get(id) || {};
+        accountMeta.set(id, {
+          ...existing,
+          gmLevel,
         });
       }
     }
