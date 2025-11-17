@@ -25,6 +25,10 @@
  *  Optional: systemd unit example is printed on startup.
  */
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
@@ -42,6 +46,20 @@ import {
   retailPasswordReset,
   sanitizeSoapCommand,
 } from './lib/trinitySoap.js';
+
+// Ensure local env files are loaded before computing CONFIG defaults. Allows running
+// the app via `node server.js` without a systemd EnvironmentFile.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ENV_FILES = [
+  path.join(__dirname, '.env'),
+  path.join(__dirname, 'tc-register.env'),
+];
+
+for (const envPath of ENV_FILES) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: false });
+  }
+}
 
 // ----- CONFIG (read from env or inline defaults for dev) -----
 const CONFIG = {
