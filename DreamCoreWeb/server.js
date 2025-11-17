@@ -216,6 +216,28 @@ const SHARED_STYLES = `
       color: #f8fafc;
       background-color: #0f172a;
     }
+    .corner-logo {
+      position: fixed;
+      top: clamp(1rem, 3vw, 2rem);
+      left: clamp(1rem, 3vw, 2rem);
+      z-index: 60;
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      box-shadow: 0 18px 45px rgba(2, 6, 23, 0.65);
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+    @media (max-width: 480px) {
+      .corner-logo {
+        padding: 0.25rem 0.75rem;
+        letter-spacing: 0.22em;
+      }
+    }
+    .corner-logo-offset {
+      padding-top: clamp(5.5rem, 11vw, 7.5rem);
+    }
 `;
 
 // ----- DB (MariaDB for pending verifications) -----
@@ -701,8 +723,8 @@ const HOME_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -860,7 +882,10 @@ const LOGIN_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
@@ -881,8 +906,8 @@ const LOGIN_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -1046,9 +1071,9 @@ const ACCOUNT_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
-  <div class="w-full max-w-5xl relative z-10">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
+  <div class="w-full max-w-6xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
         <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
@@ -1072,53 +1097,34 @@ ${SHARED_STYLES}
               <span id="retailStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Retail · pending</span>
               <span id="classicStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-100">Classic · pending</span>
             </div>
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <a class="inline-flex flex-1 items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-5 py-3 text-[15px] font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg shadow-indigo-900/40" href="/characters">Open roster</a>
-              <button id="accountLogout" class="inline-flex flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
-            </div>
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button id="accountLogout" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
+          </div>
           </div>
         </div>
 
         <div class="mt-8 space-y-6">
-          <section class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Portal security</p>
-                <h2 class="text-2xl font-semibold text-white">Update your portal password</h2>
-                <p class="text-[15px] text-indigo-100/85">This password unlocks the dashboard and syncs to any linked game accounts.</p>
-              </div>
-              <span class="rounded-full gradient-border px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Step 1</span>
-            </div>
-            <form id="accountForm" class="mt-6 space-y-5">
-              <div>
-                <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountEmail">Email</label>
-                <input id="accountEmail" type="email" name="email" readonly
-                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold opacity-80 cursor-not-allowed"
-                       value="" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountPassword">New password</label>
-                <input id="accountPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
-                       class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                       placeholder="••••••••" />
-                <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
-              </div>
-              <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Save portal password</button>
-            </form>
-            <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
-          </section>
-
           <section class="rounded-3xl gradient-border bg-gray-900/70 p-3 shadow-inner shadow-indigo-900/30">
             <div class="flex flex-wrap gap-2" role="tablist" aria-label="Account sections">
-              <button type="button" role="tab" aria-selected="true" aria-controls="retailTabPanel"
-                      data-tab-target="retailTabPanel"
+              <button type="button" role="tab" aria-selected="true" aria-controls="accountTabPanel"
+                      data-tab-target="accountTabPanel"
                       class="flex-1 min-w-[120px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                Retail
+                Account
               </button>
               <button type="button" role="tab" aria-selected="false" aria-controls="classicTabPanel"
                       data-tab-target="classicTabPanel"
                       class="flex-1 min-w-[120px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
                 Classic
+              </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="retailTabPanel"
+                      data-tab-target="retailTabPanel"
+                      class="flex-1 min-w-[120px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                Retail
+              </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="charactersTabPanel"
+                      data-tab-target="charactersTabPanel"
+                      class="flex-1 min-w-[140px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                Characters
               </button>
               <button id="gmTabButton" type="button" role="tab" aria-selected="false" aria-controls="gmToolkitSection"
                       data-tab-target="gmToolkitSection"
@@ -1128,61 +1134,64 @@ ${SHARED_STYLES}
             </div>
           </section>
 
-          <section id="retailTabPanel" data-tab-panel class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
-            <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="retailPanel" aria-expanded="true">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
-                <h2 class="text-2xl font-semibold text-white">Retail account</h2>
-                <p class="text-sm text-indigo-200/80">Link a Battle.net-style login so your roster can sync instantly.</p>
-              </div>
-              <div class="flex items-center gap-4">
-                <span id="retailStatusText" class="text-sm font-semibold text-indigo-200">Pending</span>
-                <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-indigo-400/50 text-indigo-200" data-collapse-icon>▾</span>
-              </div>
-            </button>
-            <div id="retailPanel" class="mt-6 space-y-5">
-              <div id="retailLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
-                <p class="text-sm font-semibold text-white">Retail login linked</p>
-                <p class="text-sm text-indigo-200/80">Your portal password keeps this login in sync. Head to the roster for characters.</p>
-                <div class="mt-3 flex flex-wrap gap-3">
-                  <a class="inline-flex items-center rounded-2xl border border-indigo-400/50 px-4 py-2 text-sm font-semibold text-indigo-100 hover:text-white hover:border-indigo-300 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400" href="/characters">View characters</a>
-                  ${CONFIG.GUIDE_URL
-                    ? `<a id="retailGuideButton" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400" href="${CONFIG.GUIDE_URL}" target="_blank" rel="noopener">Open retail install guide</a>`
-                    : ''}
-                </div>
-              </div>
-              <form id="retailLinkForm" class="space-y-4">
-                <p class="text-sm text-indigo-200/80">Need an in-game login? Enter a password and we'll mint your ${CONFIG.BRAND_NAME} credentials instantly.</p>
+          <section id="accountTabPanel" data-tab-panel class="rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="grid gap-4 lg:grid-cols-2">
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-5">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Retail login</p>
+                <p id="accountRetailLogin" class="mt-3 text-xl font-semibold text-white break-words">—</p>
+                <p id="accountRetailStatus" class="mt-1 text-sm text-indigo-200/80">Link required</p>
+                <p class="mt-3 text-xs text-indigo-200/70">Use this email when signing in to ${CONFIG.BRAND_NAME}.</p>
+              </article>
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-5">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">Classic login</p>
+                <p id="accountClassicLogin" class="mt-3 text-xl font-semibold text-white break-words">Pick a username</p>
+                <p id="accountClassicStatus" class="mt-1 text-sm text-rose-100/80">Link required</p>
+                <p class="mt-3 text-xs text-rose-100/70">Classic accounts use usernames instead of emails.</p>
+              </article>
+            </div>
+            <div class="mt-8 rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
-                  <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Choose a secure password" />
+                  <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Portal security</p>
+                  <h2 class="text-2xl font-semibold text-white">Update your portal password</h2>
+                  <p class="text-[15px] text-indigo-100/85">This password unlocks the dashboard and syncs to every linked game account.</p>
                 </div>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p id="retailLinkMsg" class="text-sm text-indigo-200/90"></p>
-                  <button id="retailLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Create retail login</button>
+                <span class="rounded-full gradient-border px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Universal</span>
+              </div>
+              <form id="accountForm" class="mt-6 space-y-5">
+                <div>
+                  <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountEmail">Email</label>
+                  <input id="accountEmail" type="email" name="email" readonly
+                         class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold opacity-80 cursor-not-allowed"
+                         value="" />
                 </div>
+                <div>
+                  <label class="block text-sm font-medium text-indigo-200 mb-1" for="accountPassword">New password</label>
+                  <input id="accountPassword" type="password" name="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" title="No spaces or quotes"
+                         class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                         placeholder="••••••••" />
+                  <p class="text-xs text-indigo-200/70 mt-2">${CONFIG.MIN_PASS}+ characters. No spaces or quotes.</p>
+                </div>
+                <button id="resetSubmit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400 active:scale-[0.99] transition font-semibold text-[15px] shadow-lg shadow-indigo-900/50" type="submit">Save password for portal & games</button>
               </form>
+              <pre id="accountMsg" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition"></pre>
             </div>
           </section>
 
           <section id="classicTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-rose-900/30">
-            <button type="button" class="flex w-full items-center justify-between text-left" data-collapse-target="classicPanel" aria-expanded="false">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">DreamCore Classic</p>
                 <h2 class="text-2xl font-semibold text-white">Classic account</h2>
-                <p class="text-sm text-rose-100/80">Provision Wrath credentials that stay linked to your portal profile.</p>
+                <p class="text-sm text-rose-100/80">Create Wrath credentials or refresh your password from right here.</p>
               </div>
-              <div class="flex items-center gap-4">
-                <span id="classicStatusText" class="text-sm font-semibold text-rose-100">Pending</span>
-                <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-400/50 text-rose-100" data-collapse-icon>▸</span>
-              </div>
-            </button>
-            <div id="classicPanel" class="mt-6 space-y-5 hidden">
+              <span id="classicStatusText" class="text-sm font-semibold text-rose-100">Pending</span>
+            </div>
+            <div class="mt-6 space-y-5">
               <div id="classicLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-sm font-semibold text-white">Classic login linked</p>
-                <p class="text-sm text-rose-100/80">Manage characters and resets from the roster dashboard. Portal password updates keep this login synced.</p>
+                <p class="text-sm text-rose-100/80">Use your Classic username with the latest password you set inside this portal.</p>
                 <div class="mt-3 flex flex-wrap gap-3">
-                  <a class="inline-flex items-center rounded-2xl border border-rose-400/50 px-4 py-2 text-sm font-semibold text-rose-50 hover:text-white hover:border-rose-200 hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300" href="/characters">Open roster</a>
                   <a id="classicDownloadButton" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400" href="${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}" target="_blank" rel="noopener">Download Classic client</a>
                 </div>
               </div>
@@ -1201,7 +1210,92 @@ ${SHARED_STYLES}
                   <button id="classicLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Create Classic login</button>
                 </div>
               </form>
+              <form id="classicResetForm" class="hidden space-y-4 rounded-2xl gradient-border bg-gray-900/60 p-4">
+                <p class="text-sm text-rose-100/85">Reset your Classic client password. We keep your portal login in sync automatically.</p>
+                <div>
+                  <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicResetPassword">New password</label>
+                  <input id="classicResetPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="••••••••" />
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p id="classicResetMsg" class="text-sm text-rose-100/90"></p>
+                  <button id="classicResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Save new password</button>
+                </div>
+              </form>
             </div>
+          </section>
+
+          <section id="retailTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
+                <h2 class="text-2xl font-semibold text-white">Retail account</h2>
+                <p class="text-sm text-indigo-200/80">Link a Battle.net-style login or refresh your password instantly.</p>
+              </div>
+              <span id="retailStatusText" class="text-sm font-semibold text-indigo-200">Pending</span>
+            </div>
+            <div class="mt-6 space-y-5">
+              <div id="retailLinkedSummary" class="hidden rounded-2xl gradient-border bg-gray-900/60 p-4">
+                <p class="text-sm font-semibold text-white">Retail login linked</p>
+                <p class="text-sm text-indigo-200/80">Use your portal email with the password you choose here to jump into the game.</p>
+                <div class="mt-3 flex flex-wrap gap-3">
+                  ${CONFIG.GUIDE_URL
+                    ? `<a id="retailGuideButton" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-blue-400 hover:via-purple-400 hover:to-indigo-400 focus:ring-2 focus:ring-indigo-400" href="${CONFIG.GUIDE_URL}" target="_blank" rel="noopener">Open retail install guide</a>`
+                    : ''}
+                </div>
+              </div>
+              <form id="retailLinkForm" class="space-y-4">
+                <p class="text-sm text-indigo-200/80">Need an in-game login? Enter a password and we'll mint your ${CONFIG.BRAND_NAME} credentials instantly.</p>
+                <div>
+                  <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailLinkPassword">Account password</label>
+                  <input id="retailLinkPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Choose a secure password" />
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p id="retailLinkMsg" class="text-sm text-indigo-200/90"></p>
+                  <button id="retailLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Create retail login</button>
+                </div>
+              </form>
+              <form id="retailResetForm" class="hidden space-y-4 rounded-2xl gradient-border bg-gray-900/60 p-4">
+                <p class="text-sm text-indigo-200/85">Reset your retail password here. Your portal login and any Classic account stay synced to this new password.</p>
+                <div>
+                  <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailResetPassword">New password</label>
+                  <input id="retailResetPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="••••••••" />
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p id="retailResetMsg" class="text-sm text-indigo-200/90"></p>
+                  <button id="retailResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Save new password</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Roster</p>
+                <h2 class="text-2xl font-semibold text-white">Characters</h2>
+                <p class="text-sm text-indigo-200/80">Use the dropdown to flip between Classic and Retail rosters.</p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <select id="characterFamilySelect" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="retail">Retail characters</option>
+                  <option value="classic">Classic characters</option>
+                </select>
+                <button id="characterRefreshButton" type="button" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
+              </div>
+            </div>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Characters</p>
+                <p id="charactersCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Realms</p>
+                <p id="charactersRealmCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+            </div>
+            <pre id="charactersStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Select a family to load your roster.</pre>
+            <div id="charactersEmptyState" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-indigo-200/80">Link a retail or classic account to view characters.</div>
+            <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
           </section>
 
           <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
@@ -1277,6 +1371,39 @@ ${SHARED_STYLES}
 const accountScript = () => {
   const LIMITS = window.PORTAL_LIMITS || {};
   const MIN_PASS = Number(LIMITS.minPass) || 8;
+  const safeStorage = (() => {
+    try {
+      return window.localStorage;
+    } catch (err) {
+      return null;
+    }
+  })();
+  const STORAGE_KEYS = {
+    tab: 'dreamcore.dashboard.activeTab',
+    family: 'dreamcore.dashboard.characterFamily'
+  };
+
+  function readStoredValue(key) {
+    if (!safeStorage || typeof safeStorage.getItem !== 'function' || typeof key !== 'string') {
+      return null;
+    }
+    try {
+      return safeStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function persistStoredValue(key, value) {
+    if (!safeStorage || typeof safeStorage.setItem !== 'function' || typeof key !== 'string') {
+      return;
+    }
+    try {
+      safeStorage.setItem(key, value);
+    } catch (err) {
+      // ignore storage quota failures
+    }
+  }
   const profileEmail = document.getElementById('profileEmail');
   const profileUsername = document.getElementById('profileUsername');
   const form = document.getElementById('accountForm');
@@ -1285,19 +1412,25 @@ const accountScript = () => {
   const msg = document.getElementById('accountMsg');
   const submit = document.getElementById('resetSubmit');
   const logoutButton = document.getElementById('accountLogout');
-  const collapseButtons = document.querySelectorAll('[data-collapse-target]');
   const retailStatusBadge = document.getElementById('retailStatusBadge');
   const classicStatusBadge = document.getElementById('classicStatusBadge');
   const retailStatusText = document.getElementById('retailStatusText');
   const classicStatusText = document.getElementById('classicStatusText');
-  const retailPanel = document.getElementById('retailPanel');
-  const classicPanel = document.getElementById('classicPanel');
+  const accountRetailLogin = document.getElementById('accountRetailLogin');
+  const accountRetailStatus = document.getElementById('accountRetailStatus');
+  const accountClassicLogin = document.getElementById('accountClassicLogin');
+  const accountClassicStatus = document.getElementById('accountClassicStatus');
   const retailLinkForm = document.getElementById('retailLinkForm');
   const retailLinkPassword = document.getElementById('retailLinkPassword');
   const retailLinkMsg = document.getElementById('retailLinkMsg');
   const retailLinkSubmit = document.getElementById('retailLinkSubmit');
   const retailLinkedSummary = document.getElementById('retailLinkedSummary');
   const retailGuideButton = document.getElementById('retailGuideButton');
+  const retailResetSection = document.getElementById('retailResetForm');
+  const retailResetForm = document.getElementById('retailResetForm');
+  const retailResetPassword = document.getElementById('retailResetPassword');
+  const retailResetMsg = document.getElementById('retailResetMsg');
+  const retailResetSubmit = document.getElementById('retailResetSubmit');
   const classicLinkForm = document.getElementById('classicLinkForm');
   const classicLinkUsername = document.getElementById('classicLinkUsername');
   const classicLinkPassword = document.getElementById('classicLinkPassword');
@@ -1305,6 +1438,11 @@ const accountScript = () => {
   const classicLinkSubmit = document.getElementById('classicLinkSubmit');
   const classicLinkedSummary = document.getElementById('classicLinkedSummary');
   const classicDownloadButton = document.getElementById('classicDownloadButton');
+  const classicResetSection = document.getElementById('classicResetForm');
+  const classicResetForm = document.getElementById('classicResetForm');
+  const classicResetPassword = document.getElementById('classicResetPassword');
+  const classicResetMsg = document.getElementById('classicResetMsg');
+  const classicResetSubmit = document.getElementById('classicResetSubmit');
   const tabButtons = document.querySelectorAll('[data-tab-target]');
   const tabPanels = document.querySelectorAll('[data-tab-panel]');
   const gmTabButton = document.getElementById('gmTabButton');
@@ -1319,6 +1457,13 @@ const accountScript = () => {
   const classicOnlineList = document.getElementById('classicOnlineList');
   const classicOnlineStatus = document.getElementById('classicOnlineStatus');
   const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
+  const charactersCount = document.getElementById('charactersCount');
+  const charactersRealmCount = document.getElementById('charactersRealmCount');
+  const characterStatus = document.getElementById('charactersStatus');
+  const characterGrid = document.getElementById('characterCardGrid');
+  const charactersEmptyState = document.getElementById('charactersEmptyState');
+  const characterFamilySelect = document.getElementById('characterFamilySelect');
+  const characterRefreshButton = document.getElementById('characterRefreshButton');
 
   const gmClassicOnlineEndpoint = LIMITS.gmClassicOnlineEndpoint || '/api/gm/online/classic';
   const gmCommandEndpoint = LIMITS.gmCommandEndpoint || '/api/gm/command';
@@ -1326,9 +1471,26 @@ const accountScript = () => {
   const gmClassicOnlineLimit = Math.max(Number(LIMITS.gmClassicOnlineLimit) || 12, 1);
 
   let currentSession = null;
-  let activeTabId = 'retailTabPanel';
+  let activeTabId = 'accountTabPanel';
   let gmClassicAccessible = false;
   let classicOnlineTimer = null;
+  let charactersPayload = null;
+  let charactersLoaded = false;
+  let charactersLoading = false;
+  let selectedFamilyKey = 'retail';
+
+  const storedTabId = readStoredValue(STORAGE_KEYS.tab);
+  if (storedTabId && document.getElementById(storedTabId)) {
+    activeTabId = storedTabId;
+  }
+  const storedFamily = readStoredValue(STORAGE_KEYS.family);
+  if (storedFamily && (storedFamily === 'retail' || storedFamily === 'classic')) {
+    selectedFamilyKey = storedFamily;
+  }
+
+  if (characterFamilySelect) {
+    characterFamilySelect.value = selectedFamilyKey;
+  }
 
   function setLoading(state) {
     if (!submit) return;
@@ -1340,6 +1502,48 @@ const accountScript = () => {
     if (!button) return;
     button.disabled = state;
     button.classList.toggle('opacity-60', state);
+  }
+
+  function attachClientResetHandler({ form, input, msgEl, submitButton }) {
+    if (!form || !input || !msgEl) return;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const newPassword = input.value || '';
+      if (!newPassword) {
+        msgEl.textContent = 'Enter a new password to continue.';
+        return;
+      }
+      if (/\s/.test(newPassword) || /['"]/.test(newPassword)) {
+        msgEl.textContent = 'Password cannot contain spaces or quotes.';
+        return;
+      }
+      if (newPassword.length < MIN_PASS) {
+        msgEl.textContent = `Password must be at least ${MIN_PASS} characters.`;
+        return;
+      }
+      msgEl.textContent = 'Updating password…';
+      setLinkLoading(submitButton, true);
+      try {
+        const res = await fetch('/api/account/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ newPassword }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          msgEl.textContent = data?.error ? 'Error: ' + data.error : 'Unable to reset password.';
+          return;
+        }
+        msgEl.textContent = 'Password updated. Use this new login everywhere.';
+        input.value = '';
+      } catch (err) {
+        console.error('Client password reset failed', err);
+        msgEl.textContent = 'Network error. Please try again.';
+      } finally {
+        setLinkLoading(submitButton, false);
+      }
+    });
   }
 
   function realmLabel(realm) {
@@ -1413,6 +1617,213 @@ const accountScript = () => {
 
       classicOnlineList.appendChild(container);
     });
+  }
+
+  const CLASS_NAMES = {
+    1: 'Warrior',
+    2: 'Paladin',
+    3: 'Hunter',
+    4: 'Rogue',
+    5: 'Priest',
+    6: 'Death Knight',
+    7: 'Shaman',
+    8: 'Mage',
+    9: 'Warlock',
+    10: 'Monk',
+    11: 'Druid',
+    12: 'Demon Hunter',
+    13: 'Evoker',
+  };
+
+  const RACE_NAMES = {
+    1: 'Human',
+    2: 'Orc',
+    3: 'Dwarf',
+    4: 'Night Elf',
+    5: 'Undead',
+    6: 'Tauren',
+    7: 'Gnome',
+    8: 'Troll',
+    9: 'Goblin',
+    10: 'Blood Elf',
+    11: 'Draenei',
+    22: 'Worgen',
+    24: 'Pandaren',
+  };
+
+  const FAMILY_DEFAULTS = {
+    retail: 'DreamCore Master',
+    classic: 'DreamCore Classic',
+  };
+  const configuredLabels = LIMITS.familyLabels || {};
+  const FAMILY_LABELS = {
+    retail: configuredLabels.retail || LIMITS.brandName || FAMILY_DEFAULTS.retail,
+    classic: configuredLabels.classic || LIMITS.classicBrandName || FAMILY_DEFAULTS.classic,
+  };
+
+  function formatFamilyLabel(family) {
+    if (!family) return FAMILY_LABELS.retail;
+    return FAMILY_LABELS[family] || family.charAt(0).toUpperCase() + family.slice(1);
+  }
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
+  }
+
+  function formatDate(value) {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return date.toLocaleString();
+  }
+
+  function renderCharacterCard(character) {
+    const className = CLASS_NAMES[character.class] || `Class #${character.class}`;
+    const raceName = RACE_NAMES[character.race] || `Race #${character.race}`;
+    const realmName = character.realm?.name || 'Unknown realm';
+    const lastPlayed = formatDate(character.lastLogin);
+    return `
+      <article class="rounded-3xl gradient-border bg-gray-900/70 p-5 shadow-inner shadow-indigo-900/40">
+        <div class="flex items-baseline justify-between">
+          <h3 class="text-xl font-semibold text-white">${escapeHtml(character.name)}</h3>
+          <span class="text-sm font-semibold text-indigo-300">Lvl ${escapeHtml(character.level)}</span>
+        </div>
+        <p class="mt-2 text-[15px] text-indigo-100/90">${escapeHtml(raceName)} · ${escapeHtml(className)}</p>
+        <p class="mt-2 text-sm text-indigo-200/80">Realm: <span class="font-semibold text-indigo-100">${escapeHtml(realmName)}</span></p>
+        <p class="mt-2 text-xs text-indigo-200/70">Last seen: ${escapeHtml(lastPlayed)}</p>
+      </article>
+    `;
+  }
+
+  function updateFamilySelectState(families) {
+    if (!characterFamilySelect) return;
+    const availableKeys = new Set((Array.isArray(families) ? families : []).map((family) => (family?.family || 'retail')));
+    Array.from(characterFamilySelect.options || []).forEach((option) => {
+      const isAvailable = availableKeys.has(option.value);
+      option.disabled = !isAvailable;
+      option.classList.toggle('opacity-60', !isAvailable);
+    });
+  }
+
+  function updateCharactersUI() {
+    if (!characterStatus || !characterGrid || !charactersCount || !charactersRealmCount) {
+      return;
+    }
+    if (!charactersPayload) {
+      return;
+    }
+    const families = Array.isArray(charactersPayload?.families) ? charactersPayload.families : [];
+    updateFamilySelectState(families);
+    if (!families.length) {
+      charactersCount.textContent = '0';
+      charactersRealmCount.textContent = '0';
+      characterGrid.innerHTML = '';
+      const fallbackMessage = charactersPayload?.message || 'Link a retail or classic account to view characters.';
+      if (charactersEmptyState) {
+        charactersEmptyState.classList.remove('hidden');
+        charactersEmptyState.textContent = fallbackMessage;
+      }
+      characterStatus.textContent = fallbackMessage;
+      return;
+    }
+    let targetFamily = families.find((family) => (family?.family || 'retail') === selectedFamilyKey) || families[0];
+    if (targetFamily && (targetFamily.family || 'retail') !== selectedFamilyKey) {
+      selectedFamilyKey = targetFamily.family || 'retail';
+      persistStoredValue(STORAGE_KEYS.family, selectedFamilyKey);
+      if (characterFamilySelect) {
+        characterFamilySelect.value = selectedFamilyKey;
+      }
+    }
+    const characters = Array.isArray(targetFamily?.characters) ? targetFamily.characters : [];
+    const realms = Array.isArray(targetFamily?.realms) ? targetFamily.realms : [];
+    const summary = targetFamily?.summary || {};
+    charactersCount.textContent = String(summary.totalCharacters ?? characters.length ?? 0);
+    charactersRealmCount.textContent = String(summary.totalRealms ?? realms.length ?? 0);
+    const label = formatFamilyLabel(targetFamily?.family || selectedFamilyKey);
+    if (targetFamily?.message) {
+      characterStatus.textContent = targetFamily.message;
+    } else if (characters.length) {
+      characterStatus.textContent = `${label} roster loaded.`;
+    } else {
+      characterStatus.textContent = `No ${label} characters yet. Play a bit and refresh the roster.`;
+    }
+    if (!characters.length) {
+      if (charactersEmptyState) {
+        charactersEmptyState.classList.remove('hidden');
+        charactersEmptyState.textContent = `No ${label} characters yet.`;
+      }
+      characterGrid.innerHTML = '';
+    } else {
+      if (charactersEmptyState) {
+        charactersEmptyState.classList.add('hidden');
+      }
+      characterGrid.innerHTML = characters.map(renderCharacterCard).join('');
+    }
+  }
+
+  function ensureCharactersLoaded() {
+    if (charactersLoaded || charactersLoading) {
+      return;
+    }
+    loadCharacters();
+  }
+
+  async function loadCharacters(forceRefresh = false) {
+    if (!characterStatus) {
+      return;
+    }
+    charactersLoading = true;
+    characterStatus.textContent = forceRefresh ? 'Refreshing roster…' : 'Loading roster…';
+    const url = forceRefresh ? '/api/characters?refresh=1' : '/api/characters';
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        characterStatus.textContent = data?.error ? 'Error: ' + data.error : 'Unable to load characters.';
+        if (characterGrid) {
+          characterGrid.innerHTML = '';
+        }
+        if (charactersCount) {
+          charactersCount.textContent = '0';
+        }
+        if (charactersRealmCount) {
+          charactersRealmCount.textContent = '0';
+        }
+        if (charactersEmptyState) {
+          charactersEmptyState.classList.remove('hidden');
+          charactersEmptyState.textContent = 'Unable to load roster right now.';
+        }
+        charactersPayload = null;
+        charactersLoaded = false;
+        return;
+      }
+      charactersPayload = data;
+      charactersLoaded = true;
+      updateCharactersUI();
+    } catch (err) {
+      console.error('Character fetch failed', err);
+      characterStatus.textContent = 'Network error while loading characters.';
+      if (characterGrid) {
+        characterGrid.innerHTML = '';
+      }
+      if (charactersCount) {
+        charactersCount.textContent = '0';
+      }
+      if (charactersRealmCount) {
+        charactersRealmCount.textContent = '0';
+      }
+      if (charactersEmptyState) {
+        charactersEmptyState.classList.remove('hidden');
+        charactersEmptyState.textContent = 'Network error while loading characters.';
+      }
+      charactersLoaded = false;
+    } finally {
+      charactersLoading = false;
+    }
   }
 
   function updateGmRealmOptions(realms) {
@@ -1567,6 +1978,7 @@ const accountScript = () => {
     const nextPanel = document.getElementById(targetId);
     if (!nextPanel) return;
     activeTabId = targetId;
+    persistStoredValue(STORAGE_KEYS.tab, targetId);
     tabPanels.forEach((panel) => {
       panel.classList.toggle('hidden', panel.id !== targetId);
     });
@@ -1590,6 +2002,9 @@ const accountScript = () => {
           ? 'Refreshing…'
           : 'Open the GM tab to load the roster.';
     }
+    if (targetId === 'charactersTabPanel') {
+      ensureCharactersLoaded();
+    }
     syncClassicOnlinePolling();
   }
 
@@ -1608,7 +2023,7 @@ const accountScript = () => {
       gmTabButton.setAttribute('aria-hidden', hasGm ? 'false' : 'true');
     }
     if (!hasGm && activeTabId === 'gmToolkitSection') {
-      setActiveTab('retailTabPanel');
+      setActiveTab('accountTabPanel');
     }
 
     updateGmRealmOptions(realms);
@@ -1625,23 +2040,6 @@ const accountScript = () => {
     syncClassicOnlinePolling();
   }
 
-  function togglePanel(button, targetId) {
-    const target = document.getElementById(targetId);
-    if (!button || !target) return;
-    const expanded = button.getAttribute('aria-expanded') === 'true';
-    button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-    target.classList.toggle('hidden', expanded);
-    const icon = button.querySelector('[data-collapse-icon]');
-    if (icon) {
-      icon.textContent = expanded ? '▸' : '▾';
-    }
-  }
-
-  collapseButtons.forEach((button) => {
-    const targetId = button.getAttribute('data-collapse-target');
-    button.addEventListener('click', () => togglePanel(button, targetId));
-  });
-
   tabButtons.forEach((button) => {
     button.addEventListener('click', () => {
       if (button.classList.contains('hidden')) return;
@@ -1653,6 +2051,18 @@ const accountScript = () => {
   });
 
   setActiveTab(activeTabId);
+
+  characterFamilySelect?.addEventListener('change', (event) => {
+    const value = event.target?.value || 'retail';
+    selectedFamilyKey = value;
+    persistStoredValue(STORAGE_KEYS.family, selectedFamilyKey);
+    updateCharactersUI();
+  });
+
+  characterRefreshButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    loadCharacters(true);
+  });
 
   function updateBadge(el, isLinked, palette) {
     if (!el) return;
@@ -1679,6 +2089,19 @@ const accountScript = () => {
     return base.trim();
   }
 
+  attachClientResetHandler({
+    form: retailResetForm,
+    input: retailResetPassword,
+    msgEl: retailResetMsg,
+    submitButton: retailResetSubmit,
+  });
+  attachClientResetHandler({
+    form: classicResetForm,
+    input: classicResetPassword,
+    msgEl: classicResetMsg,
+    submitButton: classicResetSubmit,
+  });
+
   function updateLinkingUI() {
     const retailIds = Array.isArray(currentSession?.retailAccountIds) ? currentSession.retailAccountIds : [];
     const classicIds = Array.isArray(currentSession?.classicAccountIds) ? currentSession.classicAccountIds : [];
@@ -1690,6 +2113,22 @@ const accountScript = () => {
     }
     if (profileUsername) {
       profileUsername.textContent = currentSession?.username || '—';
+    }
+    if (accountRetailLogin) {
+      accountRetailLogin.textContent = currentSession?.email || '—';
+    }
+    if (accountRetailStatus) {
+      accountRetailStatus.textContent = hasRetail ? 'Ready to play' : 'Link required';
+    }
+    if (accountClassicLogin) {
+      if (hasClassic && currentSession?.username) {
+        accountClassicLogin.textContent = currentSession.username;
+      } else {
+        accountClassicLogin.textContent = deriveClassicUsername() || 'Pick a username';
+      }
+    }
+    if (accountClassicStatus) {
+      accountClassicStatus.textContent = hasClassic ? 'Ready to play' : 'Link required';
     }
 
     updateBadge(retailStatusBadge, hasRetail, { label: 'Retail', border: 'gradient-border' });
@@ -1718,6 +2157,12 @@ const accountScript = () => {
     }
     if (classicDownloadButton) {
       classicDownloadButton.classList.toggle('hidden', !hasClassic);
+    }
+    if (retailResetSection) {
+      retailResetSection.classList.toggle('hidden', !hasRetail);
+    }
+    if (classicResetSection) {
+      classicResetSection.classList.toggle('hidden', !hasClassic);
     }
 
     if (classicLinkUsername && !classicLinkUsername.value.trim() && currentSession) {
@@ -1814,6 +2259,9 @@ const accountScript = () => {
         retailLinkPassword.value = '';
       }
       await refreshSession();
+      if (charactersLoaded) {
+        await loadCharacters(true);
+      }
     } catch (err) {
       console.error('Retail link failed', err);
       retailLinkMsg.textContent = 'Network error while linking retail login.';
@@ -1853,6 +2301,9 @@ const accountScript = () => {
         classicLinkPassword.value = '';
       }
       await refreshSession();
+      if (charactersLoaded) {
+        await loadCharacters(true);
+      }
     } catch (err) {
       console.error('Classic link failed', err);
       classicLinkMsg.textContent = 'Network error while linking Classic login.';
@@ -1939,7 +2390,10 @@ const RESET_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
@@ -1960,8 +2414,8 @@ const RESET_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -2145,7 +2599,10 @@ const CHARACTERS_PAGE = () => `<!doctype html>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
@@ -2166,8 +2623,8 @@ const CHARACTERS_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-4xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -5850,7 +6307,10 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background: radial-gradient(circle at top, rgba(76, 29, 149, 0.25), rgba(15, 23, 42, 0.95));
+      background:
+        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
+        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
+      background-color: #010005;
     }
     .aurora::before {
       content: "";
@@ -5871,8 +6331,8 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${cornerLogo}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${cornerLogo}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border ${tone.border} overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
