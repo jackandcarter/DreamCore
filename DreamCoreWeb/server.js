@@ -216,6 +216,28 @@ const SHARED_STYLES = `
       color: #f8fafc;
       background-color: #0f172a;
     }
+    .corner-logo {
+      position: fixed;
+      top: clamp(1rem, 3vw, 2rem);
+      left: clamp(1rem, 3vw, 2rem);
+      z-index: 60;
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      box-shadow: 0 18px 45px rgba(2, 6, 23, 0.65);
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+    @media (max-width: 480px) {
+      .corner-logo {
+        padding: 0.25rem 0.75rem;
+        letter-spacing: 0.22em;
+      }
+    }
+    .corner-logo-offset {
+      padding-top: clamp(5.5rem, 11vw, 7.5rem);
+    }
 `;
 
 // ----- DB (MariaDB for pending verifications) -----
@@ -701,8 +723,8 @@ const HOME_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -884,8 +906,8 @@ const LOGIN_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -1049,8 +1071,8 @@ const ACCOUNT_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-6xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -1244,6 +1266,36 @@ ${SHARED_STYLES}
                 </div>
               </form>
             </div>
+          </section>
+
+          <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Roster</p>
+                <h2 class="text-2xl font-semibold text-white">Characters</h2>
+                <p class="text-sm text-indigo-200/80">Use the dropdown to flip between Classic and Retail rosters.</p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <select id="characterFamilySelect" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="retail">Retail characters</option>
+                  <option value="classic">Classic characters</option>
+                </select>
+                <button id="characterRefreshButton" type="button" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
+              </div>
+            </div>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Characters</p>
+                <p id="charactersCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Realms</p>
+                <p id="charactersRealmCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+            </div>
+            <pre id="charactersStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Select a family to load your roster.</pre>
+            <div id="charactersEmptyState" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-indigo-200/80">Link a retail or classic account to view characters.</div>
+            <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
           </section>
 
           <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
@@ -2392,8 +2444,8 @@ const RESET_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -2601,8 +2653,8 @@ const CHARACTERS_PAGE = () => `<!doctype html>
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${CONFIG.CORNER_LOGO}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-4xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
@@ -6309,8 +6361,8 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
 ${SHARED_STYLES}
   </style>
 </head>
-<body class="min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
-  <div class="absolute top-6 left-6 text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg z-20 uppercase">${cornerLogo}</div>
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+  <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${cornerLogo}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border ${tone.border} overflow-hidden">
       <div class="px-6 pt-8 pb-10 sm:px-10">
