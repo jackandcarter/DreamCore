@@ -552,53 +552,124 @@ async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('pending', "game_type VARCHAR(16) NOT NULL DEFAULT 'retail' AFTER email");
 }
 
+async function hydratePortalUserLinks(portalUser) {
+  if (!portalUser || typeof portalUser !== 'object') {
+    return { portalUser: portalUser || null, retailLinked: false, classicLinked: false };
+  }
+  const portalUserId = toSafeNumber(portalUser.id);
+  if (portalUserId == null) {
+    return { portalUser, retailLinked: false, classicLinked: false };
+  }
+  const normalizedEmail = normalizeEmail(portalUser.email);
+  const retailIds = sanitizeAccountIdList(
+    Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : []
+  );
+  const classicIds = sanitizeAccountIdList(
+    Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : []
+  );
+  let retailLinked = false;
+  let classicLinked = false;
+
+  if (!retailIds.length && normalizedEmail) {
+    try {
+      const [primary, fallback] = await Promise.all([
+        getAuthAccountByEmail(normalizedEmail),
+        getGameAccountByEmail(normalizedEmail),
+      ]);
+      const retailAccountId = toSafeNumber(primary?.id ?? fallback?.id ?? null);
+      if (retailAccountId != null) {
+        retailIds.push(retailAccountId);
+        await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: Date.now() });
+        retailLinked = true;
+      }
+    } catch (err) {
+      console.error('Failed to hydrate retail link for portal user', portalUserId, err);
+    }
+  }
+
+  if (!classicIds.length) {
+    try {
+      const resolvedClassic = await resolveClassicAccountLink({
+        username: portalUser.username,
+        email: normalizedEmail,
+      });
+      const classicAccountId = toSafeNumber(resolvedClassic?.accountId);
+      if (classicAccountId != null) {
+        classicIds.push(classicAccountId);
+        await linkPortalUserToClassicAccount(portalUserId, classicAccountId, {
+          linkedAt: Date.now(),
+        });
+        classicLinked = true;
+        if (!portalUser.username && resolvedClassic.username) {
+          try {
+            await pool.execute('UPDATE portal_users SET username = ? WHERE id = ? AND username IS NULL', [
+              resolvedClassic.username,
+              portalUserId,
+            ]);
+            portalUser.username = resolvedClassic.username;
+          } catch (err) {
+            console.error('Failed to backfill Classic username for portal user', portalUserId, err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to hydrate classic link for portal user', portalUserId, err);
+    }
+  }
+
+  portalUser.retailAccountIds = sanitizeAccountIdList(retailIds);
+  portalUser.classicAccountIds = sanitizeAccountIdList(classicIds);
+
+  return { portalUser, retailLinked, classicLinked };
+}
+
 async function hydratePortalAccountLinks() {
   try {
     const [portalRows] = await pool.query('SELECT id, email, username FROM portal_users');
     if (!Array.isArray(portalRows) || !portalRows.length) {
       return;
     }
-    const [retailLinkRows] = await pool.query('SELECT portal_user_id FROM portal_user_retail_accounts');
-    const [classicLinkRows] = await pool.query('SELECT portal_user_id FROM portal_user_classic_accounts');
-    const linkedRetail = new Set(retailLinkRows.map((row) => toSafeNumber(row.portal_user_id)).filter((id) => id != null));
-    const linkedClassic = new Set(
-      classicLinkRows.map((row) => toSafeNumber(row.portal_user_id)).filter((id) => id != null)
+    const [retailLinkRows] = await pool.query(
+      'SELECT portal_user_id, retail_account_id FROM portal_user_retail_accounts'
     );
+    const [classicLinkRows] = await pool.query(
+      'SELECT portal_user_id, classic_account_id FROM portal_user_classic_accounts'
+    );
+    const retailLinkMap = new Map();
+    const classicLinkMap = new Map();
+    for (const row of retailLinkRows) {
+      const portalId = toSafeNumber(row.portal_user_id);
+      const accountId = toSafeNumber(row.retail_account_id);
+      if (portalId == null || accountId == null) continue;
+      if (!retailLinkMap.has(portalId)) {
+        retailLinkMap.set(portalId, []);
+      }
+      retailLinkMap.get(portalId).push(accountId);
+    }
+    for (const row of classicLinkRows) {
+      const portalId = toSafeNumber(row.portal_user_id);
+      const accountId = toSafeNumber(row.classic_account_id);
+      if (portalId == null || accountId == null) continue;
+      if (!classicLinkMap.has(portalId)) {
+        classicLinkMap.set(portalId, []);
+      }
+      classicLinkMap.get(portalId).push(accountId);
+    }
     let linkedRetailCount = 0;
     let linkedClassicCount = 0;
     for (const portalRow of portalRows) {
       const portalUserId = toSafeNumber(portalRow.id);
       if (portalUserId == null) continue;
-      const normalizedEmail = normalizeEmail(portalRow.email);
-      if (!linkedRetail.has(portalUserId) && normalizedEmail) {
-        const [primary, fallback] = await Promise.all([
-          getAuthAccountByEmail(normalizedEmail),
-          getGameAccountByEmail(normalizedEmail),
-        ]);
-        const retailAccountId = primary?.id ?? fallback?.id ?? null;
-        if (retailAccountId != null) {
-          await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: Date.now() });
-          linkedRetail.add(portalUserId);
-          linkedRetailCount += 1;
-        }
-      }
-      if (!linkedClassic.has(portalUserId)) {
-        const resolvedClassic = await resolveClassicAccountLink({
-          username: portalRow.username,
-          email: normalizedEmail,
-        });
-        if (resolvedClassic?.accountId != null) {
-          await linkPortalUserToClassicAccount(portalUserId, resolvedClassic.accountId, { linkedAt: Date.now() });
-          linkedClassic.add(portalUserId);
-          linkedClassicCount += 1;
-          if (!portalRow.username && resolvedClassic.username) {
-            await pool.execute('UPDATE portal_users SET username = ? WHERE id = ? AND username IS NULL', [
-              resolvedClassic.username,
-              portalUserId,
-            ]);
-          }
-        }
-      }
+      const portalUser = {
+        id: portalUserId,
+        email: portalRow.email,
+        username: portalRow.username,
+        retailAccountIds: retailLinkMap.get(portalUserId)?.slice() || [],
+        classicAccountIds: classicLinkMap.get(portalUserId)?.slice() || [],
+      };
+      const { retailLinked, classicLinked } = await hydratePortalUserLinks(portalUser);
+      if (retailLinked) linkedRetailCount += 1;
+      if (classicLinked) linkedClassicCount += 1;
     }
     console.log(
       `Hydrated portal account links: ${linkedRetailCount} retail, ${linkedClassicCount} classic updates applied`
@@ -1251,36 +1322,6 @@ ${SHARED_STYLES}
                 </div>
               </form>
             </div>
-          </section>
-
-          <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Roster</p>
-                <h2 class="text-2xl font-semibold text-white">Characters</h2>
-                <p class="text-sm text-indigo-200/80">Use the dropdown to flip between Classic and Retail rosters.</p>
-              </div>
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <select id="characterFamilySelect" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                  <option value="retail">Retail characters</option>
-                  <option value="classic">Classic characters</option>
-                </select>
-                <button id="characterRefreshButton" type="button" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
-              </div>
-            </div>
-            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Characters</p>
-                <p id="charactersCount" class="mt-2 text-3xl font-semibold text-white">0</p>
-              </article>
-              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Realms</p>
-                <p id="charactersRealmCount" class="mt-2 text-3xl font-semibold text-white">0</p>
-              </article>
-            </div>
-            <pre id="charactersStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Select a family to load your roster.</pre>
-            <div id="charactersEmptyState" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-indigo-200/80">Link a retail or classic account to view characters.</div>
-            <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
           </section>
 
           <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
@@ -4642,7 +4683,8 @@ async function loadPortalUser(whereClause, params) {
     const links = await loadPortalUserAccountLinks(user.id);
     user.retailAccountIds = links.retailAccountIds;
     user.classicAccountIds = links.classicAccountIds;
-    return user;
+    const hydrated = await hydratePortalUserLinks(user);
+    return hydrated?.portalUser || user;
   } catch (err) {
     console.error('Failed to load portal user', err);
     return null;
