@@ -567,18 +567,23 @@ async function hydratePortalUserLinks(portalUser) {
   const classicIds = sanitizeAccountIdList(
     Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : []
   );
+  const retailIdSet = new Set(retailIds);
+  const classicIdSet = new Set(classicIds);
   let retailLinked = false;
   let classicLinked = false;
 
-  if (!retailIds.length && normalizedEmail) {
+  if (normalizedEmail) {
     try {
       const [primary, fallback] = await Promise.all([
         getAuthAccountByEmail(normalizedEmail),
         getGameAccountByEmail(normalizedEmail),
       ]);
-      const retailAccountId = toSafeNumber(primary?.id ?? fallback?.id ?? null);
-      if (retailAccountId != null) {
+      const candidates = [primary, fallback];
+      for (const candidate of candidates) {
+        const retailAccountId = toSafeNumber(candidate?.id);
+        if (retailAccountId == null || retailIdSet.has(retailAccountId)) continue;
         retailIds.push(retailAccountId);
+        retailIdSet.add(retailAccountId);
         await linkPortalUserToRetailAccount(portalUserId, retailAccountId, { linkedAt: Date.now() });
         retailLinked = true;
       }
@@ -587,34 +592,33 @@ async function hydratePortalUserLinks(portalUser) {
     }
   }
 
-  if (!classicIds.length) {
-    try {
-      const resolvedClassic = await resolveClassicAccountLink({
-        username: portalUser.username,
-        email: normalizedEmail,
+  try {
+    const resolvedClassic = await resolveClassicAccountLink({
+      username: portalUser.username,
+      email: normalizedEmail,
+    });
+    const classicAccountId = toSafeNumber(resolvedClassic?.accountId);
+    if (classicAccountId != null && !classicIdSet.has(classicAccountId)) {
+      classicIds.push(classicAccountId);
+      classicIdSet.add(classicAccountId);
+      await linkPortalUserToClassicAccount(portalUserId, classicAccountId, {
+        linkedAt: Date.now(),
       });
-      const classicAccountId = toSafeNumber(resolvedClassic?.accountId);
-      if (classicAccountId != null) {
-        classicIds.push(classicAccountId);
-        await linkPortalUserToClassicAccount(portalUserId, classicAccountId, {
-          linkedAt: Date.now(),
-        });
-        classicLinked = true;
-        if (!portalUser.username && resolvedClassic.username) {
-          try {
-            await pool.execute('UPDATE portal_users SET username = ? WHERE id = ? AND username IS NULL', [
-              resolvedClassic.username,
-              portalUserId,
-            ]);
-            portalUser.username = resolvedClassic.username;
-          } catch (err) {
-            console.error('Failed to backfill Classic username for portal user', portalUserId, err);
-          }
+      classicLinked = true;
+      if (!portalUser.username && resolvedClassic?.username) {
+        try {
+          await pool.execute('UPDATE portal_users SET username = ? WHERE id = ? AND username IS NULL', [
+            resolvedClassic.username,
+            portalUserId,
+          ]);
+          portalUser.username = resolvedClassic.username;
+        } catch (err) {
+          console.error('Failed to backfill Classic username for portal user', portalUserId, err);
         }
       }
-    } catch (err) {
-      console.error('Failed to hydrate classic link for portal user', portalUserId, err);
     }
+  } catch (err) {
+    console.error('Failed to hydrate classic link for portal user', portalUserId, err);
   }
 
   portalUser.retailAccountIds = sanitizeAccountIdList(retailIds);
@@ -3653,6 +3657,46 @@ function buildRealmDirectoryFromConfig(family = null) {
     }));
 }
 
+function normalizeRealmDirectoryEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.map((entry) => ({
+    id: toSafeNumber(entry?.id ?? entry?.realmId ?? entry?.realmID),
+    name: entry?.name || null,
+    charDb: entry?.charDb || entry?.char_db || entry?.database || null,
+  }));
+}
+
+function mergeRealmDirectoryRows(rows, fallbackEntries = []) {
+  const normalizedFallback = normalizeRealmDirectoryEntries(fallbackEntries);
+  if (!Array.isArray(rows) || !rows.length) {
+    return normalizedFallback;
+  }
+  const fallbackById = new Map();
+  for (const entry of normalizedFallback) {
+    if (entry?.id == null || fallbackById.has(entry.id)) continue;
+    fallbackById.set(entry.id, entry);
+  }
+  const merged = [];
+  const seenIds = new Set();
+  for (const row of rows) {
+    const realmId = toSafeNumber(row?.id);
+    const fallback = realmId != null ? fallbackById.get(realmId) : null;
+    merged.push({
+      id: realmId,
+      name: row?.name || fallback?.name || null,
+      charDb: fallback?.charDb || null,
+    });
+    if (realmId != null) {
+      seenIds.add(realmId);
+    }
+  }
+  for (const entry of normalizedFallback) {
+    if (entry.id != null && seenIds.has(entry.id)) continue;
+    merged.push({ ...entry });
+  }
+  return merged;
+}
+
 function safeIdentifier(value, fallback) {
   const str = String(value || '').trim();
   if (!str) return fallback;
@@ -3675,26 +3719,15 @@ let REALM_DIRECTORY_CACHE = null;
 
 async function ensureRealmDirectory() {
   if (REALM_DIRECTORY_CACHE) return REALM_DIRECTORY_CACHE;
+  const fallbackDirectory = buildRealmDirectoryFromConfig();
   try {
-    const [rows] = await authPool.query('SELECT id, name, char_db FROM `realmlist`');
-    REALM_DIRECTORY_CACHE = rows.map((row) => ({
-      id: toSafeNumber(row.id),
-      name: row.name || null,
-      charDb: row.char_db || row.charDb || null,
-    }));
+    const [rows] = await authPool.query('SELECT id, name FROM `realmlist`');
+    REALM_DIRECTORY_CACHE = mergeRealmDirectoryRows(rows, fallbackDirectory);
   } catch (err) {
-    if (err?.code === 'ER_BAD_FIELD_ERROR') {
-      console.warn(
-        'realm directory: char_db column not found, falling back to REALM_DATABASES config'
-      );
-      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
-    } else if (err?.code === 'ER_NO_SUCH_TABLE') {
-      console.warn('realm directory: realmlist table missing, falling back to REALM_DATABASES config');
-      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
-    } else {
+    if (err?.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Failed to load realm directory', err);
-      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
     }
+    REALM_DIRECTORY_CACHE = fallbackDirectory;
   }
   return REALM_DIRECTORY_CACHE;
 }
@@ -3704,31 +3737,18 @@ let CLASSIC_REALM_DIRECTORY_CACHE = null;
 async function ensureClassicRealmDirectory() {
   if (CLASSIC_REALM_DIRECTORY_CACHE) return CLASSIC_REALM_DIRECTORY_CACHE;
   if (!classicAuthPool) {
-    CLASSIC_REALM_DIRECTORY_CACHE = [];
+    CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
     return CLASSIC_REALM_DIRECTORY_CACHE;
   }
+  const fallbackDirectory = buildRealmDirectoryFromConfig('classic');
   try {
-    const [rows] = await classicAuthPool.query('SELECT id, name, char_db FROM `realmlist`');
-    CLASSIC_REALM_DIRECTORY_CACHE = rows.map((row) => ({
-      id: toSafeNumber(row.id),
-      name: row.name || null,
-      charDb: row.char_db || row.charDb || null,
-    }));
+    const [rows] = await classicAuthPool.query('SELECT id, name FROM `realmlist`');
+    CLASSIC_REALM_DIRECTORY_CACHE = mergeRealmDirectoryRows(rows, fallbackDirectory);
   } catch (err) {
-    if (err?.code === 'ER_BAD_FIELD_ERROR') {
-      console.warn(
-        'classic realm directory: char_db column not found, falling back to REALM_DATABASES config'
-      );
-      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
-    } else if (err?.code === 'ER_NO_SUCH_TABLE') {
-      console.warn(
-        'classic realm directory: realmlist table missing, falling back to REALM_DATABASES config'
-      );
-      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
-    } else {
+    if (err?.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Failed to load classic realm directory', err);
-      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
     }
+    CLASSIC_REALM_DIRECTORY_CACHE = fallbackDirectory;
   }
   return CLASSIC_REALM_DIRECTORY_CACHE;
 }
@@ -3744,8 +3764,7 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
               ga.id AS gaId,
               ga.username AS username,
               ga.realmID AS realmId,
-              r.name AS realmName,
-              r.char_db AS realmCharDb
+              r.name AS realmName
          FROM \`bnetaccount_gameaccount\` AS link
          JOIN \`gameaccount\` AS ga ON ga.id = link.gameaccountid
          LEFT JOIN \`realmlist\` AS r ON r.id = ga.realmID
@@ -3753,12 +3772,14 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
       [bnetAccountId]
     );
     for (const row of rows) {
+      const realmId = toSafeNumber(row.realmId ?? row.realmID);
+      const realmEntry = resolveRealmEntry({ realmId }, REALM_LOOKUP);
       accounts.push({
         gameAccountId: toSafeNumber(row.gameAccountId ?? row.gaId ?? row.id),
         username: row.username || null,
-        realmId: toSafeNumber(row.realmId ?? row.realmID),
-        realmName: row.realmName || null,
-        realmCharDb: row.realmCharDb || row.char_db || null,
+        realmId,
+        realmName: row.realmName || realmEntry?.config?.name || null,
+        realmCharDb: realmEntry?.config?.charDbLabel || realmEntry?.config?.database || null,
       });
     }
     if (accounts.length) {
@@ -4367,18 +4388,30 @@ async function fetchAccountGmRows(dbPool, accountIds) {
     return createEmptyGmInfo();
   }
   const placeholders = ids.map(() => '?').join(', ');
-  try {
-    const [rows] = await dbPool.query(
-      `SELECT id, gmlevel, RealmID FROM account_access WHERE id IN (${placeholders})`,
-      ids
-    );
-    return buildGmInfoFromRows(rows);
-  } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      return createEmptyGmInfo();
+  const queries = [
+    `SELECT AccountID AS id, gmlevel, RealmID FROM account_access WHERE AccountID IN (${placeholders})`,
+    `SELECT id, gmlevel, RealmID FROM account_access WHERE id IN (${placeholders})`,
+  ];
+  let lastError = null;
+  for (const sql of queries) {
+    try {
+      const [rows] = await dbPool.query(sql, ids);
+      return buildGmInfoFromRows(rows);
+    } catch (err) {
+      if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        lastError = err;
+        continue;
+      }
+      if (err?.code === 'ER_NO_SUCH_TABLE') {
+        return createEmptyGmInfo();
+      }
+      throw err;
     }
-    throw err;
   }
+  if (lastError) {
+    throw lastError;
+  }
+  return createEmptyGmInfo();
 }
 
 async function getRetailGmInfo(accountIds) {
@@ -5242,19 +5275,24 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    await recordPortalLogin(portalUser.id);
+    const hydration = await hydratePortalUserLinks(portalUser);
+    const activePortalUser = hydration?.portalUser || portalUser;
 
-    const retailAccountIds = sanitizeAccountIdList(Array.isArray(portalUser.retailAccountIds) ? portalUser.retailAccountIds : []);
+    await recordPortalLogin(activePortalUser.id);
+
+    const retailAccountIds = sanitizeAccountIdList(
+      Array.isArray(activePortalUser.retailAccountIds) ? activePortalUser.retailAccountIds : []
+    );
     const classicAccountIds = sanitizeAccountIdList(
-      Array.isArray(portalUser.classicAccountIds) ? portalUser.classicAccountIds : []
+      Array.isArray(activePortalUser.classicAccountIds) ? activePortalUser.classicAccountIds : []
     );
     const primaryRetailAccountId = retailAccountIds.length ? retailAccountIds[0] : null;
 
     const session = await persistSession(
       {
-        portalUserId: portalUser.id,
-        email: portalUser.email,
-        username: portalUser.username,
+        portalUserId: activePortalUser.id,
+        email: activePortalUser.email,
+        username: activePortalUser.username,
         retailAccountIds,
         classicAccountIds,
       },
@@ -5272,10 +5310,10 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
     return res.json({
       ok: true,
-      portalUserId: portalUser.id,
+      portalUserId: activePortalUser.id,
       accountId: primaryRetailAccountId,
-      email: portalUser.email,
-      username: portalUser.username,
+      email: activePortalUser.email,
+      username: activePortalUser.username,
       retailAccountIds,
       classicAccountIds,
       session: {
