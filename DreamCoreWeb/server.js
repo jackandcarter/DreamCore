@@ -1298,6 +1298,36 @@ ${SHARED_STYLES}
             <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
           </section>
 
+          <section id="charactersTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Roster</p>
+                <h2 class="text-2xl font-semibold text-white">Characters</h2>
+                <p class="text-sm text-indigo-200/80">Use the dropdown to flip between Classic and Retail rosters.</p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <select id="characterFamilySelect" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="retail">Retail characters</option>
+                  <option value="classic">Classic characters</option>
+                </select>
+                <button id="characterRefreshButton" type="button" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Refresh roster</button>
+              </div>
+            </div>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Characters</p>
+                <p id="charactersCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Realms</p>
+                <p id="charactersRealmCount" class="mt-2 text-3xl font-semibold text-white">0</p>
+              </article>
+            </div>
+            <pre id="charactersStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Select a family to load your roster.</pre>
+            <div id="charactersEmptyState" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-indigo-200/80">Link a retail or classic account to view characters.</div>
+            <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+          </section>
+
           <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
             <div class="flex flex-col gap-6 lg:flex-row">
               <div class="flex-1 space-y-5">
