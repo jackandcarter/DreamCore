@@ -109,7 +109,20 @@ const CONFIG = {
   CHARACTER_CACHE_TTL_MS: Number(process.env.CHARACTER_CACHE_TTL_MS || 30 * 1000),
   GM_ONLINE_POLL_MS: Number(process.env.GM_ONLINE_POLL_MS || 20 * 1000),
   GM_CLASSIC_ONLINE_LIMIT: Number(process.env.GM_CLASSIC_ONLINE_LIMIT || 12),
+  GM_DEBUG: (process.env.GM_DEBUG || 'false').toLowerCase() === 'true',
 };
+
+function gmDebug(message, details) {
+  if (!CONFIG.GM_DEBUG) {
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  if (details === undefined) {
+    console.log(`[GM DEBUG ${timestamp}] ${message}`);
+    return;
+  }
+  console.log(`[GM DEBUG ${timestamp}] ${message}`, details);
+}
 
 const SOAP = makeSoapConfig({
   host: CONFIG.TC_SOAP_HOST,
@@ -4301,6 +4314,14 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
     loadGmFlagsForAccounts({ type: 'retail', accountIds: sanitizedRetailIds }),
     loadGmFlagsForAccounts({ type: 'classic', accountIds: sanitizedClassicIds }),
   ]);
+  gmDebug('buildCharactersResponse:gm-flags', {
+    retailAccounts: sanitizedRetailIds,
+    classicAccounts: sanitizedClassicIds,
+    retailGmAccounts: Object.keys(retailGmFlags || {}).length,
+    classicGmAccounts: Object.keys(classicGmFlags || {}).length,
+    retailHasGm: hasAnyGmFlags(retailGmFlags),
+    classicHasGm: hasAnyGmFlags(classicGmFlags),
+  });
   const refreshedAt = new Date().toISOString();
   const families = [];
   let totalCharacters = 0;
@@ -4333,6 +4354,11 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
       classic: classicGmFlags,
     },
   };
+  gmDebug('buildCharactersResponse:payload', {
+    totalCharacters,
+    totalRealms,
+    isGm: payload.isGm,
+  });
   if (!totalCharacters) {
     payload.message = 'No characters found for your linked accounts.';
   }
@@ -4374,7 +4400,13 @@ function sanitizeAccountIdList(values) {
 
 async function loadGmFlagsForAccounts({ type, accountIds }) {
   const sanitized = sanitizeAccountIdList(accountIds);
+  gmDebug('loadGmFlagsForAccounts:start', {
+    type,
+    requestedCount: Array.isArray(accountIds) ? accountIds.length : 0,
+    sanitizedCount: sanitized.length,
+  });
   if (!sanitized.length) {
+    gmDebug('loadGmFlagsForAccounts:skip-empty', { type });
     return {};
   }
 
@@ -4404,6 +4436,7 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
   const realmCol = realmColCandidates.find((name) => columnNames.includes(name)) || null;
 
   if (!idCol || !gmCol) {
+    gmDebug('loadGmFlagsForAccounts:missing-columns', { type, idCol, gmCol, realmCol });
     return {};
   }
 
@@ -4414,6 +4447,7 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
   const placeholders = sanitized.map(() => '?').join(', ');
   const sql = `SELECT ${selectParts.join(', ')} FROM \`account_access\` WHERE ${idCol} IN (${placeholders})`;
 
+  gmDebug('loadGmFlagsForAccounts:query', { type, idCol, gmCol, realmCol, sql });
   const [rows] = await pool.query(sql, sanitized);
   const result = {};
   for (const row of rows) {
@@ -4424,6 +4458,12 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
       realmId: toSafeNumber(row?.realmId ?? row?.RealmID ?? row?.RealmId) ?? -1,
     };
   }
+  gmDebug('loadGmFlagsForAccounts:result', {
+    type,
+    rowCount: rows.length,
+    gmAccounts: Object.keys(result).length,
+    gmHits: Object.values(result).filter((entry) => (toSafeNumber(entry?.gmlevel) ?? 0) > 0).length,
+  });
   return result;
 }
 
@@ -4528,9 +4568,15 @@ function buildGmInfoFromRows(rows) {
   return normalizeGmInfo(info);
 }
 
-async function fetchAccountGmRows(dbPool, accountIds) {
+async function fetchAccountGmRows(dbPool, accountIds, { realm = 'retail' } = {}) {
   const ids = sanitizeAccountIdList(accountIds);
+  gmDebug('fetchAccountGmRows:start', {
+    realm,
+    requestedCount: Array.isArray(accountIds) ? accountIds.length : 0,
+    sanitizedCount: ids.length,
+  });
   if (!ids.length) {
+    gmDebug('fetchAccountGmRows:skip-empty', { realm });
     return createEmptyGmInfo();
   }
   const placeholders = ids.map(() => '?').join(', ');
@@ -4541,31 +4587,45 @@ async function fetchAccountGmRows(dbPool, accountIds) {
   let lastError = null;
   for (const sql of queries) {
     try {
+      gmDebug('fetchAccountGmRows:query', { realm, sql });
       const [rows] = await dbPool.query(sql, ids);
-      return buildGmInfoFromRows(rows);
+      const info = buildGmInfoFromRows(rows);
+      gmDebug('fetchAccountGmRows:success', {
+        realm,
+        rowCount: rows.length,
+        maxLevel: info.maxLevel,
+        entryCount: info.entries.length,
+      });
+      return info;
     } catch (err) {
       if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        gmDebug('fetchAccountGmRows:query-fallback', { realm, sql, error: err?.message });
         lastError = err;
         continue;
       }
       if (err?.code === 'ER_NO_SUCH_TABLE') {
+        gmDebug('fetchAccountGmRows:no-table', { realm });
         return createEmptyGmInfo();
       }
+      gmDebug('fetchAccountGmRows:query-error', { realm, error: err?.message });
       throw err;
     }
   }
   if (lastError) {
+    gmDebug('fetchAccountGmRows:exhausted', { realm, error: lastError?.message });
     throw lastError;
   }
   return createEmptyGmInfo();
 }
 
 async function getRetailGmInfo(accountIds) {
-  return fetchAccountGmRows(authPool, accountIds);
+  gmDebug('getRetailGmInfo:invoke', { accountIds: sanitizeAccountIdList(accountIds) });
+  return fetchAccountGmRows(authPool, accountIds, { realm: 'retail' });
 }
 
 async function getClassicGmInfo(accountIds) {
-  return fetchAccountGmRows(classicAuthPool, accountIds);
+  gmDebug('getClassicGmInfo:invoke', { accountIds: sanitizeAccountIdList(accountIds) });
+  return fetchAccountGmRows(classicAuthPool, accountIds, { realm: 'classic' });
 }
 
 function pickPrimaryAccountId(portalUser) {
@@ -4692,6 +4752,11 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
   const ip = (req.ip || req.headers['x-forwarded-for'] || '').toString().slice(0, 64);
   const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
   const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
+  gmDebug('persistSession:start', {
+    portalUserId: safePortalId,
+    retailAccounts: sanitizedRetailIds,
+    classicAccounts: sanitizedClassicIds,
+  });
   const primaryAccountId = pickPrimaryAccountId({
     retailAccountIds: sanitizedRetailIds,
     classicAccountIds: sanitizedClassicIds,
@@ -4703,8 +4768,16 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
       getRetailGmInfo(sanitizedRetailIds),
       getClassicGmInfo(sanitizedClassicIds),
     ]);
+    gmDebug('persistSession:gm-loaded', {
+      portalUserId: safePortalId,
+      retailMax: retailGmInfo?.maxLevel,
+      retailEntries: retailGmInfo?.entries?.length || 0,
+      classicMax: classicGmInfo?.maxLevel,
+      classicEntries: classicGmInfo?.entries?.length || 0,
+    });
   } catch (err) {
     console.error('Failed to load GM metadata for session', err);
+    gmDebug('persistSession:gm-error', { portalUserId: safePortalId, error: err?.message });
   }
   const sessionUsername = normalizePortalUsername(username);
   await pool.execute(
@@ -4737,6 +4810,11 @@ async function updateSessionAccountLinks(session, { retailAccountIds, classicAcc
   const hashed = hashSessionToken(session.token);
   const nextRetail = retailAccountIds != null ? sanitizeAccountIdList(retailAccountIds) : session.retailAccountIds || [];
   const nextClassic = classicAccountIds != null ? sanitizeAccountIdList(classicAccountIds) : session.classicAccountIds || [];
+  gmDebug('updateSessionAccountLinks:start', {
+    sessionId: session.id,
+    retailAccounts: nextRetail,
+    classicAccounts: nextClassic,
+  });
   let retailGmInfo = session.retailGmInfo || createEmptyGmInfo();
   let classicGmInfo = session.classicGmInfo || createEmptyGmInfo();
   try {
@@ -4744,8 +4822,16 @@ async function updateSessionAccountLinks(session, { retailAccountIds, classicAcc
       getRetailGmInfo(nextRetail),
       getClassicGmInfo(nextClassic),
     ]);
+    gmDebug('updateSessionAccountLinks:gm-loaded', {
+      sessionId: session.id,
+      retailMax: retailGmInfo?.maxLevel,
+      retailEntries: retailGmInfo?.entries?.length || 0,
+      classicMax: classicGmInfo?.maxLevel,
+      classicEntries: classicGmInfo?.entries?.length || 0,
+    });
   } catch (err) {
     console.error('Failed to refresh GM metadata for session update', err);
+    gmDebug('updateSessionAccountLinks:gm-error', { sessionId: session.id, error: err?.message });
   }
   try {
     await pool.execute(
