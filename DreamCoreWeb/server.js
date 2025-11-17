@@ -110,6 +110,8 @@ const CONFIG = {
   GM_ONLINE_POLL_MS: Number(process.env.GM_ONLINE_POLL_MS || 20 * 1000),
   GM_CLASSIC_ONLINE_LIMIT: Number(process.env.GM_CLASSIC_ONLINE_LIMIT || 12),
   GM_DEBUG: (process.env.GM_DEBUG || 'false').toLowerCase() === 'true',
+  RETAIL_CHARACTER_DEBUG:
+    (process.env.RETAIL_CHARACTER_DEBUG || 'false').toLowerCase() === 'true',
 };
 
 function gmDebug(message, details) {
@@ -122,6 +124,18 @@ function gmDebug(message, details) {
     return;
   }
   console.log(`[GM DEBUG ${timestamp}] ${message}`, details);
+}
+
+function retailCharacterDebug(message, details) {
+  if (!CONFIG.RETAIL_CHARACTER_DEBUG) {
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  if (details === undefined) {
+    console.log(`[RETAIL CHAR DEBUG ${timestamp}] ${message}`);
+    return;
+  }
+  console.log(`[RETAIL CHAR DEBUG ${timestamp}] ${message}`, details);
 }
 
 const SOAP = makeSoapConfig({
@@ -3837,7 +3851,11 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
   const accounts = [];
   let missingLinkTable = false;
   let missingGameAccountTable = false;
+  retailCharacterDebug('fetchGameAccountsForBnet:start', { bnetAccountId });
   try {
+    retailCharacterDebug('fetchGameAccountsForBnet:queryGameAccountLink', {
+      bnetAccountId,
+    });
     const [rows] = await authPool.query(
       `SELECT link.gameaccountid AS gameAccountId,
               ga.id AS gaId,
@@ -3850,6 +3868,10 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
         WHERE link.bnetaccountid = ?`,
       [bnetAccountId]
     );
+    retailCharacterDebug('fetchGameAccountsForBnet:primaryResults', {
+      bnetAccountId,
+      rowCount: Array.isArray(rows) ? rows.length : 0,
+    });
     for (const row of rows) {
       const realmId = toSafeNumber(row.realmId ?? row.realmID);
       const realmEntry = resolveRealmEntry({ realmId }, REALM_LOOKUP);
@@ -3879,6 +3901,9 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
 
   if (!accounts.length && !missingLinkTable) {
     try {
+      retailCharacterDebug('fetchGameAccountsForBnet:fallbackAccountJoin', {
+        bnetAccountId,
+      });
       const [rows] = await authPool.query(
         `SELECT link.gameaccountid AS gameAccountId,
                 acc.id AS accountId,
@@ -3889,6 +3914,10 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
           WHERE link.bnetaccountid = ?`,
         [bnetAccountId]
       );
+      retailCharacterDebug('fetchGameAccountsForBnet:fallbackAccountResults', {
+        bnetAccountId,
+        rowCount: Array.isArray(rows) ? rows.length : 0,
+      });
       const realms = await ensureRealmDirectory();
       for (const row of rows) {
         const realmId = toSafeNumber(row.realmId ?? row.realmID);
@@ -3914,8 +3943,16 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
   if (!accounts.length) {
     const legacyAccounts = await fetchAccountsViaLegacyLink(bnetAccountId);
     accounts.push(...legacyAccounts);
+    retailCharacterDebug('fetchGameAccountsForBnet:legacyResults', {
+      bnetAccountId,
+      rowCount: legacyAccounts.length,
+    });
   }
 
+  retailCharacterDebug('fetchGameAccountsForBnet:complete', {
+    bnetAccountId,
+    accountCount: accounts.length,
+  });
   return accounts;
 }
 
@@ -3951,7 +3988,12 @@ async function loadBattleNetCharacters(bnetAccountIds) {
   const normalizedIds = Array.isArray(bnetAccountIds)
     ? sanitizeAccountIdList(bnetAccountIds)
     : sanitizeAccountIdList([bnetAccountIds]);
+  retailCharacterDebug('loadBattleNetCharacters:start', {
+    input: bnetAccountIds,
+    normalized: normalizedIds,
+  });
   if (!normalizedIds.length) {
+    retailCharacterDebug('loadBattleNetCharacters:emptyInput');
     return { characters: [], realms: [] };
   }
 
@@ -3961,9 +4003,18 @@ async function loadBattleNetCharacters(bnetAccountIds) {
 
   for (const bnetAccountId of normalizedIds) {
     const gameAccounts = await fetchGameAccountsForBnet(bnetAccountId);
+    retailCharacterDebug('loadBattleNetCharacters:accountsLoaded', {
+      bnetAccountId,
+      accountCount: gameAccounts.length,
+    });
     for (const account of gameAccounts) {
       const realmEntry = resolveRealmEntry(account, REALM_LOOKUP);
-      if (!realmEntry) continue;
+      if (!realmEntry) {
+        retailCharacterDebug('loadBattleNetCharacters:missingRealmEntry', {
+          account,
+        });
+        continue;
+      }
       const realmId = toSafeNumber(account.realmId);
       const realmName = account.realmName || realmEntry.config.name || 'Realm';
       const groupKey = `${realmEntry.key}#${realmId ?? 'null'}`;
@@ -4008,18 +4059,35 @@ async function loadBattleNetCharacters(bnetAccountIds) {
   }
 
   if (!groups.size) {
+    retailCharacterDebug('loadBattleNetCharacters:noGroups');
     return { characters: [], realms: [] };
   }
 
   for (const group of groups.values()) {
-    if (!group.entry?.pool || !group.accountIds.length) continue;
+    if (!group.entry?.pool || !group.accountIds.length) {
+      retailCharacterDebug('loadBattleNetCharacters:skipGroup', {
+        realmKey: `${group.entry?.key}#${group.realmId ?? 'null'}`,
+        hasPool: !!group.entry?.pool,
+        accountCount: group.accountIds.length,
+      });
+      continue;
+    }
     const placeholders = group.accountIds.map(() => '?').join(', ');
     const tableName = entryCharactersTable(group.entry);
     try {
+      retailCharacterDebug('loadBattleNetCharacters:queryCharacters', {
+        realmKey: `${group.entry.key}#${group.realmId ?? 'null'}`,
+        tableName,
+        accountIds: group.accountIds,
+      });
       const [rows] = await group.entry.pool.query(
         `SELECT account, name, level, class, race, logout_time FROM \`${tableName}\` WHERE account IN (${placeholders})`,
         group.accountIds
       );
+      retailCharacterDebug('loadBattleNetCharacters:queryResults', {
+        realmKey: `${group.entry.key}#${group.realmId ?? 'null'}`,
+        rowCount: Array.isArray(rows) ? rows.length : 0,
+      });
       const realmMeta = realmMetaMap.get(`${group.entry.key}#${group.realmId ?? 'null'}`);
       for (const row of rows) {
         const accountId = toSafeNumber(row.account ?? row.accountId ?? row.id);
@@ -4047,6 +4115,10 @@ async function loadBattleNetCharacters(bnetAccountIds) {
       }
     } catch (err) {
       console.error('Character lookup failed for realm', group.realmId ?? 'unknown', err);
+      retailCharacterDebug('loadBattleNetCharacters:queryError', {
+        realmKey: `${group.entry.key}#${group.realmId ?? 'null'}`,
+        error: err?.message || String(err),
+      });
       const realmMeta = realmMetaMap.get(`${group.entry.key}#${group.realmId ?? 'null'}`);
       if (realmMeta) {
         realmMeta.error = 'Character lookup failed';
@@ -4083,7 +4155,12 @@ async function loadBattleNetCharacters(bnetAccountIds) {
     };
   });
 
-  return { characters, realms };
+  const result = { characters, realms };
+  retailCharacterDebug('loadBattleNetCharacters:complete', {
+    totalCharacters: characters.length,
+    realmCount: realms.length,
+  });
+  return result;
 }
 
 async function fetchClassicAccountMetadata(accountIds) {
@@ -6757,5 +6834,5 @@ app.listen(CONFIG.PORT, () => {
   console.log(`   Classic portal URL: ${CONFIG.CLASSIC_BASE_URL}`);
   console.log(`   Classic SOAP endpoint: ${CLASSIC_SOAP.host}:${CLASSIC_SOAP.port}`);
   console.log(`\nExample systemd unit (save as /etc/systemd/system/tc-register.service):\n`);
-  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CLASSIC_AUTH_DB_HOST=${CLASSIC_AUTH_DB.HOST}\nEnvironment=CLASSIC_AUTH_DB_PORT=${CLASSIC_AUTH_DB.PORT}\nEnvironment=CLASSIC_AUTH_DB_USER=${CLASSIC_AUTH_DB.USER}\nEnvironment=CLASSIC_AUTH_DB_PASS=${CLASSIC_AUTH_DB.PASS}\nEnvironment=CLASSIC_AUTH_DB_NAME=${CLASSIC_AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=CLASSIC_CHAR_DB_HOST=${CLASSIC_CHAR_DB.HOST}\nEnvironment=CLASSIC_CHAR_DB_PORT=${CLASSIC_CHAR_DB.PORT}\nEnvironment=CLASSIC_CHAR_DB_USER=${CLASSIC_CHAR_DB.USER}\nEnvironment=CLASSIC_CHAR_DB_PASS=${CLASSIC_CHAR_DB.PASS}\nEnvironment=CLASSIC_CHAR_DB_NAME=${CLASSIC_CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\n\n[Install]\nWantedBy=multi-user.target\n`);
+  console.log(`[Unit]\nDescription=TrinityCore Self-Serve Registration\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${process.cwd()}\nExecStart=/usr/bin/node ${process.cwd()}/server.js\nRestart=always\nEnvironment=PORT=${CONFIG.PORT}\nEnvironment=BASE_URL=${CONFIG.BASE_URL}\nEnvironment=TC_SOAP_HOST=${CONFIG.TC_SOAP_HOST}\nEnvironment=TC_SOAP_PORT=${CONFIG.TC_SOAP_PORT}\nEnvironment=TC_SOAP_USER=${CONFIG.TC_SOAP_USER}\nEnvironment=TC_SOAP_PASS=${CONFIG.TC_SOAP_PASS}\nEnvironment=SOAP_DEBUG=${CONFIG.SOAP_DEBUG}\nEnvironment=TURNSTILE_SITEKEY=${CONFIG.TURNSTILE_SITEKEY}\nEnvironment=TURNSTILE_SECRET=${CONFIG.TURNSTILE_SECRET}\nEnvironment=CLASSIC_TURNSTILE_SITEKEY=${CONFIG.CLASSIC_TURNSTILE_SITEKEY}\nEnvironment=CLASSIC_TURNSTILE_SECRET=${CONFIG.CLASSIC_TURNSTILE_SECRET}\nEnvironment=SMTP_HOST=${CONFIG.SMTP_HOST}\nEnvironment=SMTP_PORT=${CONFIG.SMTP_PORT}\nEnvironment=SMTP_SECURE=${CONFIG.SMTP_SECURE}\nEnvironment=SMTP_USER=${CONFIG.SMTP_USER}\nEnvironment=SMTP_PASS=${CONFIG.SMTP_PASS}\nEnvironment=FROM_EMAIL=${CONFIG.FROM_EMAIL}\nEnvironment=BRAND_NAME=${CONFIG.BRAND_NAME}\nEnvironment=CLASSIC_BRAND_NAME=${CONFIG.CLASSIC_BRAND_NAME}\nEnvironment=CLASSIC_HEADER_TITLE=${CONFIG.CLASSIC_HEADER_TITLE}\nEnvironment=CLASSIC_GUIDE_URL=${CONFIG.CLASSIC_GUIDE_URL}\nEnvironment=CLASSIC_CLIENT_DOWNLOAD_URL=${CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL}\nEnvironment=CLASSIC_BASE_URL=${CONFIG.CLASSIC_BASE_URL}\nEnvironment=CLASSIC_SOAP_HOST=${CLASSIC_SOAP.host}\nEnvironment=CLASSIC_SOAP_PORT=${CLASSIC_SOAP.port}\nEnvironment=CLASSIC_SOAP_USER=${CLASSIC_SOAP.user}\nEnvironment=CLASSIC_SOAP_PASS=${CLASSIC_SOAP.pass}\nEnvironment=DB_HOST=${DB.HOST}\nEnvironment=DB_PORT=${DB.PORT}\nEnvironment=DB_USER=${DB.USER}\nEnvironment=DB_PASS=${DB.PASS}\nEnvironment=DB_NAME=${DB.NAME}\nEnvironment=CLASSIC_DB_HOST=${CLASSIC_DB.HOST}\nEnvironment=CLASSIC_DB_PORT=${CLASSIC_DB.PORT}\nEnvironment=CLASSIC_DB_USER=${CLASSIC_DB.USER}\nEnvironment=CLASSIC_DB_PASS=${CLASSIC_DB.PASS}\nEnvironment=CLASSIC_DB_NAME=${CLASSIC_DB.NAME}\nEnvironment=AUTH_DB_HOST=${AUTH_DB.HOST}\nEnvironment=AUTH_DB_PORT=${AUTH_DB.PORT}\nEnvironment=AUTH_DB_USER=${AUTH_DB.USER}\nEnvironment=AUTH_DB_PASS=${AUTH_DB.PASS}\nEnvironment=AUTH_DB_NAME=${AUTH_DB.NAME}\nEnvironment=CLASSIC_AUTH_DB_HOST=${CLASSIC_AUTH_DB.HOST}\nEnvironment=CLASSIC_AUTH_DB_PORT=${CLASSIC_AUTH_DB.PORT}\nEnvironment=CLASSIC_AUTH_DB_USER=${CLASSIC_AUTH_DB.USER}\nEnvironment=CLASSIC_AUTH_DB_PASS=${CLASSIC_AUTH_DB.PASS}\nEnvironment=CLASSIC_AUTH_DB_NAME=${CLASSIC_AUTH_DB.NAME}\nEnvironment=CHAR_DB_HOST=${CHAR_DB.HOST}\nEnvironment=CHAR_DB_PORT=${CHAR_DB.PORT}\nEnvironment=CHAR_DB_USER=${CHAR_DB.USER}\nEnvironment=CHAR_DB_PASS=${CHAR_DB.PASS}\nEnvironment=CHAR_DB_NAME=${CHAR_DB.NAME}\nEnvironment=CLASSIC_CHAR_DB_HOST=${CLASSIC_CHAR_DB.HOST}\nEnvironment=CLASSIC_CHAR_DB_PORT=${CLASSIC_CHAR_DB.PORT}\nEnvironment=CLASSIC_CHAR_DB_USER=${CLASSIC_CHAR_DB.USER}\nEnvironment=CLASSIC_CHAR_DB_PASS=${CLASSIC_CHAR_DB.PASS}\nEnvironment=CLASSIC_CHAR_DB_NAME=${CLASSIC_CHAR_DB.NAME}\nEnvironment=SESSION_TTL_HOURS=${CONFIG.SESSION_TTL_HOURS}\nEnvironment=SESSION_COOKIE_NAME=${CONFIG.SESSION_COOKIE_NAME}\nEnvironment=COOKIE_SECURE=${CONFIG.COOKIE_SECURE}\nEnvironment=RETAIL_CHARACTER_DEBUG=${CONFIG.RETAIL_CHARACTER_DEBUG}\n\n[Install]\nWantedBy=multi-user.target\n`);
 });
