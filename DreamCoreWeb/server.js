@@ -3638,6 +3638,21 @@ function toSafeNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+function buildRealmDirectoryFromConfig(family = null) {
+  const configs = Array.isArray(REALM_DB_CONFIGS) ? REALM_DB_CONFIGS : [];
+  return configs
+    .filter((cfg) => {
+      if (family === 'classic') return cfg.family === 'classic';
+      if (family === 'retail') return cfg.family !== 'classic';
+      return true;
+    })
+    .map((cfg) => ({
+      id: toSafeNumber(cfg.realmId),
+      name: cfg.name || null,
+      charDb: cfg.charDbLabel || cfg.database || null,
+    }));
+}
+
 function safeIdentifier(value, fallback) {
   const str = String(value || '').trim();
   if (!str) return fallback;
@@ -3668,11 +3683,17 @@ async function ensureRealmDirectory() {
       charDb: row.char_db || row.charDb || null,
     }));
   } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      REALM_DIRECTORY_CACHE = [];
+    if (err?.code === 'ER_BAD_FIELD_ERROR') {
+      console.warn(
+        'realm directory: char_db column not found, falling back to REALM_DATABASES config'
+      );
+      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
+    } else if (err?.code === 'ER_NO_SUCH_TABLE') {
+      console.warn('realm directory: realmlist table missing, falling back to REALM_DATABASES config');
+      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
     } else {
       console.error('Failed to load realm directory', err);
-      REALM_DIRECTORY_CACHE = [];
+      REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig();
     }
   }
   return REALM_DIRECTORY_CACHE;
@@ -3694,11 +3715,19 @@ async function ensureClassicRealmDirectory() {
       charDb: row.char_db || row.charDb || null,
     }));
   } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      CLASSIC_REALM_DIRECTORY_CACHE = [];
+    if (err?.code === 'ER_BAD_FIELD_ERROR') {
+      console.warn(
+        'classic realm directory: char_db column not found, falling back to REALM_DATABASES config'
+      );
+      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
+    } else if (err?.code === 'ER_NO_SUCH_TABLE') {
+      console.warn(
+        'classic realm directory: realmlist table missing, falling back to REALM_DATABASES config'
+      );
+      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
     } else {
       console.error('Failed to load classic realm directory', err);
-      CLASSIC_REALM_DIRECTORY_CACHE = [];
+      CLASSIC_REALM_DIRECTORY_CACHE = buildRealmDirectoryFromConfig('classic');
     }
   }
   return CLASSIC_REALM_DIRECTORY_CACHE;
