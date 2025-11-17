@@ -4514,15 +4514,25 @@ async function loadGmFlagsForAccounts({ type, accountIds }) {
   }
 
   const columnNames = Array.isArray(columnRows) ? columnRows.map((col) => col.Field) : [];
-  const idCol = columnNames.includes('id')
-    ? 'id'
-    : columnNames.includes('account_id')
-    ? 'account_id'
-    : null;
+  const columnLookup = new Map(columnNames.map((name) => [String(name).toLowerCase(), name]));
+  const pickColumn = (...candidates) => {
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (columnNames.includes(candidate)) {
+        return candidate;
+      }
+      const normalized = String(candidate).toLowerCase();
+      if (columnLookup.has(normalized)) {
+        return columnLookup.get(normalized);
+      }
+    }
+    return null;
+  };
+  const idCol = pickColumn('id', 'account_id', 'accountid', 'accountId', 'AccountID');
   const gmColCandidates = ['gmlevel', 'gmLevel', 'GMLevel', 'securitylevel', 'SecurityLevel'];
-  const gmCol = gmColCandidates.find((name) => columnNames.includes(name)) || null;
+  const gmCol = pickColumn(...gmColCandidates);
   const realmColCandidates = ['RealmID', 'realmId', 'realmID', 'realm_id'];
-  const realmCol = realmColCandidates.find((name) => columnNames.includes(name)) || null;
+  const realmCol = pickColumn(...realmColCandidates);
 
   if (!idCol || !gmCol) {
     gmDebug('loadGmFlagsForAccounts:missing-columns', { type, idCol, gmCol, realmCol });
