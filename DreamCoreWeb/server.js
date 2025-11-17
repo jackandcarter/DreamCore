@@ -3753,6 +3753,59 @@ async function ensureClassicRealmDirectory() {
   return CLASSIC_REALM_DIRECTORY_CACHE;
 }
 
+const LEGACY_BNET_ACCOUNT_COLUMNS = [
+  'battlenetAccount',
+  'battlenet_account',
+  'bnetAccount',
+  'bnet_account',
+  'bnetaccount',
+];
+
+async function fetchAccountsViaLegacyLink(bnetAccountId) {
+  if (bnetAccountId == null) return [];
+  const realms = await ensureRealmDirectory();
+  const realmMap = new Map();
+  for (const realm of realms) {
+    if (realm?.id == null || realmMap.has(realm.id)) continue;
+    realmMap.set(realm.id, realm);
+  }
+  for (const column of LEGACY_BNET_ACCOUNT_COLUMNS) {
+    let rows;
+    try {
+      [rows] = await authPool.query(
+        `SELECT id, username, realmID FROM \`account\` WHERE ${column} = ?`,
+        [bnetAccountId]
+      );
+    } catch (err) {
+      if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        continue;
+      }
+      if (err?.code === 'ER_NO_SUCH_TABLE') {
+        return [];
+      }
+      throw err;
+    }
+    if (!Array.isArray(rows) || !rows.length) {
+      continue;
+    }
+    return rows
+      .map((row) => {
+        const realmId = toSafeNumber(row.realmId ?? row.realmID);
+        const realmEntry = resolveRealmEntry({ realmId }, REALM_LOOKUP);
+        const realmInfo = (realmId != null && realmMap.get(realmId)) || null;
+        return {
+          gameAccountId: toSafeNumber(row.id),
+          username: row.username || null,
+          realmId,
+          realmName: realmInfo?.name || realmEntry?.config?.name || null,
+          realmCharDb: realmEntry?.config?.charDbLabel || realmEntry?.config?.database || null,
+        };
+      })
+      .filter((entry) => entry.gameAccountId != null);
+  }
+  return [];
+}
+
 async function fetchGameAccountsForBnet(bnetAccountId) {
   if (bnetAccountId == null) return [];
   const accounts = [];
@@ -3798,11 +3851,7 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
     }
   }
 
-  if (missingLinkTable) {
-    return accounts;
-  }
-
-  if (!accounts.length) {
+  if (!accounts.length && !missingLinkTable) {
     try {
       const [rows] = await authPool.query(
         `SELECT link.gameaccountid AS gameAccountId,
@@ -3834,6 +3883,11 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
         throw err;
       }
     }
+  }
+
+  if (!accounts.length) {
+    const legacyAccounts = await fetchAccountsViaLegacyLink(bnetAccountId);
+    accounts.push(...legacyAccounts);
   }
 
   return accounts;
@@ -5183,10 +5237,33 @@ async function findBnetIdForGameAccount(accountId) {
       return parsed == null ? null : parsed;
     }
   } catch (err) {
-    if (err?.code === 'ER_NO_SUCH_TABLE') {
-      return null;
+    if (err?.code !== 'ER_NO_SUCH_TABLE') {
+      throw err;
     }
-    throw err;
+  }
+  for (const column of LEGACY_BNET_ACCOUNT_COLUMNS) {
+    try {
+      const [rows] = await authPool.execute(
+        `SELECT ${column} AS bnetAccountId FROM \`account\` WHERE id = ? LIMIT 1`,
+        [safeId]
+      );
+      if (!rows.length) {
+        continue;
+      }
+      const raw = rows[0]?.bnetAccountId ?? rows[0]?.bnetaccountid ?? rows[0]?.[column];
+      const parsed = toSafeNumber(raw);
+      if (parsed != null) {
+        return parsed;
+      }
+    } catch (err) {
+      if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        continue;
+      }
+      if (err?.code === 'ER_NO_SUCH_TABLE') {
+        return null;
+      }
+      throw err;
+    }
   }
   return null;
 }
