@@ -265,10 +265,11 @@ const CHAR_DB = {
 };
 
 const CLASSIC_CHAR_DB = {
-  HOST: process.env.CLASSIC_CHAR_DB_HOST || process.env.CLASSIC_DB_HOST || CHAR_DB.HOST,
-  PORT: Number(process.env.CLASSIC_CHAR_DB_PORT || process.env.CLASSIC_DB_PORT || CHAR_DB.PORT || 3306),
-  USER: process.env.CLASSIC_CHAR_DB_USER || process.env.CLASSIC_DB_USER || CHAR_DB.USER || 'trinity',
-  PASS: process.env.CLASSIC_CHAR_DB_PASS || process.env.CLASSIC_DB_PASS || CHAR_DB.PASS || DEFAULT_DB_PASS,
+  // Classic character roster should reuse the Trinity character credentials by default.
+  HOST: process.env.CLASSIC_CHAR_DB_HOST || CHAR_DB.HOST,
+  PORT: Number(process.env.CLASSIC_CHAR_DB_PORT || CHAR_DB.PORT || process.env.CLASSIC_DB_PORT || 3306),
+  USER: process.env.CLASSIC_CHAR_DB_USER || CHAR_DB.USER || 'trinity',
+  PASS: process.env.CLASSIC_CHAR_DB_PASS || CHAR_DB.PASS || DEFAULT_DB_PASS,
   NAME: process.env.CLASSIC_CHAR_DB_NAME || 'tc_characters_335',
 };
 
