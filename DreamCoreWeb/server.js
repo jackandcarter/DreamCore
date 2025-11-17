@@ -1274,7 +1274,7 @@ ${SHARED_STYLES}
                 </div>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p id="classicResetMsg" class="text-sm text-rose-100/90"></p>
-                  <button id="classicResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Save new password</button>
+                  <button id="classicResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-400 via-pink-400 to-orange-300 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:from-rose-300 hover:via-pink-300 hover:to-orange-200 focus:ring-2 focus:ring-rose-200" type="submit">Save new password</button>
                 </div>
               </form>
             </div>
