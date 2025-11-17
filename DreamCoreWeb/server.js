@@ -1864,6 +1864,7 @@ const accountScript = () => {
       charactersPayload = data;
       charactersLoaded = true;
       updateCharactersUI();
+      updateGmAccessUI();
     } catch (err) {
       console.error('Character fetch failed', err);
       characterStatus.textContent = 'Network error while loading characters.';
@@ -2072,11 +2073,23 @@ const accountScript = () => {
     const gmAccess = normalizeGmPayload(currentSession?.gmAccess);
     const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
     const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
+    const gmAccountFlags =
+      charactersPayload && typeof charactersPayload === 'object'
+        ? charactersPayload.gmAccounts || {}
+        : {};
+    const gmRetailFromRoster = Object.values(gmAccountFlags?.retail || {}).some((entry) => {
+      const level = Number(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel) || 0;
+      return level > 0;
+    });
+    const gmClassicFromRoster = Object.values(gmAccountFlags?.classic || {}).some((entry) => {
+      const level = Number(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel) || 0;
+      return level > 0;
+    });
     const realms = [];
-    if (retailMax > 0) realms.push('retail');
-    if (classicMax > 0) realms.push('classic');
-    const hasGm = realms.length > 0;
-    gmClassicAccessible = classicMax > 0;
+    if (retailMax > 0 || gmRetailFromRoster) realms.push('retail');
+    if (classicMax > 0 || gmClassicFromRoster) realms.push('classic');
+    const hasGm = Boolean(charactersPayload?.isGm) || realms.length > 0;
+    gmClassicAccessible = realms.includes('classic');
 
     if (gmTabButton) {
       gmTabButton.classList.toggle('hidden', !hasGm);
@@ -4270,6 +4283,11 @@ function createEmptyCharacterResponse() {
     summary: { totalCharacters: 0, totalRealms: 0 },
     message: 'No characters found for your linked accounts.',
     refreshedAt,
+    isGm: false,
+    gmAccounts: {
+      retail: {},
+      classic: {},
+    },
   };
 }
 
@@ -4279,6 +4297,10 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
   if (!sanitizedRetailIds.length && !sanitizedClassicIds.length) {
     return createEmptyCharacterResponse();
   }
+  const [retailGmFlags, classicGmFlags] = await Promise.all([
+    loadGmFlagsForAccounts({ type: 'retail', accountIds: sanitizedRetailIds }),
+    loadGmFlagsForAccounts({ type: 'classic', accountIds: sanitizedClassicIds }),
+  ]);
   const refreshedAt = new Date().toISOString();
   const families = [];
   let totalCharacters = 0;
@@ -4305,6 +4327,11 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
     families,
     summary: { totalCharacters, totalRealms },
     refreshedAt,
+    isGm: hasAnyGmFlags(retailGmFlags) || hasAnyGmFlags(classicGmFlags),
+    gmAccounts: {
+      retail: retailGmFlags,
+      classic: classicGmFlags,
+    },
   };
   if (!totalCharacters) {
     payload.message = 'No characters found for your linked accounts.';
@@ -4343,6 +4370,71 @@ function sanitizeAccountIdList(values) {
     }
   }
   return clean;
+}
+
+async function loadGmFlagsForAccounts({ type, accountIds }) {
+  const sanitized = sanitizeAccountIdList(accountIds);
+  if (!sanitized.length) {
+    return {};
+  }
+
+  const pool = type === 'classic' ? classicAuthPool : authPool;
+  let columnRows;
+  try {
+    [columnRows] = await pool.query('SHOW COLUMNS FROM `account_access`');
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') {
+      return {};
+    }
+    throw err;
+  }
+
+  const columnNames = Array.isArray(columnRows) ? columnRows.map((col) => col.Field) : [];
+  const idCol = columnNames.includes('id')
+    ? 'id'
+    : columnNames.includes('account_id')
+    ? 'account_id'
+    : null;
+  const gmCol = columnNames.includes('gmlevel')
+    ? 'gmlevel'
+    : columnNames.includes('gmLevel')
+    ? 'gmLevel'
+    : null;
+  const realmColCandidates = ['RealmID', 'realmId', 'realmID', 'realm_id'];
+  const realmCol = realmColCandidates.find((name) => columnNames.includes(name)) || null;
+
+  if (!idCol || !gmCol) {
+    return {};
+  }
+
+  const selectParts = [`${idCol} AS accountId`, `${gmCol} AS gmlevel`];
+  if (realmCol) {
+    selectParts.push(`${realmCol} AS realmId`);
+  }
+  const placeholders = sanitized.map(() => '?').join(', ');
+  const sql = `SELECT ${selectParts.join(', ')} FROM \`account_access\` WHERE ${idCol} IN (${placeholders})`;
+
+  const [rows] = await pool.query(sql, sanitized);
+  const result = {};
+  for (const row of rows) {
+    const id = toSafeNumber(row?.accountId);
+    if (id == null) continue;
+    result[id] = {
+      gmlevel: toSafeNumber(row?.gmlevel ?? row?.gmLevel ?? row?.GMLevel) ?? 0,
+      realmId: toSafeNumber(row?.realmId ?? row?.RealmID ?? row?.RealmId) ?? -1,
+    };
+  }
+  return result;
+}
+
+function hasAnyGmFlags(flags) {
+  if (!flags || typeof flags !== 'object') {
+    return false;
+  }
+  return Object.values(flags).some((entry) => {
+    const gmLevel = toSafeNumber(entry?.gmlevel ?? entry?.gmLevel ?? entry?.GMLevel);
+    return gmLevel != null && gmLevel > 0;
+  });
 }
 
 function createEmptyGmInfo() {
