@@ -6333,6 +6333,11 @@ app.post('/api/register', limiter, async (req, res) => {
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
 
+    const existingPortalUser = await getPortalUserByEmail(email);
+    if (existingPortalUser) {
+      return res.status(400).json({ error: 'You already have a portal account, please login instead.' });
+    }
+
     const ok = await verifyTurnstile(cfToken, req.ip, CONFIG.TURNSTILE_SECRET);
     if (!ok) return badRequest(res, 'CAPTCHA failed');
 
@@ -6388,6 +6393,11 @@ app.post('/api/classic/register', limiter, async (req, res) => {
 
     if (!isValidPassword(password)) return badRequest(res, 'Invalid password');
     if (!isValidEmail(email)) return badRequest(res, 'Invalid email');
+
+    const existingPortalUser = await getPortalUserByEmail(email);
+    if (existingPortalUser) {
+      return res.status(400).json({ error: 'You already have a portal account, please login instead.' });
+    }
 
     const ok = await verifyTurnstile(cfToken, req.ip, CONFIG.CLASSIC_TURNSTILE_SECRET);
     if (!ok) return badRequest(res, 'CAPTCHA failed');
