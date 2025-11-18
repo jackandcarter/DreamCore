@@ -1345,17 +1345,7 @@ ${SHARED_STYLES}
                   <button id="classicLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-rose-900/40 transition hover:scale-[1.01] focus:ring-2 focus:ring-rose-300" type="submit">Create Classic login</button>
                 </div>
               </form>
-              <form id="classicResetForm" class="hidden space-y-4 rounded-2xl gradient-border bg-gray-900/60 p-4">
-                <p class="text-sm text-rose-100/85">Reset your Classic client password. We keep your portal login in sync automatically.</p>
-                <div>
-                  <label class="block text-sm font-semibold text-rose-100 mb-1" for="classicResetPassword">New password</label>
-                  <input id="classicResetPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400" placeholder="••••••••" />
-                </div>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p id="classicResetMsg" class="text-sm text-rose-100/90"></p>
-                  <button id="classicResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-rose-400 via-pink-400 to-orange-300 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:from-rose-300 hover:via-pink-300 hover:to-orange-200 focus:ring-2 focus:ring-rose-200" type="submit">Save new password</button>
-                </div>
-              </form>
+              <p class="text-xs text-rose-100/70">Need to change your Classic password later? Use the Account tab's universal reset—your portal login updates Classic and Retail together.</p>
             </div>
           </section>
 
@@ -1388,17 +1378,7 @@ ${SHARED_STYLES}
                   <button id="retailLinkSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Create retail login</button>
                 </div>
               </form>
-              <form id="retailResetForm" class="hidden space-y-4 rounded-2xl gradient-border bg-gray-900/60 p-4">
-                <p class="text-sm text-indigo-200/85">Reset your retail password here. Your portal login and any Classic account stay synced to this new password.</p>
-                <div>
-                  <label class="block text-sm font-semibold text-indigo-200 mb-1" for="retailResetPassword">New password</label>
-                  <input id="retailResetPassword" type="password" required minlength="${CONFIG.MIN_PASS}" maxlength="${CONFIG.MAX_PASS}" pattern="[^\\s'\"]+" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="••••••••" />
-                </div>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p id="retailResetMsg" class="text-sm text-indigo-200/90"></p>
-                  <button id="retailResetSubmit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" type="submit">Save new password</button>
-                </div>
-              </form>
+              <p class="text-xs text-indigo-200/70">Need to change your password later? Head back to the Account tab and run the universal reset. We'll update your portal, Retail, and Classic logins in one shot.</p>
             </div>
           </section>
 
@@ -1573,11 +1553,6 @@ const accountScript = () => {
   const retailLinkSubmit = document.getElementById('retailLinkSubmit');
   const retailLinkedSummary = document.getElementById('retailLinkedSummary');
   const retailGuideButton = document.getElementById('retailGuideButton');
-  const retailResetSection = document.getElementById('retailResetForm');
-  const retailResetForm = document.getElementById('retailResetForm');
-  const retailResetPassword = document.getElementById('retailResetPassword');
-  const retailResetMsg = document.getElementById('retailResetMsg');
-  const retailResetSubmit = document.getElementById('retailResetSubmit');
   const classicLinkForm = document.getElementById('classicLinkForm');
   const classicLinkUsername = document.getElementById('classicLinkUsername');
   const classicLinkPassword = document.getElementById('classicLinkPassword');
@@ -1585,11 +1560,6 @@ const accountScript = () => {
   const classicLinkSubmit = document.getElementById('classicLinkSubmit');
   const classicLinkedSummary = document.getElementById('classicLinkedSummary');
   const classicDownloadButton = document.getElementById('classicDownloadButton');
-  const classicResetSection = document.getElementById('classicResetForm');
-  const classicResetForm = document.getElementById('classicResetForm');
-  const classicResetPassword = document.getElementById('classicResetPassword');
-  const classicResetMsg = document.getElementById('classicResetMsg');
-  const classicResetSubmit = document.getElementById('classicResetSubmit');
   const tabButtons = document.querySelectorAll('[data-tab-target]');
   const tabPanels = document.querySelectorAll('[data-tab-panel]');
   const gmTabButton = document.getElementById('gmTabButton');
@@ -1659,48 +1629,6 @@ const accountScript = () => {
     if (!button) return;
     button.disabled = state;
     button.classList.toggle('opacity-60', state);
-  }
-
-  function attachClientResetHandler({ form, input, msgEl, submitButton }) {
-    if (!form || !input || !msgEl) return;
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const newPassword = input.value || '';
-      if (!newPassword) {
-        msgEl.textContent = 'Enter a new password to continue.';
-        return;
-      }
-      if (/\s/.test(newPassword) || /['"]/.test(newPassword)) {
-        msgEl.textContent = 'Password cannot contain spaces or quotes.';
-        return;
-      }
-      if (newPassword.length < MIN_PASS) {
-        msgEl.textContent = `Password must be at least ${MIN_PASS} characters.`;
-        return;
-      }
-      msgEl.textContent = 'Updating password…';
-      setLinkLoading(submitButton, true);
-      try {
-        const res = await fetch('/api/account/reset-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ newPassword }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          msgEl.textContent = data?.error ? 'Error: ' + data.error : 'Unable to reset password.';
-          return;
-        }
-        msgEl.textContent = 'Password updated. Use this new login everywhere.';
-        input.value = '';
-      } catch (err) {
-        console.error('Client password reset failed', err);
-        msgEl.textContent = 'Network error. Please try again.';
-      } finally {
-        setLinkLoading(submitButton, false);
-      }
-    });
   }
 
   function realmLabel(realm) {
@@ -2444,19 +2372,6 @@ const accountScript = () => {
     return base.trim();
   }
 
-  attachClientResetHandler({
-    form: retailResetForm,
-    input: retailResetPassword,
-    msgEl: retailResetMsg,
-    submitButton: retailResetSubmit,
-  });
-  attachClientResetHandler({
-    form: classicResetForm,
-    input: classicResetPassword,
-    msgEl: classicResetMsg,
-    submitButton: classicResetSubmit,
-  });
-
   function updateLinkingUI() {
     const retailIds = Array.isArray(currentSession?.retailAccountIds) ? currentSession.retailAccountIds : [];
     const classicIds = Array.isArray(currentSession?.classicAccountIds) ? currentSession.classicAccountIds : [];
@@ -2508,13 +2423,6 @@ const accountScript = () => {
     if (classicDownloadButton) {
       classicDownloadButton.classList.toggle('hidden', !hasClassic);
     }
-    if (retailResetSection) {
-      retailResetSection.classList.toggle('hidden', !hasRetail);
-    }
-    if (classicResetSection) {
-      classicResetSection.classList.toggle('hidden', !hasClassic);
-    }
-
     if (classicLinkUsername && !classicLinkUsername.value.trim() && currentSession) {
       classicLinkUsername.value = deriveClassicUsername();
     }
@@ -5563,6 +5471,14 @@ async function applyLinkedPasswordUpdate({ portalUser, newPassword }) {
   }
 }
 
+async function updatePortalAndLinkedPasswords({ portalUser, newPassword }) {
+  if (!portalUser || portalUser.id == null || typeof newPassword !== 'string' || !newPassword.length) {
+    throw new Error('Missing portal user or password');
+  }
+  await setPortalUserPassword(portalUser.id, newPassword);
+  await applyLinkedPasswordUpdate({ portalUser, newPassword });
+}
+
 async function linkPortalAccounts({ portalUserId, password, username, gameType }) {
   if (!isValidPassword(password)) {
     throw new PortalHttpError('Invalid password');
@@ -5629,8 +5545,7 @@ async function linkPortalAccounts({ portalUserId, password, username, gameType }
   portalUser.retailAccountIds = retailIds;
   portalUser.classicAccountIds = classicIds;
 
-  await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
-  await setPortalUserPassword(portalUser.id, password);
+  await updatePortalAndLinkedPasswords({ portalUser, newPassword: password });
 
   return { portalUser, linked: targetType, retailAccountIds: retailIds, classicAccountIds: classicIds };
 }
@@ -6087,9 +6002,7 @@ app.post('/api/account/reset-password', requireSession, async (req, res) => {
       return res.status(404).json({ error: 'Portal account not found.' });
     }
 
-    await applyLinkedPasswordUpdate({ portalUser, newPassword });
-
-    await setPortalUserPassword(portalUser.id, newPassword);
+    await updatePortalAndLinkedPasswords({ portalUser, newPassword });
 
     return res.json({ ok: true });
   } catch (e) {
@@ -6528,8 +6441,7 @@ app.post('/api/password-reset/confirm', passwordResetLimiter, async (req, res) =
       await pool.execute('DELETE FROM password_resets WHERE token = ?', [token]);
       return badRequest(res, 'Reset link is invalid or expired.');
     }
-    await applyLinkedPasswordUpdate({ portalUser, newPassword: password });
-    await setPortalUserPassword(portalUser.id, password);
+    await updatePortalAndLinkedPasswords({ portalUser, newPassword: password });
     await pool.execute('DELETE FROM password_resets WHERE email = ?', [portalUser.email]);
     return res.json({ ok: true });
   } catch (e) {
