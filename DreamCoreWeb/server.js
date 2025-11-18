@@ -1919,6 +1919,12 @@ const accountScript = () => {
     }
   }
 
+  function gmRealmSelectLabel(realm) {
+    if (realm === 'classic') return 'DreamCore Classic';
+    if (realm === 'retail') return 'DreamCore Retail';
+    return `${realmLabel(realm)} GM`;
+  }
+
   function updateGmRealmOptions(realms) {
     if (!gmRealmSelect) return;
     const available = Array.isArray(realms) ? realms : [];
@@ -1940,15 +1946,15 @@ const accountScript = () => {
       return;
     }
     gmRealmSelect.disabled = available.length === 1;
-    available.forEach((realm, index) => {
+    const preferredRealm = available.includes('classic') ? 'classic' : available[0];
+    available.forEach((realm) => {
       const option = document.createElement('option');
       option.value = realm;
-      option.textContent = `${realmLabel(realm)} GM`;
-      if (index === 0) {
-        option.selected = true;
-      }
+      option.textContent = gmRealmSelectLabel(realm);
+      option.selected = realm === preferredRealm;
       gmRealmSelect.appendChild(option);
     });
+    gmRealmSelect.value = preferredRealm;
     if (gmCommandMsg) {
       gmCommandMsg.textContent = 'Enter a command and send it to the selected realm.';
     }
