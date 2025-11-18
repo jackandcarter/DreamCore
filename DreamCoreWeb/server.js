@@ -3965,6 +3965,42 @@ const LEGACY_BNET_ACCOUNT_COLUMNS = [
   'bnetaccount',
 ];
 
+let ACCOUNT_TABLE_COLUMN_INFO = null;
+
+async function ensureAccountTableColumnInfo() {
+  if (ACCOUNT_TABLE_COLUMN_INFO) {
+    return ACCOUNT_TABLE_COLUMN_INFO;
+  }
+  const info = { realmColumn: null };
+  if (!authPool) {
+    ACCOUNT_TABLE_COLUMN_INFO = info;
+    return info;
+  }
+  try {
+    const [rows] = await authPool.query('SHOW COLUMNS FROM `account`');
+    const lookup = new Map();
+    for (const row of rows || []) {
+      const raw = row?.Field || row?.field || row?.COLUMN_NAME;
+      if (!raw) continue;
+      lookup.set(String(raw).toLowerCase(), String(raw));
+    }
+    const realmCandidates = ['realmid', 'realm_id', 'realmId', 'RealmID'];
+    for (const candidate of realmCandidates) {
+      const normalized = lookup.get(candidate.toLowerCase());
+      if (normalized) {
+        info.realmColumn = normalized;
+        break;
+      }
+    }
+  } catch (err) {
+    if (err?.code !== 'ER_NO_SUCH_TABLE') {
+      console.warn('Failed to inspect auth.account columns', err?.message || err);
+    }
+  }
+  ACCOUNT_TABLE_COLUMN_INFO = info;
+  return info;
+}
+
 async function fetchAccountsViaLegacyLink(bnetAccountId) {
   if (bnetAccountId == null) return [];
   retailCharacterDebug('fetchAccountsViaLegacyLink:start', { bnetAccountId });
@@ -3974,6 +4010,9 @@ async function fetchAccountsViaLegacyLink(bnetAccountId) {
     if (realm?.id == null || realmMap.has(realm.id)) continue;
     realmMap.set(realm.id, realm);
   }
+  const accountColumns = await ensureAccountTableColumnInfo();
+  const realmColumnName = safeIdentifier(accountColumns?.realmColumn, null);
+  const realmSelect = realmColumnName ? `\`${realmColumnName}\` AS realmId` : 'NULL AS realmId';
   for (const column of LEGACY_BNET_ACCOUNT_COLUMNS) {
     retailCharacterDebug('fetchAccountsViaLegacyLink:tryColumn', {
       bnetAccountId,
@@ -3981,8 +4020,17 @@ async function fetchAccountsViaLegacyLink(bnetAccountId) {
     });
     let rows;
     try {
+      const columnName = safeIdentifier(column, null);
+      if (!columnName) {
+        retailCharacterDebug('fetchAccountsViaLegacyLink:skipColumn', {
+          bnetAccountId,
+          column,
+          reason: 'invalidColumnName',
+        });
+        continue;
+      }
       [rows] = await authPool.query(
-        `SELECT id, username, realmID FROM \`account\` WHERE ${column} = ?`,
+        `SELECT id, username, ${realmSelect} FROM \`account\` WHERE \`${columnName}\` = ?`,
         [bnetAccountId]
       );
     } catch (err) {
