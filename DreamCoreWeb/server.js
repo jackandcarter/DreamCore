@@ -3818,6 +3818,7 @@ const LEGACY_BNET_ACCOUNT_COLUMNS = [
 
 async function fetchAccountsViaLegacyLink(bnetAccountId) {
   if (bnetAccountId == null) return [];
+  retailCharacterDebug('fetchAccountsViaLegacyLink:start', { bnetAccountId });
   const realms = await ensureRealmDirectory();
   const realmMap = new Map();
   for (const realm of realms) {
@@ -3825,6 +3826,10 @@ async function fetchAccountsViaLegacyLink(bnetAccountId) {
     realmMap.set(realm.id, realm);
   }
   for (const column of LEGACY_BNET_ACCOUNT_COLUMNS) {
+    retailCharacterDebug('fetchAccountsViaLegacyLink:tryColumn', {
+      bnetAccountId,
+      column,
+    });
     let rows;
     try {
       [rows] = await authPool.query(
@@ -3833,16 +3838,32 @@ async function fetchAccountsViaLegacyLink(bnetAccountId) {
       );
     } catch (err) {
       if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        retailCharacterDebug('fetchAccountsViaLegacyLink:missingColumn', {
+          bnetAccountId,
+          column,
+        });
         continue;
       }
       if (err?.code === 'ER_NO_SUCH_TABLE') {
+        retailCharacterDebug('fetchAccountsViaLegacyLink:missingAccountTable', {
+          bnetAccountId,
+        });
         return [];
       }
       throw err;
     }
     if (!Array.isArray(rows) || !rows.length) {
+      retailCharacterDebug('fetchAccountsViaLegacyLink:noRows', {
+        bnetAccountId,
+        column,
+      });
       continue;
     }
+    retailCharacterDebug('fetchAccountsViaLegacyLink:rowsFound', {
+      bnetAccountId,
+      column,
+      rowCount: rows.length,
+    });
     return rows
       .map((row) => {
         const realmId = toSafeNumber(row.realmId ?? row.realmID);
@@ -3858,6 +3879,10 @@ async function fetchAccountsViaLegacyLink(bnetAccountId) {
       })
       .filter((entry) => entry.gameAccountId != null);
   }
+  retailCharacterDebug('fetchAccountsViaLegacyLink:complete', {
+    bnetAccountId,
+    rowCount: 0,
+  });
   return [];
 }
 
@@ -3906,10 +3931,15 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
     if (err?.code === 'ER_NO_SUCH_TABLE') {
       if (message.includes('bnetaccount_gameaccount')) {
         missingLinkTable = true;
+        retailCharacterDebug('fetchGameAccountsForBnet:missingLinkTable');
       } else {
         missingGameAccountTable = true;
+        retailCharacterDebug('fetchGameAccountsForBnet:missingGameAccountTable');
       }
     } else if (err?.code !== 'ER_BAD_FIELD_ERROR') {
+      retailCharacterDebug('fetchGameAccountsForBnet:primaryError', {
+        error: err?.message || String(err),
+      });
       throw err;
     }
   }
@@ -3947,15 +3977,21 @@ async function fetchGameAccountsForBnet(bnetAccountId) {
       }
     } catch (err) {
       if (err?.code === 'ER_NO_SUCH_TABLE' && missingGameAccountTable) {
+        retailCharacterDebug('fetchGameAccountsForBnet:fallbackMissingAccountTable');
         return accounts;
       }
       if (err?.code !== 'ER_NO_SUCH_TABLE') {
+        retailCharacterDebug('fetchGameAccountsForBnet:fallbackError', {
+          error: err?.message || String(err),
+        });
         throw err;
       }
+      retailCharacterDebug('fetchGameAccountsForBnet:fallbackMissingLinkTable');
     }
   }
 
   if (!accounts.length) {
+    retailCharacterDebug('fetchGameAccountsForBnet:legacyFallback', { bnetAccountId });
     const legacyAccounts = await fetchAccountsViaLegacyLink(bnetAccountId);
     accounts.push(...legacyAccounts);
     retailCharacterDebug('fetchGameAccountsForBnet:legacyResults', {
@@ -5337,19 +5373,36 @@ async function linkPortalAccounts({ portalUserId, password, username, gameType }
 async function getAuthAccountByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
+  retailCharacterDebug('getAuthAccountByEmail:start', { email, normalized });
   const tables = ['bnetaccount', 'battlenet_accounts'];
   for (const table of tables) {
+    retailCharacterDebug('getAuthAccountByEmail:queryTable', {
+      table,
+      normalized,
+    });
     try {
       const [rows] = await authPool.execute(
         `SELECT id, email FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
         [normalized]
       );
-      if (rows.length) return rows[0];
+      retailCharacterDebug('getAuthAccountByEmail:queryResult', {
+        table,
+        rowCount: Array.isArray(rows) ? rows.length : 0,
+      });
+      if (rows.length) {
+        retailCharacterDebug('getAuthAccountByEmail:hit', {
+          table,
+          accountId: rows[0]?.id ?? null,
+        });
+        return rows[0];
+      }
     } catch (err) {
       if (err?.code === 'ER_NO_SUCH_TABLE') {
+        retailCharacterDebug('getAuthAccountByEmail:missingTable', { table });
         continue;
       }
       if (err?.code === 'ER_BAD_FIELD_ERROR') {
+        retailCharacterDebug('getAuthAccountByEmail:fieldError', { table });
         // Older schema variants sometimes omit auth columns such as sha_pass_hash.
         // Fall back to a minimal column set so the lookup still succeeds.
         try {
@@ -5357,13 +5410,25 @@ async function getAuthAccountByEmail(email) {
             `SELECT id FROM \`${table}\` WHERE UPPER(email) = UPPER(?) LIMIT 1`,
             [normalized]
           );
+          retailCharacterDebug('getAuthAccountByEmail:fallbackResult', {
+            table,
+            rowCount: Array.isArray(fallbackRows) ? fallbackRows.length : 0,
+          });
           if (fallbackRows.length) {
             const row = fallbackRows[0];
             row.email = normalized;
+            retailCharacterDebug('getAuthAccountByEmail:fallbackHit', {
+              table,
+              accountId: row?.id ?? null,
+            });
             return row;
           }
         } catch (inner) {
           if (inner?.code === 'ER_NO_SUCH_TABLE') continue;
+          retailCharacterDebug('getAuthAccountByEmail:fallbackError', {
+            table,
+            error: inner?.message || String(inner),
+          });
           throw inner;
         }
         continue;
@@ -5371,6 +5436,7 @@ async function getAuthAccountByEmail(email) {
       throw err;
     }
   }
+  retailCharacterDebug('getAuthAccountByEmail:notFound', { normalized });
   return null;
 }
 
