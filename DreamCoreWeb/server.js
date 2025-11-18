@@ -656,7 +656,12 @@ async function hydratePortalUserLinks(portalUser) {
         getAuthAccountByEmail(normalizedEmail),
         getGameAccountByEmail(normalizedEmail),
       ]);
-      const candidates = [primary, fallback];
+      const candidates = [];
+      if (primary) {
+        candidates.push(primary);
+      } else if (fallback) {
+        candidates.push(fallback);
+      }
       for (const candidate of candidates) {
         const retailAccountId = toSafeNumber(candidate?.id);
         if (retailAccountId == null || retailIdSet.has(retailAccountId)) continue;
@@ -4629,18 +4634,88 @@ function createEmptyCharacterResponse() {
   };
 }
 
+async function deriveBattleNetAccountIds(accountIds) {
+  const sanitized = sanitizeAccountIdList(accountIds);
+  if (!sanitized.length || !authPool) {
+    return sanitized;
+  }
+  const normalized = [];
+  const seen = new Set();
+  const pending = new Set(sanitized);
+  const push = (value) => {
+    const id = toSafeNumber(value);
+    if (id == null || seen.has(id)) return;
+    seen.add(id);
+    normalized.push(id);
+  };
+
+  const accountCandidates = Array.from(pending);
+  if (accountCandidates.length) {
+    const placeholders = accountCandidates.map(() => '?').join(', ');
+    try {
+      const [rows] = await authPool.query(
+        `SELECT id, battlenet_account FROM \`account\` WHERE id IN (${placeholders})`,
+        accountCandidates
+      );
+      for (const row of rows || []) {
+        const accountId = toSafeNumber(row.id);
+        if (accountId == null || !pending.has(accountId)) continue;
+        pending.delete(accountId);
+        const parent = toSafeNumber(row.battlenet_account);
+        if (parent != null) {
+          push(parent);
+        } else {
+          push(accountId);
+        }
+      }
+    } catch (err) {
+      if (err?.code !== 'ER_NO_SUCH_TABLE') {
+        console.warn('Failed to inspect auth.account for retail IDs', err?.message || err);
+      }
+    }
+  }
+
+  if (pending.size) {
+    const remaining = Array.from(pending);
+    const placeholders = remaining.map(() => '?').join(', ');
+    try {
+      const [rows] = await authPool.query(
+        `SELECT id FROM \`battlenet_accounts\` WHERE id IN (${placeholders})`,
+        remaining
+      );
+      for (const row of rows || []) {
+        const id = toSafeNumber(row.id);
+        if (id == null || !pending.has(id)) continue;
+        pending.delete(id);
+        push(id);
+      }
+    } catch (err) {
+      if (err?.code !== 'ER_NO_SUCH_TABLE') {
+        console.warn('Failed to inspect battlenet_accounts for retail IDs', err?.message || err);
+      }
+    }
+  }
+
+  for (const leftover of pending) {
+    push(leftover);
+  }
+  return normalized;
+}
+
 async function buildCharactersResponse({ retailAccountIds = [], classicAccountIds = [] } = {}) {
   const sanitizedRetailIds = sanitizeAccountIdList(retailAccountIds);
   const sanitizedClassicIds = sanitizeAccountIdList(classicAccountIds);
   if (!sanitizedRetailIds.length && !sanitizedClassicIds.length) {
     return createEmptyCharacterResponse();
   }
-  const [retailGmFlags, classicGmFlags] = await Promise.all([
+  const [retailGmFlags, classicGmFlags, retailBattleNetIds] = await Promise.all([
     loadGmFlagsForAccounts({ type: 'retail', accountIds: sanitizedRetailIds }),
     loadGmFlagsForAccounts({ type: 'classic', accountIds: sanitizedClassicIds }),
+    deriveBattleNetAccountIds(sanitizedRetailIds),
   ]);
   gmDebug('buildCharactersResponse:gm-flags', {
     retailAccounts: sanitizedRetailIds,
+    retailBattleNetAccounts: retailBattleNetIds,
     classicAccounts: sanitizedClassicIds,
     retailGmAccounts: Object.keys(retailGmFlags || {}).length,
     classicGmAccounts: Object.keys(classicGmFlags || {}).length,
@@ -4653,7 +4728,7 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
   let totalRealms = 0;
 
   const descriptors = [
-    { key: 'retail', ids: sanitizedRetailIds, loader: loadBattleNetCharacters },
+    { key: 'retail', ids: retailBattleNetIds, loader: loadBattleNetCharacters },
     { key: 'classic', ids: sanitizedClassicIds, loader: loadClassicCharacters },
   ];
 
