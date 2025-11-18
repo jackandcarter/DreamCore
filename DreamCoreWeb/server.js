@@ -1224,23 +1224,15 @@ ${SHARED_STYLES}
           <div class="max-w-2xl">
             <span class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-indigo-900/30">Portal profile</span>
             <h1 class="mt-4 text-4xl font-semibold tracking-tight text-white">DreamCore account dashboard</h1>
-            <p class="mt-3 text-[15px] text-indigo-100/90">Manage your secure portal login, provision game accounts for <span class="font-semibold text-indigo-300">${CONFIG.BRAND_NAME}</span> and <span class="font-semibold text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</span>, then jump into the roster.</p>
+            <p class="mt-3 text-[15px] text-indigo-100/90">Manage your DreamCore Accounts.</p>
             <div class="mt-6 grid gap-4 sm:grid-cols-2">
               <div class="rounded-2xl gradient-border bg-gray-900/60 p-4">
                 <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Portal email</p>
                 <p id="profileEmail" class="mt-2 text-lg font-semibold text-white break-words">Loading…</p>
               </div>
-              <div class="rounded-2xl gradient-border bg-gray-900/60 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Username</p>
-                <p id="profileUsername" class="mt-2 text-lg font-semibold text-white">—</p>
-              </div>
             </div>
           </div>
           <div class="flex w-full max-w-sm flex-col gap-4">
-            <div class="flex flex-wrap gap-3" id="statusBadges">
-              <span id="retailStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Retail · pending</span>
-              <span id="classicStatusBadge" class="inline-flex items-center rounded-full gradient-border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-100">Classic · pending</span>
-            </div>
           <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button id="accountLogout" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400">Log out</button>
           </div>
@@ -1327,7 +1319,6 @@ ${SHARED_STYLES}
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-rose-200">DreamCore Classic</p>
                 <h2 class="text-2xl font-semibold text-white">Classic account</h2>
-                <p class="text-sm text-rose-100/80">Create Wrath credentials or refresh your password from right here.</p>
               </div>
               <span id="classicStatusText" class="text-sm font-semibold text-rose-100">Pending</span>
             </div>
@@ -1373,7 +1364,6 @@ ${SHARED_STYLES}
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">DreamCore Master</p>
                 <h2 class="text-2xl font-semibold text-white">Retail account</h2>
-                <p class="text-sm text-indigo-200/80">Link a Battle.net-style login or refresh your password instantly.</p>
               </div>
               <span id="retailStatusText" class="text-sm font-semibold text-indigo-200">Pending</span>
             </div>
@@ -1565,15 +1555,12 @@ const accountScript = () => {
     }
   }
   const profileEmail = document.getElementById('profileEmail');
-  const profileUsername = document.getElementById('profileUsername');
   const form = document.getElementById('accountForm');
   const emailInput = document.getElementById('accountEmail');
   const passwordInput = document.getElementById('accountPassword');
   const msg = document.getElementById('accountMsg');
   const submit = document.getElementById('resetSubmit');
   const logoutButton = document.getElementById('accountLogout');
-  const retailStatusBadge = document.getElementById('retailStatusBadge');
-  const classicStatusBadge = document.getElementById('classicStatusBadge');
   const retailStatusText = document.getElementById('retailStatusText');
   const classicStatusText = document.getElementById('classicStatusText');
   const accountRetailLogin = document.getElementById('accountRetailLogin');
@@ -2449,23 +2436,6 @@ const accountScript = () => {
     loadCharacters(true);
   });
 
-  function updateBadge(el, isLinked, palette) {
-    if (!el) return;
-    el.classList.toggle('bg-gradient-to-r', isLinked);
-    el.classList.toggle('from-emerald-400', isLinked);
-    el.classList.toggle('to-indigo-400', isLinked);
-    el.classList.toggle('text-gray-900', isLinked);
-    el.classList.toggle('border', true);
-    if (!isLinked) {
-      el.classList.add(palette.border);
-      el.classList.remove('border-transparent');
-    } else {
-      el.classList.add('border-transparent');
-      el.classList.remove(palette.border);
-    }
-    el.textContent = isLinked ? `${palette.label} · linked` : `${palette.label} · pending`;
-  }
-
   function deriveClassicUsername() {
     if (classicLinkUsername && classicLinkUsername.value.trim()) {
       return classicLinkUsername.value.trim();
@@ -2496,9 +2466,6 @@ const accountScript = () => {
     if (profileEmail && currentSession?.email) {
       profileEmail.textContent = currentSession.email;
     }
-    if (profileUsername) {
-      profileUsername.textContent = currentSession?.username || '—';
-    }
     if (accountRetailLogin) {
       accountRetailLogin.textContent = currentSession?.email || '—';
     }
@@ -2516,8 +2483,6 @@ const accountScript = () => {
       accountClassicStatus.textContent = hasClassic ? 'Ready to play' : 'Link required';
     }
 
-    updateBadge(retailStatusBadge, hasRetail, { label: 'Retail', border: 'gradient-border' });
-    updateBadge(classicStatusBadge, hasClassic, { label: 'Classic', border: 'gradient-border' });
     if (retailStatusText) {
       retailStatusText.textContent = hasRetail ? 'Ready to play' : 'Link required';
     }
