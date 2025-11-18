@@ -146,8 +146,8 @@ const SOAP = makeSoapConfig({
 });
 
 const CLASSIC_SOAP = makeSoapConfig({
-  host: process.env.CLASSIC_SOAP_HOST || 'wotlk.the-demiurge.com',
-  port: Number(process.env.CLASSIC_SOAP_PORT || CONFIG.TC_SOAP_PORT || 7878),
+  host: process.env.CLASSIC_SOAP_HOST || CONFIG.TC_SOAP_HOST || '127.0.0.1',
+  port: Number(process.env.CLASSIC_SOAP_PORT || 7888),
   user: process.env.CLASSIC_SOAP_USER || CONFIG.TC_SOAP_USER,
   pass: process.env.CLASSIC_SOAP_PASS || CONFIG.TC_SOAP_PASS,
 });
@@ -304,6 +304,22 @@ const CLASSIC_CHAR_DB = {
   NAME: process.env.CLASSIC_CHAR_DB_NAME || 'tc_characters_335',
 };
 
+const WORLD_DB = {
+  HOST: process.env.WORLD_DB_HOST || AUTH_DB.HOST || '127.0.0.1',
+  PORT: Number(process.env.WORLD_DB_PORT || AUTH_DB.PORT || 3306),
+  USER: process.env.WORLD_DB_USER || AUTH_DB.USER || 'trinity',
+  PASS: process.env.WORLD_DB_PASS || AUTH_DB.PASS || DEFAULT_DB_PASS,
+  NAME: process.env.WORLD_DB_NAME || 'world',
+};
+
+const CLASSIC_WORLD_DB = {
+  HOST: process.env.CLASSIC_WORLD_DB_HOST || WORLD_DB.HOST,
+  PORT: Number(process.env.CLASSIC_WORLD_DB_PORT || WORLD_DB.PORT || 3306),
+  USER: process.env.CLASSIC_WORLD_DB_USER || WORLD_DB.USER || 'trinity',
+  PASS: process.env.CLASSIC_WORLD_DB_PASS || WORLD_DB.PASS || DEFAULT_DB_PASS,
+  NAME: process.env.CLASSIC_WORLD_DB_NAME || 'tc_world_335',
+};
+
 function makeAuthPoolFromEnv(prefix) {
   const normalized = String(prefix || '').toUpperCase();
   const lookup = {
@@ -403,6 +419,35 @@ const classicCharPool =
         namedPlaceholders: true,
       });
 
+const worldPool = await mysql.createPool({
+  host: WORLD_DB.HOST,
+  port: WORLD_DB.PORT,
+  user: WORLD_DB.USER,
+  password: WORLD_DB.PASS,
+  database: WORLD_DB.NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+});
+
+const classicWorldPool =
+  WORLD_DB.HOST === CLASSIC_WORLD_DB.HOST &&
+  WORLD_DB.PORT === CLASSIC_WORLD_DB.PORT &&
+  WORLD_DB.USER === CLASSIC_WORLD_DB.USER &&
+  WORLD_DB.PASS === CLASSIC_WORLD_DB.PASS &&
+  WORLD_DB.NAME === CLASSIC_WORLD_DB.NAME
+    ? worldPool
+    : await mysql.createPool({
+        host: CLASSIC_WORLD_DB.HOST,
+        port: CLASSIC_WORLD_DB.PORT,
+        user: CLASSIC_WORLD_DB.USER,
+        password: CLASSIC_WORLD_DB.PASS,
+        database: CLASSIC_WORLD_DB.NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        namedPlaceholders: true,
+      });
+
 const REALM_DB_CONFIGS = loadRealmDbConfigs();
 const REALM_POOL_ENTRIES = buildRealmPoolEntries(REALM_DB_CONFIGS);
 const REALM_FAMILY_MAP = {
@@ -414,6 +459,12 @@ const REALM_LOOKUP = createRealmLookup(
 );
 const CLASSIC_REALM_LOOKUP = createRealmLookup(
   REALM_FAMILY_MAP.classic.length ? REALM_FAMILY_MAP.classic : REALM_POOL_ENTRIES
+);
+
+const GM_COMMAND_CACHE = new Map();
+const GM_COMMAND_CACHE_TTL_MS = Math.max(
+  Number(process.env.GM_COMMAND_CACHE_TTL_MS) || 15 * 60 * 1000,
+  30 * 1000
 );
 
 // Ensure table exists (and de-dupe by email)
@@ -757,6 +808,11 @@ const linkAccountLimiter = rateLimit({
 });
 
 const requireGmCommandAccess = requireRequestGm({ source: 'body', key: 'realm' });
+const requireGmCommandQueryAccess = requireRequestGm({
+  source: 'query',
+  key: 'realm',
+  fallbackRealm: 'retail',
+});
 
 // ----- UI (modern, minimal, responsive) -----
 const HOME_PAGE = () => `<!doctype html>
@@ -1116,6 +1172,7 @@ function buildPortalLimitsScriptTag() {
     gmClassicOnlineLimit: CONFIG.GM_CLASSIC_ONLINE_LIMIT,
     gmClassicOnlineEndpoint: '/api/gm/online/classic',
     gmCommandEndpoint: '/api/gm/command',
+    gmCommandListEndpoint: '/api/gm/commands',
   };
   return `
   <script>
@@ -1429,6 +1486,22 @@ ${SHARED_STYLES}
                     <p id="gmResponseEmpty" class="text-sm text-indigo-200/70">No commands sent this session.</p>
                   </div>
                 </div>
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Command reference</p>
+                      <h3 class="text-lg font-semibold text-white">GM command cheatsheet</h3>
+                    </div>
+                    <span id="gmCommandRealmBadge" class="text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">—</span>
+                  </div>
+                  <div class="mt-4 space-y-3">
+                    <input id="gmCommandFilter" type="search" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Search commands (.ban, .tele)" />
+                    <p id="gmCommandListStatus" class="text-xs text-indigo-200/80">GM access required to load commands.</p>
+                    <div id="gmCommandList" class="max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-indigo-100/90">
+                      <p class="text-sm text-indigo-200/70">GM access required.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <aside class="space-y-4 lg:w-80">
                 <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
@@ -1541,6 +1614,10 @@ const accountScript = () => {
   const gmCommandContext = document.getElementById('gmCommandContext');
   const gmResponseLog = document.getElementById('gmResponseLog');
   const gmResponseEmpty = document.getElementById('gmResponseEmpty');
+  const gmCommandFilter = document.getElementById('gmCommandFilter');
+  const gmCommandList = document.getElementById('gmCommandList');
+  const gmCommandListStatus = document.getElementById('gmCommandListStatus');
+  const gmCommandRealmBadge = document.getElementById('gmCommandRealmBadge');
   const classicOnlineList = document.getElementById('classicOnlineList');
   const classicOnlineStatus = document.getElementById('classicOnlineStatus');
   const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
@@ -1554,6 +1631,7 @@ const accountScript = () => {
 
   const gmClassicOnlineEndpoint = LIMITS.gmClassicOnlineEndpoint || '/api/gm/online/classic';
   const gmCommandEndpoint = LIMITS.gmCommandEndpoint || '/api/gm/command';
+  const gmCommandListEndpoint = LIMITS.gmCommandListEndpoint || '/api/gm/commands';
   const gmOnlinePollMs = Math.max(Number(LIMITS.gmOnlinePollMs) || 20000, 5000);
   const gmClassicOnlineLimit = Math.max(Number(LIMITS.gmClassicOnlineLimit) || 12, 1);
 
@@ -1565,6 +1643,11 @@ const accountScript = () => {
   let charactersLoaded = false;
   let charactersLoading = false;
   let selectedFamilyKey = 'retail';
+  let gmCommandReferenceRealm = null;
+  let gmCommandReference = [];
+  let gmCommandReferenceLoading = false;
+  let gmCommandReferenceError = null;
+  let gmCommandFilterValue = '';
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -1758,6 +1841,12 @@ const accountScript = () => {
     return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
   }
 
+  function escapeAttribute(value) {
+    return String(value || '')
+      .replace(/\s+/g, ' ')
+      .replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
+  }
+
   function formatDate(value) {
     if (!value) return 'Unknown';
     const date = new Date(value);
@@ -1928,6 +2017,11 @@ const accountScript = () => {
       if (gmCommandMsg) {
         gmCommandMsg.textContent = 'GM access is required to send SOAP commands.';
       }
+      gmCommandReferenceRealm = null;
+      gmCommandReference = [];
+      gmCommandReferenceError = null;
+      gmCommandReferenceLoading = false;
+      renderGmCommandReferenceList();
       return;
     }
     gmRealmSelect.disabled = available.length === 1;
@@ -1943,6 +2037,8 @@ const accountScript = () => {
     if (gmCommandMsg) {
       gmCommandMsg.textContent = 'Enter a command and send it to the selected realm.';
     }
+    const selectedRealm = gmRealmSelect.value || '';
+    syncGmCommandReference(selectedRealm !== gmCommandReferenceRealm);
   }
 
   function setGmSubmitting(state) {
@@ -1950,6 +2046,171 @@ const accountScript = () => {
     gmCommandSubmit.disabled = state;
     gmCommandSubmit.classList.toggle('opacity-60', state);
   }
+
+  function updateGmCommandListStatus(message) {
+    if (!gmCommandListStatus) return;
+    gmCommandListStatus.textContent = message || '';
+  }
+
+  function updateGmCommandRealmBadge(realm) {
+    if (!gmCommandRealmBadge) return;
+    if (!realm) {
+      gmCommandRealmBadge.textContent = '—';
+      return;
+    }
+    gmCommandRealmBadge.textContent = `${realmLabel(realm)} GM`;
+  }
+
+  function setGmCommandFilterEnabled(enabled) {
+    if (!gmCommandFilter) return;
+    gmCommandFilter.disabled = !enabled;
+    gmCommandFilter.classList.toggle('opacity-60', !enabled);
+    if (!enabled) {
+      gmCommandFilter.value = '';
+      gmCommandFilterValue = '';
+    }
+  }
+
+  function formatCommandHelpPreview(helpText) {
+    if (!helpText) {
+      return 'No help description available for this command.';
+    }
+    const normalized = String(helpText || '').replace(/\s+/g, ' ').trim();
+    if (normalized.length <= 160) {
+      return normalized;
+    }
+    return `${normalized.slice(0, 157)}…`;
+  }
+
+  function buildCommandEntryHtml(entry) {
+    const rawName = typeof entry?.name === 'string' ? entry.name.trim() : String(entry?.name || '').trim();
+    const name = rawName ? `.${rawName}` : 'Command';
+    const help = entry?.help || 'No help description available for this command.';
+    const preview = formatCommandHelpPreview(help);
+    return `
+      <article class="rounded-2xl border border-white/10 bg-gray-900/60 p-4" title="${escapeAttribute(help)}">
+        <div class="flex items-center justify-between gap-3">
+          <code class="text-sm font-semibold text-indigo-100">${escapeHtml(name)}</code>
+          <span class="text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/70">Hover for help</span>
+        </div>
+        <p class="mt-2 text-xs text-indigo-200/80">${escapeHtml(preview)}</p>
+      </article>
+    `;
+  }
+
+  function getFilteredGmCommands() {
+    if (!Array.isArray(gmCommandReference)) {
+      return [];
+    }
+    if (!gmCommandFilterValue) {
+      return gmCommandReference;
+    }
+    const query = gmCommandFilterValue.toLowerCase();
+    return gmCommandReference.filter((entry) => {
+      const name = String(entry?.name || '').toLowerCase();
+      const help = String(entry?.help || '').toLowerCase();
+      return name.includes(query) || help.includes(query);
+    });
+  }
+
+  function renderGmCommandReferenceList() {
+    if (!gmCommandList) {
+      return;
+    }
+    updateGmCommandRealmBadge(gmCommandReferenceRealm);
+    if (!gmCommandReferenceRealm) {
+      setGmCommandFilterEnabled(false);
+      updateGmCommandListStatus('GM access required to load commands.');
+      gmCommandList.innerHTML = '<p class="text-sm text-indigo-200/70">GM access required.</p>';
+      return;
+    }
+    if (gmCommandReferenceLoading) {
+      setGmCommandFilterEnabled(false);
+      updateGmCommandListStatus('Loading command reference…');
+      gmCommandList.innerHTML = '<p class="text-sm text-indigo-200/70">Loading command reference…</p>';
+      return;
+    }
+    if (gmCommandReferenceError) {
+      setGmCommandFilterEnabled(false);
+      updateGmCommandListStatus(gmCommandReferenceError);
+      gmCommandList.innerHTML = `<p class="text-sm text-rose-200/80">${escapeHtml(gmCommandReferenceError)}</p>`;
+      return;
+    }
+    setGmCommandFilterEnabled(true);
+    updateGmCommandListStatus(
+      gmCommandReference.length
+        ? `Loaded ${gmCommandReference.length} commands for ${realmLabel(gmCommandReferenceRealm)}.`
+        : `No commands published for ${realmLabel(gmCommandReferenceRealm)}.`
+    );
+    const filtered = getFilteredGmCommands();
+    if (!filtered.length) {
+      if (gmCommandFilterValue) {
+        gmCommandList.innerHTML = '<p class="text-sm text-indigo-200/70">No commands match your search.</p>';
+      } else {
+        gmCommandList.innerHTML = '<p class="text-sm text-indigo-200/70">No commands were returned from the database.</p>';
+      }
+      return;
+    }
+    gmCommandList.innerHTML = filtered.map(buildCommandEntryHtml).join('');
+  }
+
+  async function loadGmCommandReferenceForRealm(realm, { force = false } = {}) {
+    if (!realm) {
+      gmCommandReferenceRealm = null;
+      gmCommandReference = [];
+      gmCommandReferenceError = null;
+      gmCommandReferenceLoading = false;
+      renderGmCommandReferenceList();
+      return;
+    }
+    if (!force && gmCommandReferenceRealm === realm && gmCommandReference.length) {
+      renderGmCommandReferenceList();
+      return;
+    }
+    gmCommandReferenceRealm = realm;
+    gmCommandReferenceLoading = true;
+    gmCommandReferenceError = null;
+    if (gmCommandFilter) {
+      gmCommandFilter.value = '';
+    }
+    gmCommandFilterValue = '';
+    renderGmCommandReferenceList();
+    try {
+      const url = `${gmCommandListEndpoint}?realm=${encodeURIComponent(realm)}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to load command reference.');
+      }
+      gmCommandReference = Array.isArray(data?.commands) ? data.commands : [];
+      gmCommandReferenceError = null;
+    } catch (err) {
+      console.error('GM command reference lookup failed', err);
+      gmCommandReference = [];
+      gmCommandReferenceError = err?.message || 'Unable to load command reference.';
+    } finally {
+      gmCommandReferenceLoading = false;
+      renderGmCommandReferenceList();
+    }
+  }
+
+  function syncGmCommandReference(force = false) {
+    if (!gmRealmSelect) {
+      return;
+    }
+    const realm = gmRealmSelect.value || '';
+    if (!realm) {
+      gmCommandReferenceRealm = null;
+      gmCommandReference = [];
+      gmCommandReferenceError = null;
+      gmCommandReferenceLoading = false;
+      renderGmCommandReferenceList();
+      return;
+    }
+    loadGmCommandReferenceForRealm(realm, { force });
+  }
+
+  renderGmCommandReferenceList();
 
   function formatLogMessage(payload) {
     if (payload == null) {
@@ -2172,6 +2433,15 @@ const accountScript = () => {
     selectedFamilyKey = value;
     persistStoredValue(STORAGE_KEYS.family, selectedFamilyKey);
     updateCharactersUI();
+  });
+
+  gmRealmSelect?.addEventListener('change', () => {
+    syncGmCommandReference(true);
+  });
+
+  gmCommandFilter?.addEventListener('input', (event) => {
+    gmCommandFilterValue = (event.target?.value || '').trim().toLowerCase();
+    renderGmCommandReferenceList();
   });
 
   characterRefreshButton?.addEventListener('click', (event) => {
@@ -4493,6 +4763,36 @@ async function buildCharactersResponse({ retailAccountIds = [], classicAccountId
   return payload;
 }
 
+function getWorldPoolForRealm(realm) {
+  const normalized = realm === 'classic' ? 'classic' : 'retail';
+  return normalized === 'classic' ? classicWorldPool : worldPool;
+}
+
+async function loadGmCommandReference(realm = 'retail') {
+  const normalized = realm === 'classic' ? 'classic' : 'retail';
+  const cacheKey = normalized;
+  const cached = GM_COMMAND_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.commands;
+  }
+  const poolRef = getWorldPoolForRealm(normalized);
+  if (!poolRef) {
+    throw new Error('World database unavailable');
+  }
+  const [rows] = await poolRef.execute('SELECT name, help FROM command ORDER BY name ASC');
+  const commands = rows
+    .map((row) => ({
+      name: typeof row?.name === 'string' ? row.name.trim() : '',
+      help: typeof row?.help === 'string' ? row.help.trim() : '',
+    }))
+    .filter((entry) => entry.name.length);
+  GM_COMMAND_CACHE.set(cacheKey, {
+    commands,
+    expiresAt: Date.now() + GM_COMMAND_CACHE_TTL_MS,
+  });
+  return commands;
+}
+
 function hashSessionToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex').toUpperCase();
 }
@@ -5968,6 +6268,22 @@ app.post('/api/gm/command', requireSession, requireGmCommandAccess, async (req, 
       command: safeCommand,
       response: soapFault ? { raw: soapFault } : undefined,
     });
+  }
+});
+
+app.get('/api/gm/commands', requireSession, requireGmCommandQueryAccess, async (req, res) => {
+  const realm = req.gmRealm || 'retail';
+  try {
+    const commands = await loadGmCommandReference(realm);
+    return res.json({
+      ok: true,
+      realm,
+      total: commands.length,
+      commands,
+    });
+  } catch (err) {
+    console.error('Failed to load GM command reference', err);
+    return res.status(503).json({ error: 'Command reference unavailable' });
   }
 });
 
