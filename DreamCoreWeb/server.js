@@ -461,6 +461,187 @@ const CLASSIC_REALM_LOOKUP = createRealmLookup(
   REALM_FAMILY_MAP.classic.length ? REALM_FAMILY_MAP.classic : REALM_POOL_ENTRIES
 );
 
+const CLASSIC_CUSTOM_ITEM_MIN = 900000;
+const CLASSIC_CUSTOM_ITEM_MAX = 999999;
+
+const ITEM_TEMPLATE_COLUMNS = [
+  'entry',
+  'class',
+  'subclass',
+  'SoundOverrideSubclass',
+  'name',
+  'displayid',
+  'Quality',
+  'Flags',
+  'FlagsExtra',
+  'BuyCount',
+  'BuyPrice',
+  'SellPrice',
+  'InventoryType',
+  'AllowableClass',
+  'AllowableRace',
+  'ItemLevel',
+  'RequiredLevel',
+  'RequiredSkill',
+  'RequiredSkillRank',
+  'requiredspell',
+  'requiredhonorrank',
+  'RequiredCityRank',
+  'RequiredReputationFaction',
+  'RequiredReputationRank',
+  'maxcount',
+  'stackable',
+  'ContainerSlots',
+  'StatsCount',
+  'stat_type1',
+  'stat_value1',
+  'stat_type2',
+  'stat_value2',
+  'stat_type3',
+  'stat_value3',
+  'stat_type4',
+  'stat_value4',
+  'stat_type5',
+  'stat_value5',
+  'stat_type6',
+  'stat_value6',
+  'stat_type7',
+  'stat_value7',
+  'stat_type8',
+  'stat_value8',
+  'stat_type9',
+  'stat_value9',
+  'stat_type10',
+  'stat_value10',
+  'ScalingStatDistribution',
+  'ScalingStatValue',
+  'dmg_min1',
+  'dmg_max1',
+  'dmg_type1',
+  'dmg_min2',
+  'dmg_max2',
+  'dmg_type2',
+  'armor',
+  'holy_res',
+  'fire_res',
+  'nature_res',
+  'frost_res',
+  'shadow_res',
+  'arcane_res',
+  'delay',
+  'ammo_type',
+  'RangedModRange',
+  'spellid_1',
+  'spelltrigger_1',
+  'spellcharges_1',
+  'spellppmRate_1',
+  'spellcooldown_1',
+  'spellcategory_1',
+  'spellcategorycooldown_1',
+  'spellid_2',
+  'spelltrigger_2',
+  'spellcharges_2',
+  'spellppmRate_2',
+  'spellcooldown_2',
+  'spellcategory_2',
+  'spellcategorycooldown_2',
+  'spellid_3',
+  'spelltrigger_3',
+  'spellcharges_3',
+  'spellppmRate_3',
+  'spellcooldown_3',
+  'spellcategory_3',
+  'spellcategorycooldown_3',
+  'spellid_4',
+  'spelltrigger_4',
+  'spellcharges_4',
+  'spellppmRate_4',
+  'spellcooldown_4',
+  'spellcategory_4',
+  'spellcategorycooldown_4',
+  'spellid_5',
+  'spelltrigger_5',
+  'spellcharges_5',
+  'spellppmRate_5',
+  'spellcooldown_5',
+  'spellcategory_5',
+  'spellcategorycooldown_5',
+  'bonding',
+  'description',
+  'PageText',
+  'LanguageID',
+  'PageMaterial',
+  'startquest',
+  'lockid',
+  'Material',
+  'sheath',
+  'RandomProperty',
+  'RandomSuffix',
+  'block',
+  'itemset',
+  'MaxDurability',
+  'area',
+  'Map',
+  'BagFamily',
+  'TotemCategory',
+  'socketColor_1',
+  'socketContent_1',
+  'socketColor_2',
+  'socketContent_2',
+  'socketColor_3',
+  'socketContent_3',
+  'socketBonus',
+  'GemProperties',
+  'RequiredDisenchantSkill',
+  'ArmorDamageModifier',
+  'duration',
+  'ItemLimitCategory',
+  'HolidayId',
+  'ScriptName',
+  'DisenchantID',
+  'FoodType',
+  'minMoneyLoot',
+  'maxMoneyLoot',
+  'flagsCustom',
+  'VerifiedBuild',
+];
+
+const ITEM_TEMPLATE_STRING_FIELDS = new Set(['name', 'description', 'ScriptName']);
+const ITEM_TEMPLATE_MAX_LENGTHS = {
+  name: 255,
+  description: 255,
+  ScriptName: 64,
+};
+const CLASSIC_WEAPON_FIELD_BOUNDS = {
+  ItemLevel: { min: 0, max: 500 },
+  RequiredLevel: { min: 0, max: 255 },
+  Quality: { min: 0, max: 7 },
+  InventoryType: { min: 0, max: 40 },
+  displayid: { min: 0, max: 2000000 },
+  BuyCount: { min: 1, max: 255 },
+  BuyPrice: { min: 0, max: 2000000000 },
+  SellPrice: { min: 0, max: 2000000000 },
+  maxcount: { min: 0, max: 255 },
+  stackable: { min: 0, max: 1000 },
+  StatsCount: { min: 0, max: 10 },
+  delay: { min: 0, max: 10000 },
+  armor: { min: 0, max: 10000 },
+  holy_res: { min: 0, max: 1000 },
+  fire_res: { min: 0, max: 1000 },
+  nature_res: { min: 0, max: 1000 },
+  frost_res: { min: 0, max: 1000 },
+  shadow_res: { min: 0, max: 1000 },
+  arcane_res: { min: 0, max: 1000 },
+  ammo_type: { min: 0, max: 5 },
+  RangedModRange: { min: 0, max: 1000 },
+  block: { min: 0, max: 1000 },
+  MaxDurability: { min: 0, max: 500 },
+  minMoneyLoot: { min: 0, max: 2000000000 },
+  maxMoneyLoot: { min: 0, max: 2000000000 },
+};
+const CLASSIC_WEAPON_DAMAGE_LIMIT = 100000;
+const CLASSIC_WEAPON_STAT_ABS_MAX = 10000;
+
 const GM_COMMAND_CACHE = new Map();
 const GM_COMMAND_CACHE_TTL_MS = Math.max(
   Number(process.env.GM_COMMAND_CACHE_TTL_MS) || 15 * 60 * 1000,
@@ -1178,12 +1359,86 @@ function buildPortalLimitsScriptTag() {
     gmClassicOnlineEndpoint: '/api/gm/online/classic',
     gmCommandEndpoint: '/api/gm/command',
     gmCommandListEndpoint: '/api/gm/commands',
+    gmClassicWeaponSearchEndpoint: '/api/gm/classic/weapons/search',
+    gmClassicWeaponDetailsEndpoint: '/api/gm/classic/weapons',
+    gmClassicWeaponCloneEndpoint: '/api/gm/classic/weapons',
   };
   return `
   <script>
     window.PORTAL_LIMITS = ${JSON.stringify(payload)};
   </script>`;
 }
+
+const weaponStatInputsHtml = Array.from({ length: 10 }, (_, idx) => {
+  const index = idx + 1;
+  return `
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_stat_type${index}">Stat ${index} type</label>
+          <input id="weaponField_stat_type${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_stat_value${index}">Stat ${index} value</label>
+          <input id="weaponField_stat_value${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+        </div>
+      </div>`;
+}).join('');
+
+const weaponSpellInputsHtml = Array.from({ length: 5 }, (_, idx) => {
+  const index = idx + 1;
+  return `
+      <div class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h5 class="text-sm font-semibold text-white">Spell slot ${index}</h5>
+          <span class="text-[11px] uppercase tracking-[0.3em] text-indigo-200/70">#${index}</span>
+        </div>
+        <div class="grid gap-3 md:grid-cols-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellid_${index}">spellid_${index}</label>
+            <input id="weaponField_spellid_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spelltrigger_${index}">spelltrigger_${index}</label>
+            <input id="weaponField_spelltrigger_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellcharges_${index}">spellcharges_${index}</label>
+            <input id="weaponField_spellcharges_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellppmRate_${index}">spellppmRate_${index}</label>
+            <input id="weaponField_spellppmRate_${index}" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellcooldown_${index}">spellcooldown_${index}</label>
+            <input id="weaponField_spellcooldown_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellcategory_${index}">spellcategory_${index}</label>
+            <input id="weaponField_spellcategory_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_spellcategorycooldown_${index}">spellcategorycooldown_${index}</label>
+            <input id="weaponField_spellcategorycooldown_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+          </div>
+        </div>
+      </div>`;
+}).join('');
+
+const weaponSocketInputsHtml = Array.from({ length: 3 }, (_, idx) => {
+  const index = idx + 1;
+  return `
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_socketColor_${index}">socketColor_${index}</label>
+          <input id="weaponField_socketColor_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="weaponField_socketContent_${index}">socketContent_${index}</label>
+          <input id="weaponField_socketContent_${index}" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+        </div>
+      </div>`;
+}).join('');
 
 const ACCOUNT_PAGE = () => `<!doctype html>
 <html lang="en">
@@ -1477,6 +1732,471 @@ ${SHARED_STYLES}
                     </div>
                   </div>
                 </div>
+                <div id="weaponFactoryCard" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-5">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200">Classic weapon lab</p>
+                      <h3 class="text-lg font-semibold text-white">Classic Weapon Factory (3.3.5)</h3>
+                      <p class="text-sm text-indigo-100/80">Clone any Classic weapon, edit every field, and mint it into the world DB.</p>
+                    </div>
+                    <span class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">Classic GM</span>
+                  </div>
+                  <form id="weaponSearchForm" class="space-y-3">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponSearchInput">Weapon name</label>
+                      <input id="weaponSearchInput" type="search" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="Fury of Frostmourne" />
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponQualityFilter">Quality</label>
+                        <select id="weaponQualityFilter" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                          <option value="">Any quality</option>
+                          <option value="0">Poor</option>
+                          <option value="1">Common</option>
+                          <option value="2">Uncommon</option>
+                          <option value="3">Rare</option>
+                          <option value="4">Epic</option>
+                          <option value="5">Legendary</option>
+                          <option value="6">Artifact</option>
+                          <option value="7">Heirloom</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponSubclassFilter">Weapon type</label>
+                        <select id="weaponSubclassFilter" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                          <option value="">Any type</option>
+                          <option value="0">One-Handed Axes</option>
+                          <option value="1">Two-Handed Axes</option>
+                          <option value="2">Bows</option>
+                          <option value="3">Guns</option>
+                          <option value="4">One-Handed Maces</option>
+                          <option value="5">Two-Handed Maces</option>
+                          <option value="6">Polearms</option>
+                          <option value="7">One-Handed Swords</option>
+                          <option value="8">Two-Handed Swords</option>
+                          <option value="10">Staves</option>
+                          <option value="11">Exotic</option>
+                          <option value="12">Fist Weapons</option>
+                          <option value="13">Miscellaneous</option>
+                          <option value="14">Daggers</option>
+                          <option value="15">Thrown</option>
+                          <option value="16">Spears</option>
+                          <option value="17">Crossbows</option>
+                          <option value="18">Wands</option>
+                          <option value="19">Fishing Poles</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p id="weaponSearchStatus" class="text-xs text-indigo-200/80">Classic GM access required to use the weapon factory.</p>
+                      <button id="weaponSearchSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-900/30 transition hover:from-amber-400 hover:via-orange-400 hover:to-pink-400 focus:outline-none focus:ring-2 focus:ring-amber-400">Search weapons</button>
+                    </div>
+                  </form>
+                  <div id="weaponSearchResults" class="grid gap-3">
+                    <p class="text-sm text-indigo-200/75">Search for an existing Classic weapon to begin.</p>
+                  </div>
+                  <p id="weaponSearchMore" class="hidden text-xs text-indigo-200/70">More matches exist. Refine your search to narrow the list.</p>
+                  <div id="weaponEditorPanel" class="hidden space-y-4 rounded-2xl border border-white/5 bg-black/30 p-4">
+                    <div class="rounded-2xl border border-white/10 bg-gray-900/60 p-4">
+                      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Selected base</p>
+                          <h4 id="weaponEditorTitle" class="text-xl font-semibold text-white">Select a weapon</h4>
+                          <p id="weaponEditorMeta" class="text-sm text-indigo-200/80">Pick a Classic weapon to load its template.</p>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                          <span id="weaponEditorEntry" class="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/90">#—</span>
+                          <span id="weaponEditorQuality" class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200/70">—</span>
+                        </div>
+                      </div>
+                    </div>
+                    <form id="weaponCloneForm" class="space-y-4">
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Basic identity</p>
+                          <h4 class="text-lg font-semibold text-white">Core fields</h4>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_name">Custom name</label>
+                          <input id="weaponField_name" type="text" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="My GM Blade" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_description">Description</label>
+                          <textarea id="weaponField_description" rows="3" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="Forged within the DreamCore."></textarea>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_class">class</label>
+                            <input id="weaponField_class" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="2" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_subclass">subclass</label>
+                            <input id="weaponField_subclass" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="7" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_Quality">Quality</label>
+                            <input id="weaponField_Quality" type="number" min="0" max="7" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="4" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_displayid">displayid</label>
+                            <input id="weaponField_displayid" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_InventoryType">InventoryType</label>
+                            <input id="weaponField_InventoryType" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="13" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_SoundOverrideSubclass">SoundOverrideSubclass</label>
+                            <input id="weaponField_SoundOverrideSubclass" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_Flags">Flags</label>
+                            <input id="weaponField_Flags" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_FlagsExtra">FlagsExtra</label>
+                            <input id="weaponField_FlagsExtra" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_BuyCount">BuyCount</label>
+                            <input id="weaponField_BuyCount" type="number" min="1" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_BuyPrice">BuyPrice</label>
+                            <input id="weaponField_BuyPrice" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_SellPrice">SellPrice</label>
+                            <input id="weaponField_SellPrice" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_Material">Material</label>
+                            <input id="weaponField_Material" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_sheath">sheath</label>
+                            <input id="weaponField_sheath" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Levels & economy</p>
+                          <h4 class="text-lg font-semibold text-white">Progression + stacking</h4>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ItemLevel">ItemLevel</label>
+                            <input id="weaponField_ItemLevel" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="200" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredLevel">RequiredLevel</label>
+                            <input id="weaponField_RequiredLevel" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="80" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_maxcount">maxcount</label>
+                            <input id="weaponField_maxcount" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_stackable">stackable</label>
+                            <input id="weaponField_stackable" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ContainerSlots">ContainerSlots</label>
+                            <input id="weaponField_ContainerSlots" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_StatsCount">StatsCount</label>
+                            <input id="weaponField_StatsCount" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ScalingStatDistribution">ScalingStatDistribution</label>
+                            <input id="weaponField_ScalingStatDistribution" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ScalingStatValue">ScalingStatValue</label>
+                            <input id="weaponField_ScalingStatValue" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Usage & restrictions</p>
+                          <h4 class="text-lg font-semibold text-white">Class, race, skills</h4>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_AllowableClass">AllowableClass</label>
+                            <input id="weaponField_AllowableClass" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_AllowableRace">AllowableRace</label>
+                            <input id="weaponField_AllowableRace" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredSkill">RequiredSkill</label>
+                            <input id="weaponField_RequiredSkill" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredSkillRank">RequiredSkillRank</label>
+                            <input id="weaponField_RequiredSkillRank" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_requiredspell">requiredspell</label>
+                            <input id="weaponField_requiredspell" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_requiredhonorrank">requiredhonorrank</label>
+                            <input id="weaponField_requiredhonorrank" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredCityRank">RequiredCityRank</label>
+                            <input id="weaponField_RequiredCityRank" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredReputationFaction">RequiredReputationFaction</label>
+                            <input id="weaponField_RequiredReputationFaction" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredReputationRank">RequiredReputationRank</label>
+                            <input id="weaponField_RequiredReputationRank" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_startquest">startquest</label>
+                            <input id="weaponField_startquest" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_bonding">bonding</label>
+                            <input id="weaponField_bonding" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Damage & resistances</p>
+                          <h4 class="text-lg font-semibold text-white">Weapon profile</h4>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-3">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_min1">dmg_min1</label>
+                            <input id="weaponField_dmg_min1" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="100" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_max1">dmg_max1</label>
+                            <input id="weaponField_dmg_max1" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="200" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_type1">dmg_type1</label>
+                            <input id="weaponField_dmg_type1" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_min2">dmg_min2</label>
+                            <input id="weaponField_dmg_min2" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_max2">dmg_max2</label>
+                            <input id="weaponField_dmg_max2" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_dmg_type2">dmg_type2</label>
+                            <input id="weaponField_dmg_type2" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_delay">delay</label>
+                            <input id="weaponField_delay" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="3000" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ammo_type">ammo_type</label>
+                            <input id="weaponField_ammo_type" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RangedModRange">RangedModRange</label>
+                            <input id="weaponField_RangedModRange" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-3">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_armor">armor</label>
+                            <input id="weaponField_armor" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_holy_res">holy_res</label>
+                            <input id="weaponField_holy_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_fire_res">fire_res</label>
+                            <input id="weaponField_fire_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_nature_res">nature_res</label>
+                            <input id="weaponField_nature_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_frost_res">frost_res</label>
+                            <input id="weaponField_frost_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_shadow_res">shadow_res</label>
+                            <input id="weaponField_shadow_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_arcane_res">arcane_res</label>
+                            <input id="weaponField_arcane_res" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_block">block</label>
+                            <input id="weaponField_block" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_MaxDurability">MaxDurability</label>
+                            <input id="weaponField_MaxDurability" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Stats</p>
+                          <h4 class="text-lg font-semibold text-white">All 10 stat slots</h4>
+                        </div>
+                        <div class="space-y-3">
+${weaponStatInputsHtml}
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Spells & procs</p>
+                          <h4 class="text-lg font-semibold text-white">Use, proc, aura slots</h4>
+                        </div>
+                        <div class="space-y-3">
+${weaponSpellInputsHtml}
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Sockets</p>
+                          <h4 class="text-lg font-semibold text-white">Socket colors & gems</h4>
+                        </div>
+                        <div class="space-y-3">
+${weaponSocketInputsHtml}
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_socketBonus">socketBonus</label>
+                            <input id="weaponField_socketBonus" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_GemProperties">GemProperties</label>
+                            <input id="weaponField_GemProperties" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <section class="rounded-2xl border border-white/5 bg-gray-900/60 p-4 space-y-4">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-200">Misc attributes</p>
+                          <h4 class="text-lg font-semibold text-white">Everything else</h4>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_PageText">PageText</label>
+                            <input id="weaponField_PageText" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_LanguageID">LanguageID</label>
+                            <input id="weaponField_LanguageID" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_PageMaterial">PageMaterial</label>
+                            <input id="weaponField_PageMaterial" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_lockid">lockid</label>
+                            <input id="weaponField_lockid" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RandomProperty">RandomProperty</label>
+                            <input id="weaponField_RandomProperty" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RandomSuffix">RandomSuffix</label>
+                            <input id="weaponField_RandomSuffix" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_itemset">itemset</label>
+                            <input id="weaponField_itemset" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_area">area</label>
+                            <input id="weaponField_area" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_Map">Map</label>
+                            <input id="weaponField_Map" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_BagFamily">BagFamily</label>
+                            <input id="weaponField_BagFamily" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_TotemCategory">TotemCategory</label>
+                            <input id="weaponField_TotemCategory" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_RequiredDisenchantSkill">RequiredDisenchantSkill</label>
+                            <input id="weaponField_RequiredDisenchantSkill" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="-1" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ArmorDamageModifier">ArmorDamageModifier</label>
+                            <input id="weaponField_ArmorDamageModifier" type="number" step="0.01" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_duration">duration</label>
+                            <input id="weaponField_duration" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ItemLimitCategory">ItemLimitCategory</label>
+                            <input id="weaponField_ItemLimitCategory" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_HolidayId">HolidayId</label>
+                            <input id="weaponField_HolidayId" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_ScriptName">ScriptName</label>
+                            <input id="weaponField_ScriptName" type="text" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_DisenchantID">DisenchantID</label>
+                            <input id="weaponField_DisenchantID" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_FoodType">FoodType</label>
+                            <input id="weaponField_FoodType" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_minMoneyLoot">minMoneyLoot</label>
+                            <input id="weaponField_minMoneyLoot" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_maxMoneyLoot">maxMoneyLoot</label>
+                            <input id="weaponField_maxMoneyLoot" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_flagsCustom">flagsCustom</label>
+                            <input id="weaponField_flagsCustom" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_VerifiedBuild">VerifiedBuild</label>
+                            <input id="weaponField_VerifiedBuild" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="0" />
+                          </div>
+                        </div>
+                      </section>
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p id="weaponCloneMsg" class="text-sm text-indigo-200/80">Select a weapon to begin cloning.</p>
+                        <button id="weaponCloneSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-400 hover:via-cyan-400 hover:to-blue-400 focus:outline-none focus:ring-2 focus:ring-emerald-400">Clone weapon</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               </div>
               <aside class="space-y-4 lg:w-80">
                 <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
@@ -1583,6 +2303,123 @@ const accountScript = () => {
   const classicOnlineList = document.getElementById('classicOnlineList');
   const classicOnlineStatus = document.getElementById('classicOnlineStatus');
   const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
+  const weaponFactoryCard = document.getElementById('weaponFactoryCard');
+  const weaponSearchForm = document.getElementById('weaponSearchForm');
+  const weaponSearchInput = document.getElementById('weaponSearchInput');
+  const weaponQualityFilter = document.getElementById('weaponQualityFilter');
+  const weaponSubclassFilter = document.getElementById('weaponSubclassFilter');
+  const weaponSearchSubmit = document.getElementById('weaponSearchSubmit');
+  const weaponSearchStatus = document.getElementById('weaponSearchStatus');
+  const weaponSearchResults = document.getElementById('weaponSearchResults');
+  const weaponSearchMore = document.getElementById('weaponSearchMore');
+  const weaponEditorPanel = document.getElementById('weaponEditorPanel');
+  const weaponEditorTitle = document.getElementById('weaponEditorTitle');
+  const weaponEditorMeta = document.getElementById('weaponEditorMeta');
+  const weaponEditorEntry = document.getElementById('weaponEditorEntry');
+  const weaponEditorQuality = document.getElementById('weaponEditorQuality');
+  const weaponCloneForm = document.getElementById('weaponCloneForm');
+  const weaponCloneMsg = document.getElementById('weaponCloneMsg');
+  const weaponCloneSubmit = document.getElementById('weaponCloneSubmit');
+  const weaponFieldNames = [
+    'name',
+    'description',
+    'class',
+    'subclass',
+    'Quality',
+    'displayid',
+    'InventoryType',
+    'SoundOverrideSubclass',
+    'Flags',
+    'FlagsExtra',
+    'BuyCount',
+    'BuyPrice',
+    'SellPrice',
+    'Material',
+    'sheath',
+    'ItemLevel',
+    'RequiredLevel',
+    'maxcount',
+    'stackable',
+    'ContainerSlots',
+    'StatsCount',
+    'ScalingStatDistribution',
+    'ScalingStatValue',
+    'AllowableClass',
+    'AllowableRace',
+    'RequiredSkill',
+    'RequiredSkillRank',
+    'requiredspell',
+    'requiredhonorrank',
+    'RequiredCityRank',
+    'RequiredReputationFaction',
+    'RequiredReputationRank',
+    'startquest',
+    'bonding',
+    'dmg_min1',
+    'dmg_max1',
+    'dmg_type1',
+    'dmg_min2',
+    'dmg_max2',
+    'dmg_type2',
+    'delay',
+    'ammo_type',
+    'RangedModRange',
+    'armor',
+    'holy_res',
+    'fire_res',
+    'nature_res',
+    'frost_res',
+    'shadow_res',
+    'arcane_res',
+    'block',
+    'MaxDurability',
+    'PageText',
+    'LanguageID',
+    'PageMaterial',
+    'lockid',
+    'RandomProperty',
+    'RandomSuffix',
+    'itemset',
+    'area',
+    'Map',
+    'BagFamily',
+    'TotemCategory',
+    'RequiredDisenchantSkill',
+    'ArmorDamageModifier',
+    'duration',
+    'ItemLimitCategory',
+    'HolidayId',
+    'ScriptName',
+    'DisenchantID',
+    'FoodType',
+    'minMoneyLoot',
+    'maxMoneyLoot',
+    'flagsCustom',
+    'VerifiedBuild',
+    'socketBonus',
+    'GemProperties',
+  ];
+  for (let i = 1; i <= 10; i += 1) {
+    weaponFieldNames.push(`stat_type${i}`);
+    weaponFieldNames.push(`stat_value${i}`);
+  }
+  for (let i = 1; i <= 5; i += 1) {
+    weaponFieldNames.push(`spellid_${i}`);
+    weaponFieldNames.push(`spelltrigger_${i}`);
+    weaponFieldNames.push(`spellcharges_${i}`);
+    weaponFieldNames.push(`spellppmRate_${i}`);
+    weaponFieldNames.push(`spellcooldown_${i}`);
+    weaponFieldNames.push(`spellcategory_${i}`);
+    weaponFieldNames.push(`spellcategorycooldown_${i}`);
+  }
+  for (let i = 1; i <= 3; i += 1) {
+    weaponFieldNames.push(`socketColor_${i}`);
+    weaponFieldNames.push(`socketContent_${i}`);
+  }
+  const weaponFieldInputs = weaponFieldNames.reduce((map, name) => {
+    map[name] = document.getElementById(`weaponField_${name}`);
+    return map;
+  }, {});
   const charactersCount = document.getElementById('charactersCount');
   const charactersRealmCount = document.getElementById('charactersRealmCount');
   const characterStatus = document.getElementById('charactersStatus');
@@ -1594,6 +2431,9 @@ const accountScript = () => {
   const gmClassicOnlineEndpoint = LIMITS.gmClassicOnlineEndpoint || '/api/gm/online/classic';
   const gmCommandEndpoint = LIMITS.gmCommandEndpoint || '/api/gm/command';
   const gmCommandListEndpoint = LIMITS.gmCommandListEndpoint || '/api/gm/commands';
+  const gmClassicWeaponSearchEndpoint = LIMITS.gmClassicWeaponSearchEndpoint || '/api/gm/classic/weapons/search';
+  const gmClassicWeaponDetailsEndpoint = LIMITS.gmClassicWeaponDetailsEndpoint || '/api/gm/classic/weapons';
+  const gmClassicWeaponCloneEndpoint = LIMITS.gmClassicWeaponCloneEndpoint || '/api/gm/classic/weapons';
   const gmOnlinePollMs = Math.max(Number(LIMITS.gmOnlinePollMs) || 20000, 5000);
   const gmClassicOnlineLimit = Math.max(Number(LIMITS.gmClassicOnlineLimit) || 12, 1);
 
@@ -1610,6 +2450,11 @@ const accountScript = () => {
   let gmCommandReferenceLoading = false;
   let gmCommandReferenceError = null;
   let gmCommandFilterValue = '';
+  let weaponSearchLoading = false;
+  let weaponSearchPage = 1;
+  const weaponSearchPageSize = 25;
+  let currentWeaponBase = null;
+  let weaponCloneBusy = false;
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -1710,6 +2555,306 @@ const accountScript = () => {
     });
   }
 
+  function formatWeaponQualityLabel(value) {
+    const key = Number(value);
+    if (Number.isFinite(key) && WEAPON_QUALITY_NAMES[key] != null) {
+      return WEAPON_QUALITY_NAMES[key];
+    }
+    return Number.isFinite(key) ? `Quality ${key}` : 'Quality —';
+  }
+
+  function formatWeaponSubclassLabel(value) {
+    const key = Number(value);
+    if (Number.isFinite(key) && WEAPON_SUBCLASS_NAMES[key] != null) {
+      return WEAPON_SUBCLASS_NAMES[key];
+    }
+    return Number.isFinite(key) ? `Subclass ${key}` : 'Subclass —';
+  }
+
+  function setWeaponSearchStatus(message) {
+    if (weaponSearchStatus) {
+      weaponSearchStatus.textContent = message;
+    }
+  }
+
+  function setWeaponSearchLoadingState(state) {
+    weaponSearchLoading = Boolean(state);
+    if (weaponSearchSubmit) {
+      weaponSearchSubmit.disabled = weaponSearchLoading || !gmClassicAccessible;
+      weaponSearchSubmit.classList.toggle('opacity-60', weaponSearchSubmit.disabled);
+    }
+  }
+
+  function updateWeaponCloneAvailability() {
+    if (!weaponCloneSubmit) return;
+    const disabled = weaponCloneBusy || !gmClassicAccessible || !currentWeaponBase;
+    weaponCloneSubmit.disabled = disabled;
+    weaponCloneSubmit.classList.toggle('opacity-60', disabled);
+  }
+
+  function setWeaponCloneLoading(state) {
+    weaponCloneBusy = Boolean(state);
+    updateWeaponCloneAvailability();
+  }
+
+  function setWeaponCloneMessage(message) {
+    if (weaponCloneMsg) {
+      weaponCloneMsg.textContent = message;
+    }
+  }
+
+  function syncWeaponFactoryState() {
+    if (!weaponSearchStatus) {
+      return;
+    }
+    if (weaponFactoryCard) {
+      weaponFactoryCard.classList.toggle('opacity-60', !gmClassicAccessible);
+    }
+    if (!gmClassicAccessible) {
+      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
+      if (weaponSearchResults && !weaponSearchResults.childElementCount) {
+        weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">Classic GM access required.</p>';
+      }
+      if (weaponEditorPanel) {
+        weaponEditorPanel.classList.add('hidden');
+      }
+      currentWeaponBase = null;
+      setWeaponCloneMessage('Classic GM access required to clone weapons.');
+    } else if (!weaponSearchLoading) {
+      setWeaponSearchStatus('Search or filter to choose a base weapon.');
+      if (!currentWeaponBase) {
+        setWeaponCloneMessage('Select a weapon to begin cloning.');
+      }
+    }
+    updateWeaponCloneAvailability();
+  }
+
+  function renderWeaponSearchResults(items, hasMore) {
+    if (!weaponSearchResults) {
+      return;
+    }
+    weaponSearchResults.innerHTML = '';
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">No matching weapons found.</p>';
+    } else {
+      list.forEach((item) => {
+        const entryValue = Number(item?.entry);
+        const qualityLabel = formatWeaponQualityLabel(item?.Quality);
+        const subclassLabel = formatWeaponSubclassLabel(item?.subclass);
+        const itemLevel = Number(item?.ItemLevel ?? item?.itemLevel);
+        const reqLevel = Number(item?.RequiredLevel ?? item?.requiredLevel);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.weaponEntry = Number.isFinite(entryValue) ? String(entryValue) : '';
+        button.className = 'rounded-2xl border border-white/10 bg-gray-900/60 p-3 text-left transition hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400';
+        const entryLabel = Number.isFinite(entryValue) ? String(entryValue) : '—';
+        button.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-white font-semibold">${escapeHtml(item?.name || `Entry #${entryValue || '—'}`)}</span>
+            <span class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200/80">#${escapeHtml(entryLabel)}</span>
+          </div>
+          <p class="text-xs text-indigo-200/75">${escapeHtml(qualityLabel)} · ilvl ${Number.isFinite(itemLevel) ? itemLevel : '—'} · req ${Number.isFinite(reqLevel) ? reqLevel : '—'}</p>
+          <p class="text-xs text-indigo-200/60">${escapeHtml(subclassLabel)}</p>
+        `;
+        weaponSearchResults.appendChild(button);
+      });
+    }
+    if (weaponSearchMore) {
+      weaponSearchMore.classList.toggle('hidden', !hasMore);
+    }
+  }
+
+  async function runWeaponSearch(page = 1) {
+    if (!gmClassicAccessible) {
+      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
+      return;
+    }
+    const query = weaponSearchInput?.value.trim() || '';
+    const quality = weaponQualityFilter?.value || '';
+    const subclass = weaponSubclassFilter?.value || '';
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(weaponSearchPageSize));
+    if (query) params.set('q', query);
+    if (quality) params.set('quality', quality);
+    if (subclass) params.set('subclass', subclass);
+    const url = `${gmClassicWeaponSearchEndpoint}?${params.toString()}`;
+    setWeaponSearchStatus('Searching…');
+    setWeaponSearchLoadingState(true);
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to search weapons.');
+      }
+      const items = Array.isArray(data?.items) ? data.items : [];
+      renderWeaponSearchResults(items, Boolean(data?.hasMore));
+      weaponSearchPage = Number(data?.page) || 1;
+      if (items.length) {
+        setWeaponSearchStatus(
+          data?.hasMore
+            ? `Showing ${items.length} weapons (refine search for more).`
+            : `Found ${items.length} weapon${items.length === 1 ? '' : 's'}.`
+        );
+      } else {
+        setWeaponSearchStatus('No matching weapons found.');
+      }
+    } catch (err) {
+      console.error('Classic weapon search failed', err);
+      setWeaponSearchStatus(err?.message || 'Weapon search failed.');
+      if (weaponSearchResults) {
+        weaponSearchResults.innerHTML = '<p class="text-sm text-rose-200/80">Unable to search weapons right now.</p>';
+      }
+      if (weaponSearchMore) {
+        weaponSearchMore.classList.add('hidden');
+      }
+    } finally {
+      setWeaponSearchLoadingState(false);
+    }
+  }
+
+  function populateWeaponForm(item) {
+    if (!item || typeof item !== 'object') {
+      return;
+    }
+    Object.entries(weaponFieldInputs).forEach(([field, input]) => {
+      if (!input) return;
+      const raw = item[field];
+      if (raw == null) {
+        input.value = '';
+      } else {
+        input.value = typeof raw === 'string' ? raw : String(raw);
+      }
+    });
+  }
+
+  async function loadWeaponDetails(entry) {
+    const numericEntry = Number(entry);
+    if (!gmClassicAccessible || !Number.isFinite(numericEntry) || numericEntry <= 0) {
+      return;
+    }
+    setWeaponCloneMessage('Loading weapon template…');
+    try {
+      const res = await fetch(`${gmClassicWeaponDetailsEndpoint}/${numericEntry}`, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.item) {
+        throw new Error(data?.error || 'Item not found.');
+      }
+      currentWeaponBase = data.item;
+      populateWeaponForm(currentWeaponBase);
+      const qualityLabel = formatWeaponQualityLabel(currentWeaponBase.Quality);
+      const itemLevel = Number(currentWeaponBase.ItemLevel);
+      const reqLevel = Number(currentWeaponBase.RequiredLevel);
+      if (weaponEditorTitle) {
+        weaponEditorTitle.textContent = currentWeaponBase.name || `Entry #${numericEntry}`;
+      }
+      if (weaponEditorEntry) {
+        weaponEditorEntry.textContent = `#${numericEntry}`;
+      }
+      if (weaponEditorQuality) {
+        weaponEditorQuality.textContent = `${qualityLabel} · ${formatWeaponSubclassLabel(currentWeaponBase.subclass)}`;
+      }
+      if (weaponEditorMeta) {
+        weaponEditorMeta.textContent = `ilvl ${Number.isFinite(itemLevel) ? itemLevel : '—'} · req ${
+          Number.isFinite(reqLevel) ? reqLevel : '—'
+        } · InventoryType ${currentWeaponBase.InventoryType ?? '—'}`;
+      }
+      if (weaponEditorPanel) {
+        weaponEditorPanel.classList.remove('hidden');
+        weaponEditorPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setWeaponCloneMessage('Ready to clone this weapon. Update any fields and mint a new entry.');
+      updateWeaponCloneAvailability();
+    } catch (err) {
+      console.error('Failed to load weapon template', err);
+      setWeaponCloneMessage(err?.message || 'Unable to load that weapon.');
+    }
+  }
+
+  function collectWeaponPayload() {
+    const payload = {};
+    Object.entries(weaponFieldInputs).forEach(([field, input]) => {
+      if (!input) return;
+      const value = input.value;
+      if (weaponStringFields.has(field)) {
+        const normalized = field === 'description' ? value || '' : (value || '').trim();
+        payload[field] = normalized;
+        return;
+      }
+      if (value === '' || value == null) {
+        return;
+      }
+      const num = Number(value);
+      if (!Number.isFinite(num)) {
+        throw new Error(`Invalid value for ${field}.`);
+      }
+      payload[field] = num;
+    });
+    const trimmedName = (payload.name || '').trim();
+    if (!trimmedName) {
+      throw new Error('Custom name is required.');
+    }
+    payload.name = trimmedName;
+    if (payload.ScriptName != null) {
+      payload.ScriptName = String(payload.ScriptName).trim();
+    }
+    return payload;
+  }
+
+  async function handleWeaponClone(event) {
+    event?.preventDefault();
+    if (!gmClassicAccessible) {
+      setWeaponCloneMessage('Classic GM access required to clone weapons.');
+      return;
+    }
+    if (!currentWeaponBase || !Number.isFinite(Number(currentWeaponBase.entry))) {
+      setWeaponCloneMessage('Select a base weapon first.');
+      return;
+    }
+    let payload;
+    try {
+      payload = collectWeaponPayload();
+    } catch (err) {
+      setWeaponCloneMessage(err?.message || 'Fix validation errors before cloning.');
+      return;
+    }
+    setWeaponCloneMessage('Cloning weapon…');
+    setWeaponCloneLoading(true);
+    try {
+      const res = await fetch(`${gmClassicWeaponCloneEndpoint}/${currentWeaponBase.entry}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Clone failed.');
+      }
+      const newEntry = data?.entry || data?.newEntry;
+      const displayName = data?.name || payload.name;
+      setWeaponCloneMessage(`Minted item #${newEntry}: ${displayName}. Reload your worldserver cache to use it.`);
+    } catch (err) {
+      console.error('Weapon clone failed', err);
+      setWeaponCloneMessage(err?.message || 'Unable to clone weapon right now.');
+    } finally {
+      setWeaponCloneLoading(false);
+    }
+  }
+
   const CLASS_NAMES = {
     1: 'Warrior',
     2: 'Paladin',
@@ -1741,6 +2886,42 @@ const accountScript = () => {
     22: 'Worgen',
     24: 'Pandaren',
   };
+
+  const WEAPON_QUALITY_NAMES = {
+    0: 'Poor',
+    1: 'Common',
+    2: 'Uncommon',
+    3: 'Rare',
+    4: 'Epic',
+    5: 'Legendary',
+    6: 'Artifact',
+    7: 'Heirloom',
+  };
+
+  const WEAPON_SUBCLASS_NAMES = {
+    0: 'One-Handed Axes',
+    1: 'Two-Handed Axes',
+    2: 'Bows',
+    3: 'Guns',
+    4: 'One-Handed Maces',
+    5: 'Two-Handed Maces',
+    6: 'Polearms',
+    7: 'One-Handed Swords',
+    8: 'Two-Handed Swords',
+    9: 'Obsolete',
+    10: 'Staves',
+    11: 'Exotic',
+    12: 'Fist Weapons',
+    13: 'Miscellaneous',
+    14: 'Daggers',
+    15: 'Thrown',
+    16: 'Spears',
+    17: 'Crossbows',
+    18: 'Wands',
+    19: 'Fishing Poles',
+  };
+
+  const weaponStringFields = new Set(['name', 'description', 'ScriptName']);
 
   const FAMILY_DEFAULTS = {
     retail: 'DreamCore Master',
@@ -2339,6 +3520,7 @@ const accountScript = () => {
       setClassicOnlinePlaceholder('Open the GM tab to load the roster.');
     }
 
+    syncWeaponFactoryState();
     syncClassicOnlinePolling();
   }
 
@@ -2353,6 +3535,7 @@ const accountScript = () => {
   });
 
   setActiveTab(activeTabId);
+  syncWeaponFactoryState();
 
   characterFamilySelect?.addEventListener('change', (event) => {
     const value = event.target?.value || 'retail';
@@ -2580,6 +3763,29 @@ const accountScript = () => {
       setLinkLoading(classicLinkSubmit, false);
     }
   });
+
+  weaponSearchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    runWeaponSearch(1);
+  });
+
+  weaponSearchResults?.addEventListener('click', (event) => {
+    const target = event?.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const button = target.closest('[data-weapon-entry]');
+    if (!button) {
+      return;
+    }
+    const entry = Number(button.getAttribute('data-weapon-entry'));
+    if (!Number.isFinite(entry) || entry <= 0) {
+      return;
+    }
+    loadWeaponDetails(entry);
+  });
+
+  weaponCloneForm?.addEventListener('submit', handleWeaponClone);
 
   gmCommandForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -3347,6 +4553,127 @@ class PortalHttpError extends Error {
     this.statusCode = statusCode;
   }
 }
+
+function normalizeItemTemplateString(column, value) {
+  let text = value == null ? '' : String(value);
+  if (column !== 'description') {
+    text = text.trim();
+  }
+  const maxLength = ITEM_TEMPLATE_MAX_LENGTHS[column];
+  if (typeof maxLength === 'number' && maxLength > 0) {
+    return text.slice(0, maxLength);
+  }
+  return text;
+}
+
+function applyItemTemplateOverrides(baseItem, overrides, { entry }) {
+  if (!baseItem || typeof baseItem !== 'object') {
+    throw new PortalHttpError('Invalid base item.', 400);
+  }
+  const payload = overrides && typeof overrides === 'object' ? overrides : {};
+  const clone = {};
+  for (const column of ITEM_TEMPLATE_COLUMNS) {
+    clone[column] = baseItem[column];
+  }
+  clone.entry = entry;
+  const overriddenFields = [];
+
+  const overrideName = typeof payload.name === 'string' ? payload.name : '';
+  const normalizedName = normalizeItemTemplateString('name', overrideName);
+  if (!normalizedName) {
+    throw new PortalHttpError('Custom name is required.', 400);
+  }
+  clone.name = normalizedName;
+  if (!Object.is(normalizedName, baseItem.name)) {
+    overriddenFields.push('name');
+  }
+
+  for (const column of ITEM_TEMPLATE_COLUMNS) {
+    if (column === 'entry' || column === 'name') {
+      continue;
+    }
+    if (!Object.prototype.hasOwnProperty.call(payload, column)) {
+      continue;
+    }
+    if (ITEM_TEMPLATE_STRING_FIELDS.has(column)) {
+      const textValue = normalizeItemTemplateString(column, payload[column]);
+      clone[column] = textValue;
+      if (!Object.is(textValue, baseItem[column])) {
+        overriddenFields.push(column);
+      }
+      continue;
+    }
+    const rawValue = payload[column];
+    if (rawValue == null || rawValue === '') {
+      continue;
+    }
+    const numericValue = toSafeNumber(rawValue);
+    if (numericValue == null) {
+      throw new PortalHttpError(`Invalid numeric value for ${column}.`, 400);
+    }
+    clone[column] = numericValue;
+    if (!Object.is(numericValue, baseItem[column])) {
+      overriddenFields.push(column);
+    }
+  }
+
+  return { clone, overriddenFields };
+}
+
+function ensureClassicWeaponCloneValid(item) {
+  if (!item || typeof item !== 'object') {
+    throw new PortalHttpError('Invalid weapon payload.', 400);
+  }
+  const classValue = toSafeNumber(item.class);
+  const subclassValue = toSafeNumber(item.subclass);
+  if (classValue == null || subclassValue == null) {
+    throw new PortalHttpError('Weapon class and subclass are required.', 400);
+  }
+  const requiredNumericFields = ['InventoryType', 'Quality', 'ItemLevel', 'RequiredLevel', 'BuyCount', 'BuyPrice', 'SellPrice'];
+  for (const field of requiredNumericFields) {
+    if (toSafeNumber(item[field]) == null) {
+      throw new PortalHttpError(`Invalid value for ${field}.`, 400);
+    }
+  }
+  for (const [field, bounds] of Object.entries(CLASSIC_WEAPON_FIELD_BOUNDS)) {
+    const value = toSafeNumber(item[field]);
+    if (value == null) {
+      throw new PortalHttpError(`Invalid value for ${field}.`, 400);
+    }
+    if (bounds.min != null && value < bounds.min) {
+      throw new PortalHttpError(`${field} must be at least ${bounds.min}.`, 400);
+    }
+    if (bounds.max != null && value > bounds.max) {
+      throw new PortalHttpError(`${field} must be <= ${bounds.max}.`, 400);
+    }
+  }
+  const dmgMin1 = toSafeNumber(item.dmg_min1) ?? 0;
+  const dmgMax1 = toSafeNumber(item.dmg_max1) ?? 0;
+  if (dmgMin1 < 0 || dmgMax1 < 0 || dmgMax1 < dmgMin1 || dmgMax1 > CLASSIC_WEAPON_DAMAGE_LIMIT) {
+    throw new PortalHttpError('Invalid primary damage values.', 400);
+  }
+  const dmgMin2 = toSafeNumber(item.dmg_min2) ?? 0;
+  const dmgMax2 = toSafeNumber(item.dmg_max2) ?? 0;
+  if (dmgMin2 < 0 || dmgMax2 < 0 || dmgMax2 < dmgMin2 || dmgMax2 > CLASSIC_WEAPON_DAMAGE_LIMIT) {
+    throw new PortalHttpError('Invalid secondary damage values.', 400);
+  }
+  const minMoney = toSafeNumber(item.minMoneyLoot) ?? 0;
+  const maxMoney = toSafeNumber(item.maxMoneyLoot) ?? 0;
+  if (maxMoney < minMoney) {
+    throw new PortalHttpError('maxMoneyLoot must be greater than or equal to minMoneyLoot.', 400);
+  }
+  const statsCount = toSafeNumber(item.StatsCount) ?? 0;
+  if (statsCount < 0 || statsCount > 10) {
+    throw new PortalHttpError('StatsCount must be between 0 and 10.', 400);
+  }
+  for (let i = 1; i <= 10; i += 1) {
+    const statValue = toSafeNumber(item[`stat_value${i}`]);
+    if (statValue != null && Math.abs(statValue) > CLASSIC_WEAPON_STAT_ABS_MAX) {
+      throw new PortalHttpError(`stat_value${i} is out of range.`, 400);
+    }
+  }
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => (
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
@@ -6360,6 +7687,149 @@ app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }
   } catch (err) {
     console.error('Classic GM online lookup failed', err);
     return res.status(500).json({ error: 'Unable to load Classic roster.' });
+  }
+});
+
+app.get('/api/gm/classic/weapons/search', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  try {
+    if (!classicWorldPool) {
+      return res.status(503).json({ error: 'Classic world database unavailable' });
+    }
+    const rawQuery = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const searchQuery = rawQuery ? rawQuery.slice(0, 64) : '';
+    const page = Math.max(Number(req.query?.page) || 1, 1);
+    const requestedPageSize = Number(req.query?.pageSize);
+    const pageSize = Math.min(Math.max(Number.isFinite(requestedPageSize) ? requestedPageSize : 25, 1), 100);
+    const qualityFilter = toSafeNumber(req.query?.quality);
+    const subclassFilter = toSafeNumber(req.query?.subclass);
+    const offset = (page - 1) * pageSize;
+    const limit = pageSize + 1;
+    const clauses = ['class = 2'];
+    const params = [];
+    if (searchQuery) {
+      clauses.push('name LIKE ?');
+      params.push(`%${searchQuery}%`);
+    }
+    if (qualityFilter != null && qualityFilter >= 0 && qualityFilter <= 7) {
+      clauses.push('Quality = ?');
+      params.push(qualityFilter);
+    }
+    if (subclassFilter != null && subclassFilter >= 0) {
+      clauses.push('subclass = ?');
+      params.push(subclassFilter);
+    }
+    params.push(limit, offset);
+    const whereSql = clauses.join(' AND ');
+    const [rows] = await classicWorldPool.execute(
+      `SELECT entry, name, Quality, class, subclass, ItemLevel, RequiredLevel, InventoryType, displayid
+       FROM item_template
+       WHERE ${whereSql}
+       ORDER BY Quality DESC, ItemLevel DESC, name ASC
+       LIMIT ? OFFSET ?`,
+      params
+    );
+    const hasMore = rows.length > pageSize;
+    const items = hasMore ? rows.slice(0, pageSize) : rows;
+    return res.json({ ok: true, items, page, pageSize, hasMore });
+  } catch (err) {
+    console.error('Classic weapon search failed', err);
+    return res.status(500).json({ error: 'Unable to search weapons right now.' });
+  }
+});
+
+app.get('/api/gm/classic/weapons/:entry', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  try {
+    if (!classicWorldPool) {
+      return res.status(503).json({ error: 'Classic world database unavailable' });
+    }
+    const entry = toSafeNumber(req.params?.entry);
+    if (!Number.isFinite(entry) || entry <= 0) {
+      return res.status(400).json({ error: 'Invalid entry id' });
+    }
+    const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ?', [entry]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    return res.json({ ok: true, item: rows[0] });
+  } catch (err) {
+    console.error('Classic weapon lookup failed', err);
+    return res.status(500).json({ error: 'Unable to load weapon right now.' });
+  }
+});
+
+app.post('/api/gm/classic/weapons/:entry/clone', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  if (!classicWorldPool) {
+    return res.status(503).json({ error: 'Classic world database unavailable' });
+  }
+  const sourceEntry = toSafeNumber(req.params?.entry);
+  if (!Number.isFinite(sourceEntry) || sourceEntry <= 0) {
+    return res.status(400).json({ error: 'Invalid base entry id' });
+  }
+  try {
+    const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ?', [sourceEntry]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const baseItem = rows[0];
+    const baseClass = toSafeNumber(baseItem.class);
+    if (baseClass !== 2) {
+      return res.status(400).json({ error: 'Only weapon templates can be cloned with this tool.' });
+    }
+    const overrides = req.body && typeof req.body === 'object' ? req.body : {};
+    let connection;
+    try {
+      connection = await classicWorldPool.getConnection();
+      await connection.beginTransaction();
+      const [rangeRows] = await connection.execute(
+        'SELECT entry FROM item_template WHERE entry BETWEEN ? AND ? ORDER BY entry DESC LIMIT 1 FOR UPDATE',
+        [CLASSIC_CUSTOM_ITEM_MIN, CLASSIC_CUSTOM_ITEM_MAX]
+      );
+      const lastEntry = rangeRows.length ? toSafeNumber(rangeRows[0].entry) : null;
+      const newEntry = lastEntry == null ? CLASSIC_CUSTOM_ITEM_MIN : lastEntry + 1;
+      if (!Number.isFinite(newEntry) || newEntry > CLASSIC_CUSTOM_ITEM_MAX) {
+        await connection.rollback();
+        return res.status(409).json({ error: 'Custom item range exhausted' });
+      }
+      const { clone, overriddenFields } = applyItemTemplateOverrides(baseItem, overrides, { entry: newEntry });
+      ensureClassicWeaponCloneValid(clone);
+      const insertColumns = ITEM_TEMPLATE_COLUMNS.join(', ');
+      const placeholders = ITEM_TEMPLATE_COLUMNS.map(() => '?').join(', ');
+      const values = ITEM_TEMPLATE_COLUMNS.map((column) => clone[column]);
+      await connection.execute(`INSERT INTO item_template (${insertColumns}) VALUES (${placeholders})`, values);
+      await connection.commit();
+      await recordPortalAuditEvent({
+        portalUserId: req.session?.portal_user_id,
+        action: 'gm:classic-weapon-clone',
+        details: {
+          sourceEntry,
+          newEntry,
+          name: clone.name,
+          overriddenFields,
+        },
+      });
+      return res.json({ ok: true, entry: newEntry, name: clone.name, sourceEntry });
+    } catch (err) {
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackErr) {
+          console.error('Classic weapon clone rollback failed', rollbackErr);
+        }
+      }
+      if (err instanceof PortalHttpError) {
+        return res.status(err.statusCode || 400).json({ error: err.message });
+      }
+      console.error('Classic weapon clone failed', err);
+      return res.status(500).json({ error: 'Unable to clone weapon right now.' });
+    } finally {
+      connection?.release();
+    }
+  } catch (err) {
+    if (err instanceof PortalHttpError) {
+      return res.status(err.statusCode || 400).json({ error: err.message });
+    }
+    console.error('Classic weapon clone setup failed', err);
+    return res.status(500).json({ error: 'Unable to prepare weapon clone.' });
   }
 });
 
