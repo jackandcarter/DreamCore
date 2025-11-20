@@ -1232,6 +1232,15 @@ const LOGIN_PAGE = () => `<!doctype html>
       50% { transform: rotate(180deg) scale(1.2); }
       100% { transform: rotate(360deg) scale(1.1); }
     }
+    @keyframes blink-signal {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .blink-warning {
+      animation: blink-signal 1.1s ease-in-out infinite;
+      color: #c084fc;
+      text-shadow: 0 0 12px rgba(192, 132, 252, 0.55);
+    }
 ${SHARED_STYLES}
   </style>
 </head>
@@ -1675,10 +1684,19 @@ ${SHARED_STYLES}
           <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
             <div class="flex flex-col gap-6 lg:flex-row">
               <div class="flex-1 space-y-5">
-                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">GM toolkit</p>
+                <div class="rounded-2xl border border-violet-800/60 bg-gradient-to-r from-black via-gray-950 to-violet-950 p-3 shadow-inner shadow-violet-900/30">
+                  <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <button type="button" data-sub-tab-target="gmServerPanel" class="gm-subtab-btn w-full rounded-xl border border-violet-200/70 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition focus:outline-none focus:ring-2 focus:ring-violet-400">Server</button>
+                    <button type="button" data-sub-tab-target="gmWeaponPanel" class="gm-subtab-btn w-full rounded-xl border border-violet-900/60 bg-gradient-to-r from-black via-gray-950 to-violet-950 px-4 py-2 text-sm font-semibold text-indigo-200/80 shadow-md shadow-violet-900/20 transition focus:outline-none focus:ring-2 focus:ring-violet-400">Weapon Factory</button>
+                    <button type="button" data-sub-tab-target="gmArmoryPanel" class="gm-subtab-btn w-full rounded-xl border border-violet-900/60 bg-gradient-to-r from-black via-gray-950 to-violet-950 px-4 py-2 text-sm font-semibold text-indigo-200/80 shadow-md shadow-violet-900/20 transition focus:outline-none focus:ring-2 focus:ring-violet-400">Armory</button>
+                    <button type="button" data-sub-tab-target="gmQuestPanel" class="gm-subtab-btn w-full rounded-xl border border-violet-900/60 bg-gradient-to-r from-black via-gray-950 to-violet-950 px-4 py-2 text-sm font-semibold text-indigo-200/80 shadow-md shadow-violet-900/20 transition focus:outline-none focus:ring-2 focus:ring-violet-400">Quest Editor</button>
+                  </div>
+                </div>
+                <div id="gmServerPanel" data-sub-tab-panel class="space-y-5">
+                  <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">GM toolkit</p>
                       <h2 class="text-2xl font-semibold text-white">SOAP command console</h2>
                       <p class="text-sm text-indigo-100/80">Send live commands to ${CONFIG.BRAND_NAME} and ${CONFIG.CLASSIC_BRAND_NAME} realms.</p>
                     </div>
@@ -1732,7 +1750,9 @@ ${SHARED_STYLES}
                     </div>
                   </div>
                 </div>
-                <div id="weaponFactoryCard" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-5">
+                </div>
+                <div id="gmWeaponPanel" data-sub-tab-panel class="hidden space-y-5">
+                  <div id="weaponFactoryCard" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-5">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200">Classic weapon lab</p>
@@ -2190,15 +2210,29 @@ ${weaponSocketInputsHtml}
                           </div>
                         </div>
                       </section>
-                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p id="weaponCloneMsg" class="text-sm text-indigo-200/80">Select a weapon to begin cloning.</p>
-                        <button id="weaponCloneSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-400 hover:via-cyan-400 hover:to-blue-400 focus:outline-none focus:ring-2 focus:ring-emerald-400">Clone weapon</button>
-                      </div>
-                    </form>
-                  </div>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p id="weaponCloneMsg" class="text-sm text-indigo-200/80">Select a weapon to begin cloning.</p>
+                      <button id="weaponCloneSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-400 hover:via-cyan-400 hover:to-blue-400 focus:outline-none focus:ring-2 focus:ring-emerald-400">Clone weapon</button>
+                    </div>
+                  </form>
                 </div>
               </div>
-              <aside class="space-y-4 lg:w-80">
+              <div id="gmArmoryPanel" data-sub-tab-panel class="hidden space-y-4">
+                <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-black via-gray-950 to-violet-950 p-6 text-center shadow-inner shadow-violet-900/30">
+                  <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">Armory</p>
+                  <h3 class="mt-2 text-xl font-semibold text-white">Coming soon</h3>
+                  <p class="mt-3 text-sm text-indigo-100/80">Armory insights and tooling will live here once development begins.</p>
+                </div>
+              </div>
+              <div id="gmQuestPanel" data-sub-tab-panel class="hidden space-y-4">
+                <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-black via-gray-950 to-violet-950 p-6 text-center shadow-inner shadow-violet-900/30">
+                  <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">Quest Editor</p>
+                  <h3 class="mt-2 text-xl font-semibold text-white">Coming soon</h3>
+                  <p class="mt-3 text-sm text-indigo-100/80">Design, edit, and publish quests will be added in a future release.</p>
+                </div>
+              </div>
+            </div>
+            <aside class="space-y-4 lg:w-80">
                 <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
                   <div class="flex items-center justify-between">
                     <div>
@@ -2235,7 +2269,8 @@ const accountScript = () => {
   })();
   const STORAGE_KEYS = {
     tab: 'dreamcore.dashboard.activeTab',
-    family: 'dreamcore.dashboard.characterFamily'
+    family: 'dreamcore.dashboard.characterFamily',
+    gmSubtab: 'dreamcore.dashboard.gmSubtab',
   };
 
   function readStoredValue(key) {
@@ -2288,6 +2323,8 @@ const accountScript = () => {
   const tabButtons = document.querySelectorAll('[data-tab-target]');
   const tabPanels = document.querySelectorAll('[data-tab-panel]');
   const gmTabButton = document.getElementById('gmTabButton');
+  const gmSubTabButtons = document.querySelectorAll('[data-sub-tab-target]');
+  const gmSubTabPanels = document.querySelectorAll('[data-sub-tab-panel]');
   const gmCommandForm = document.getElementById('gmCommandForm');
   const gmRealmSelect = document.getElementById('gmRealmSelect');
   const gmCommandInput = document.getElementById('gmCommandInput');
@@ -3430,6 +3467,40 @@ const accountScript = () => {
     }
   }
 
+  const gmSubTabActiveClasses = [
+    'from-violet-600',
+    'via-purple-600',
+    'to-indigo-600',
+    'text-white',
+    'border-violet-200/70',
+    'shadow-violet-900/40',
+  ];
+  const gmSubTabInactiveClasses = [
+    'from-black',
+    'via-gray-950',
+    'to-violet-950',
+    'text-indigo-200/80',
+    'border-violet-900/60',
+    'shadow-violet-900/20',
+  ];
+
+  function setActiveGmSubTab(targetId) {
+    if (!gmSubTabPanels.length || !gmSubTabButtons.length) return;
+    const fallbackPanel = gmSubTabPanels[0];
+    const nextPanel = (targetId && document.getElementById(targetId)) || fallbackPanel;
+    if (!nextPanel) return;
+    gmSubTabPanels.forEach((panel) => {
+      panel.classList.toggle('hidden', panel.id !== nextPanel.id);
+    });
+    gmSubTabButtons.forEach((button) => {
+      const matches = button.getAttribute('data-sub-tab-target') === nextPanel.id;
+      button.setAttribute('aria-selected', matches ? 'true' : 'false');
+      button.classList.remove(...gmSubTabActiveClasses, ...gmSubTabInactiveClasses);
+      button.classList.add(...(matches ? gmSubTabActiveClasses : gmSubTabInactiveClasses));
+    });
+    persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
+  }
+
   function setActiveTab(targetId) {
     if (!targetId) return;
     const nextPanel = document.getElementById(targetId);
@@ -3524,6 +3595,15 @@ const accountScript = () => {
     syncClassicOnlinePolling();
   }
 
+  gmSubTabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const targetId = button.getAttribute('data-sub-tab-target');
+      if (targetId) {
+        setActiveGmSubTab(targetId);
+      }
+    });
+  });
+
   tabButtons.forEach((button) => {
     button.addEventListener('click', () => {
       if (button.classList.contains('hidden')) return;
@@ -3534,6 +3614,7 @@ const accountScript = () => {
     });
   });
 
+  setActiveGmSubTab(readStoredValue(STORAGE_KEYS.gmSubtab) || 'gmServerPanel');
   setActiveTab(activeTabId);
   syncWeaponFactoryState();
 
@@ -8508,25 +8589,27 @@ app.get('/classic/verify', async (req, res) => {
             {
               number: 'Next',
               title: 'Download the DreamCore Classic client',
-              body: [
-                reusedClassicAccount
-                  ? 'We detected that these Classic credentials already existed and simply linked them to your portal account.'
-                  : 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
-                'After installing, launch it and log in with the account you just verified.',
-              ],
-              notice: clientLoginUsername
-                ? {
-                    label: 'Client Login Username',
-                    value: clientLoginUsername,
-                    description:
-                      'Do not log in with an email address in the Classic client. Use this username exactly as shown.',
-                  }
-                : null,
-              cta: {
-                href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
-                label: 'Download Client',
+                body: [
+                  reusedClassicAccount
+                    ? 'We detected that these Classic credentials already existed and simply linked them to your portal account.'
+                    : 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
+                  'After installing, launch it and log in with the account you just verified.',
+                ],
+                notice: clientLoginUsername
+                  ? {
+                      label: 'Client Login Username',
+                      value: clientLoginUsername,
+                      description:
+                        'Do not log in with an email address in the Classic client. Use this username exactly as shown.',
+                    }
+                  : null,
+                warning:
+                  'Wrath of the Lich King client logins require the username only—do not include an email address or @ symbol.',
+                cta: {
+                  href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
+                  label: 'Download Client',
+                },
               },
-            },
           ],
           successFooter:
             'This client is already configured to connect to our server, you can now login with your account info.',
@@ -8639,6 +8722,11 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
                   }
                 </div>`
               : '';
+            const warningHtml = step.warning
+              ? `<p class="mt-5 rounded-2xl border border-violet-500/40 bg-purple-900/30 px-4 py-3 text-sm font-semibold blink-warning text-center">${escapeHtml(
+                  String(step.warning)
+                )}</p>`
+              : '';
             const cta = step.cta && step.cta.href
               ? `<a class="mt-5 inline-flex items-center justify-center rounded-2xl ${
                   idx === 0
@@ -8651,7 +8739,7 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
               const wrapperClasses = idx === 0
                 ? 'rounded-3xl gradient-border bg-indigo-500/10 p-6 backdrop-blur-sm'
                 : 'rounded-3xl gradient-border bg-gray-900/60 p-6 shadow-inner shadow-indigo-900/30';
-            return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${noticeHtml}${cta}</section>`;
+            return `<section class="${wrapperClasses}"><div class="flex items-center gap-4"><span class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 text-lg font-semibold text-white shadow-lg shadow-indigo-900/40">${number}</span><div><h2 class="text-lg font-semibold text-white">${title}</h2><p class="text-[15px] text-indigo-100/90">Follow this step before moving on.</p></div></div>${bodyHtml}${noticeHtml}${warningHtml}${cta}</section>`;
           })
           .join('')}</div>`
       : '';
