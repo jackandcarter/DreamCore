@@ -4500,7 +4500,7 @@ const accountScript = () => {
     if (retailMax > 0 || gmRetailFromRoster) realms.push('retail');
     if (classicMax > 0 || gmClassicFromRoster) realms.push('classic');
     const hasGm = Boolean(charactersPayload?.isGm) || realms.length > 0;
-    gmClassicAccessible = realms.includes('classic');
+    gmClassicAccessible = hasGm;
     gmToolkitAccessible = hasGm;
 
     if (gmTabButton) {
@@ -7765,6 +7765,10 @@ function normalizeRealmInput(value, fallback = null) {
   return fallback;
 }
 
+function hasAnyGmAccess(session, minLevel = 1) {
+  return hasGmAccess(session, 'retail', minLevel) || hasGmAccess(session, 'classic', minLevel);
+}
+
 function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
   const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
   const requiredLevel = toSafeNumber(minLevel) ?? 1;
@@ -7772,7 +7776,10 @@ function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
     if (!req.session) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    if (!hasGmAccess(req.session, normalizedRealm, requiredLevel)) {
+    if (
+      !hasGmAccess(req.session, normalizedRealm, requiredLevel) &&
+      !hasAnyGmAccess(req.session, requiredLevel)
+    ) {
       return res.status(403).json({ error: 'GM access required' });
     }
     return next();
@@ -7797,7 +7804,10 @@ function requireRequestGm({ source = 'body', key = 'realm', fallbackRealm = null
     if (!resolvedRealm) {
       return res.status(400).json({ error: 'Invalid realm selection' });
     }
-    if (!hasGmAccess(req.session, resolvedRealm, requiredLevel)) {
+    if (
+      !hasGmAccess(req.session, resolvedRealm, requiredLevel) &&
+      !hasAnyGmAccess(req.session, requiredLevel)
+    ) {
       return res.status(403).json({ error: 'GM access required' });
     }
     req.gmRealm = resolvedRealm;
