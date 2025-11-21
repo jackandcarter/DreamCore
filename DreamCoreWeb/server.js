@@ -1703,6 +1703,91 @@ ${SHARED_STYLES}
                   </div>
                 </div>
                 <div id="gmServerPanel" data-sub-tab-panel class="space-y-5">
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <article data-health-card="classic" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-3">
+                      <div class="flex items-center justify-between gap-3">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</p>
+                          <h3 class="text-lg font-semibold text-white">Server health</h3>
+                          <p class="text-xs text-indigo-200/80">Live view of Classic world status.</p>
+                        </div>
+                        <span data-health-status class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-indigo-200/80">Unknown</span>
+                      </div>
+                      <div class="flex items-center justify-between text-xs text-indigo-200/70">
+                        <span data-health-status-text>Awaiting status…</span>
+                        <span data-health-updated>—</span>
+                      </div>
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Uptime</p>
+                          <p data-health-uptime class="text-sm font-semibold text-white">Unknown</p>
+                          <p data-health-uptime-hint class="text-xs text-indigo-200/70">—</p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Players online</p>
+                          <p data-health-players class="text-sm font-semibold text-white">—</p>
+                          <p class="text-xs text-indigo-200/70">Alliance <span data-health-faction-alliance>—</span> / Horde <span data-health-faction-horde>—</span></p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">World tick</p>
+                          <p data-health-world-update class="text-sm font-semibold text-white">Unknown</p>
+                          <p class="text-xs text-indigo-200/70">Lower is better.</p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">History</p>
+                          <p data-health-history class="text-sm font-semibold text-white">—</p>
+                          <p class="text-xs text-indigo-200/70">Last restart & record online.</p>
+                        </div>
+                      </div>
+                      <div data-health-warning class="hidden rounded-xl border border-amber-200/40 bg-amber-500/10 p-3 text-xs text-amber-100/90">Partial data (some checks failed).</div>
+                      <details data-health-errors class="hidden rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-indigo-100/80">
+                        <summary class="cursor-pointer text-sm font-semibold text-indigo-100">Details</summary>
+                        <ul data-health-error-list class="mt-2 list-disc space-y-1 pl-4"></ul>
+                      </details>
+                    </article>
+
+                    <article data-health-card="retail" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-3">
+                      <div class="flex items-center justify-between gap-3">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">${CONFIG.BRAND_NAME}</p>
+                          <h3 class="text-lg font-semibold text-white">Server health</h3>
+                          <p class="text-xs text-indigo-200/80">Retail realm reachability & uptime.</p>
+                        </div>
+                        <span data-health-status class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-indigo-200/80">Unknown</span>
+                      </div>
+                      <div class="flex items-center justify-between text-xs text-indigo-200/70">
+                        <span data-health-status-text>Awaiting status…</span>
+                        <span data-health-updated>—</span>
+                      </div>
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Uptime</p>
+                          <p data-health-uptime class="text-sm font-semibold text-white">Unknown</p>
+                          <p data-health-uptime-hint class="text-xs text-indigo-200/70">—</p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Players online</p>
+                          <p data-health-players class="text-sm font-semibold text-white">—</p>
+                          <p class="text-xs text-indigo-200/70">Alliance <span data-health-faction-alliance>—</span> / Horde <span data-health-faction-horde>—</span></p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">World tick</p>
+                          <p data-health-world-update class="text-sm font-semibold text-white">Unknown</p>
+                          <p class="text-xs text-indigo-200/70">Lower is better.</p>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">History</p>
+                          <p data-health-history class="text-sm font-semibold text-white">—</p>
+                          <p class="text-xs text-indigo-200/70">Last restart & record online.</p>
+                        </div>
+                      </div>
+                      <div data-health-warning class="hidden rounded-xl border border-amber-200/40 bg-amber-500/10 p-3 text-xs text-amber-100/90">Partial data (some checks failed).</div>
+                      <details data-health-errors class="hidden rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-indigo-100/80">
+                        <summary class="cursor-pointer text-sm font-semibold text-indigo-100">Details</summary>
+                        <ul data-health-error-list class="mt-2 list-disc space-y-1 pl-4"></ul>
+                      </details>
+                    </article>
+                  </div>
                   <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div>
@@ -2349,6 +2434,7 @@ const accountScript = () => {
   const classicOnlineList = document.getElementById('classicOnlineList');
   const classicOnlineStatus = document.getElementById('classicOnlineStatus');
   const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
+  const healthCards = {};
   const weaponFactoryCard = document.getElementById('weaponFactoryCard');
   const weaponSearchForm = document.getElementById('weaponSearchForm');
   const weaponSearchInput = document.getElementById('weaponSearchInput');
@@ -2487,6 +2573,7 @@ const accountScript = () => {
   let activeTabId = 'accountTabPanel';
   let gmClassicAccessible = false;
   let classicOnlineTimer = null;
+  let healthLoaded = false;
   let charactersPayload = null;
   let charactersLoaded = false;
   let charactersLoading = false;
@@ -2599,6 +2686,175 @@ const accountScript = () => {
 
       classicOnlineList.appendChild(container);
     });
+  }
+
+  function buildHealthCardRefs(branchKey) {
+    const card = document.querySelector(`[data-health-card="${branchKey}"]`);
+    if (!card) return null;
+    return {
+      card,
+      badge: card.querySelector('[data-health-status]'),
+      statusText: card.querySelector('[data-health-status-text]'),
+      updated: card.querySelector('[data-health-updated]'),
+      uptime: card.querySelector('[data-health-uptime]'),
+      uptimeHint: card.querySelector('[data-health-uptime-hint]'),
+      players: card.querySelector('[data-health-players]'),
+      factionAlliance: card.querySelector('[data-health-faction-alliance]'),
+      factionHorde: card.querySelector('[data-health-faction-horde]'),
+      worldUpdate: card.querySelector('[data-health-world-update]'),
+      history: card.querySelector('[data-health-history]'),
+      warning: card.querySelector('[data-health-warning]'),
+      errors: card.querySelector('[data-health-errors]'),
+      errorList: card.querySelector('[data-health-error-list]'),
+    };
+  }
+
+  function formatDuration(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value < 0) return 'Unknown';
+    const parts = [];
+    const days = Math.floor(value / 86400);
+    const hours = Math.floor((value % 86400) / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const secs = Math.floor(value % 60);
+    if (days) parts.push(`${days}d`);
+    if (hours) parts.push(`${hours}h`);
+    if (minutes) parts.push(`${minutes}m`);
+    if (!parts.length) parts.push(`${secs}s`);
+    return parts.join(' ');
+  }
+
+  function formatTimestamp(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString();
+  }
+
+  function renderBranchHealth(branchKey, health) {
+    const refs = healthCards[branchKey] || buildHealthCardRefs(branchKey);
+    if (!refs) return;
+    healthCards[branchKey] = refs;
+
+    const status = (health?.status || 'unknown').toLowerCase();
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    const statusMessages = {
+      online: 'All checks passed.',
+      partial: 'Partial data (some checks failed).',
+      offline: 'This realm appears offline or unreachable right now.',
+      unknown: 'Status unknown.',
+    };
+    const badgeBase = 'rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em]';
+    const badgeClass =
+      status === 'online'
+        ? 'border border-emerald-300/60 bg-emerald-500/15 text-emerald-100'
+        : status === 'partial'
+          ? 'border border-amber-300/60 bg-amber-500/15 text-amber-100'
+          : status === 'offline'
+            ? 'border border-rose-300/60 bg-rose-500/15 text-rose-100'
+            : 'border border-white/20 bg-white/5 text-indigo-200/80';
+
+    if (refs.badge) {
+      refs.badge.className = `${badgeBase} ${badgeClass}`;
+      refs.badge.textContent = statusLabel || 'Unknown';
+    }
+
+    if (refs.card) {
+      const statusBorders = [
+        'border-emerald-300/60',
+        'border-amber-300/60',
+        'border-rose-300/60',
+        'shadow-emerald-900/30',
+        'shadow-amber-900/30',
+        'shadow-rose-900/30',
+      ];
+      refs.card.classList.remove(...statusBorders);
+      if (status === 'online') {
+        refs.card.classList.add('border-emerald-300/60', 'shadow-emerald-900/30');
+      } else if (status === 'partial') {
+        refs.card.classList.add('border-amber-300/60', 'shadow-amber-900/30');
+      } else if (status === 'offline') {
+        refs.card.classList.add('border-rose-300/60', 'shadow-rose-900/30');
+      }
+    }
+
+    if (refs.statusText) {
+      refs.statusText.textContent = statusMessages[status] || statusMessages.unknown;
+    }
+    if (refs.updated) {
+      refs.updated.textContent = formatTimestamp(health?.lastUpdated);
+    }
+
+    const metrics = health?.metrics || {};
+    const history = health?.history || {};
+    const fallbackLabel = status === 'offline' ? 'Unavailable' : 'Unknown';
+
+    if (refs.uptime) {
+      refs.uptime.textContent =
+        metrics.uptimeSeconds != null ? formatDuration(metrics.uptimeSeconds) : fallbackLabel;
+    }
+    if (refs.uptimeHint) {
+      refs.uptimeHint.textContent =
+        metrics.maxOnline != null ? `Max online: ${metrics.maxOnline}` : fallbackLabel;
+    }
+    if (refs.players) {
+      refs.players.textContent =
+        metrics.onlinePlayers != null && Number.isFinite(Number(metrics.onlinePlayers))
+          ? String(metrics.onlinePlayers)
+          : fallbackLabel;
+    }
+    if (refs.factionAlliance) {
+      const alliance = metrics?.factionOnline?.alliance;
+      refs.factionAlliance.textContent = alliance != null ? String(alliance) : '—';
+    }
+    if (refs.factionHorde) {
+      const horde = metrics?.factionOnline?.horde;
+      refs.factionHorde.textContent = horde != null ? String(horde) : '—';
+    }
+    if (refs.worldUpdate) {
+      refs.worldUpdate.textContent =
+        metrics.worldUpdateMs != null && Number.isFinite(Number(metrics.worldUpdateMs))
+          ? `${metrics.worldUpdateMs} ms`
+          : fallbackLabel;
+    }
+    if (refs.history) {
+      const parts = [];
+      if (history.lastRestartAt) parts.push(`Restart ${formatTimestamp(history.lastRestartAt)}`);
+      if (history.recordOnline != null) parts.push(`Record ${history.recordOnline}`);
+      if (history.avgSessionSeconds != null) parts.push(`Avg ${formatDuration(history.avgSessionSeconds)}`);
+      refs.history.textContent = parts.length ? parts.join(' · ') : fallbackLabel;
+    }
+
+    if (refs.warning) {
+      const warningText =
+        status === 'offline'
+          ? 'This realm appears offline or unreachable right now.'
+          : status === 'partial'
+            ? 'Partial data (some checks failed).'
+            : '';
+      if (warningText) {
+        refs.warning.textContent = warningText;
+        refs.warning.classList.remove('hidden');
+      } else {
+        refs.warning.classList.add('hidden');
+      }
+    }
+
+    if (refs.errors && refs.errorList) {
+      const errorList = Array.isArray(health?.errors)
+        ? health.errors.filter((entry) => Boolean(entry))
+        : [];
+      refs.errorList.innerHTML = '';
+      if (errorList.length) {
+        errorList.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          refs.errorList.appendChild(li);
+        });
+        refs.errors.classList.remove('hidden');
+      } else {
+        refs.errors.classList.add('hidden');
+      }
+    }
   }
 
   function formatWeaponQualityLabel(value) {
@@ -3423,6 +3679,70 @@ const accountScript = () => {
     }
   }
 
+  function buildClientHealthFallback(branchKey, errorMessage) {
+    const label = branchKey === 'classic' ? CONFIG.CLASSIC_BRAND_NAME : CONFIG.BRAND_NAME;
+    const displayName =
+      branchKey === 'classic'
+        ? `${label || 'DreamCore Classic'} (3.3.5)`
+        : `${label || 'DreamCore Retail'} (master)`;
+    const message = errorMessage || 'Unable to fetch health.';
+    return {
+      branch: branchKey,
+      displayName,
+      status: 'unknown',
+      lastUpdated: new Date().toISOString(),
+      services: {
+        auth: { status: 'unknown', details: '' },
+        world: { status: 'unknown', details: '' },
+        soap: { status: 'offline', details: `Failed to load health: ${message}` },
+        db: { status: 'unknown', details: '' },
+      },
+      metrics: {
+        uptimeSeconds: null,
+        onlinePlayers: null,
+        maxOnline: null,
+        worldUpdateMs: null,
+        factionOnline: { alliance: null, horde: null },
+      },
+      history: {
+        lastRestartAt: null,
+        avgSessionSeconds: null,
+        recordOnline: null,
+      },
+      errors: [`Failed to fetch health: ${message}`],
+    };
+  }
+
+  async function fetchHealth(branchKey) {
+    try {
+      const resp = await fetch(`/api/health/${branchKey}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (err) {
+      console.error('Failed to load health', branchKey, err);
+      return buildClientHealthFallback(branchKey, err?.message || String(err));
+    }
+  }
+
+  async function loadHealthStatuses() {
+    const [classicHealth, retailHealth] = await Promise.all([
+      fetchHealth('classic'),
+      fetchHealth('retail'),
+    ]);
+    renderBranchHealth('classic', classicHealth);
+    renderBranchHealth('retail', retailHealth);
+  }
+
+  function ensureHealthLoaded() {
+    if (healthLoaded) return;
+    healthLoaded = true;
+    loadHealthStatuses();
+  }
+
   async function loadClassicOnlineSnapshot() {
     if (!gmClassicOnlineEndpoint || !gmClassicAccessible) {
       return;
@@ -3533,6 +3853,9 @@ const accountScript = () => {
       button.classList.toggle('text-indigo-100/70', !matches);
       button.classList.toggle('border-white/10', !matches);
     });
+    if (targetId === 'gmToolkitSection') {
+      ensureHealthLoaded();
+    }
     if (classicOnlineStatus && gmClassicAccessible) {
       classicOnlineStatus.textContent =
         targetId === 'gmToolkitSection'
@@ -3625,6 +3948,7 @@ const accountScript = () => {
 
   setActiveGmSubTab(readStoredValue(STORAGE_KEYS.gmSubtab) || 'gmServerPanel');
   setActiveTab(activeTabId);
+  ensureHealthLoaded();
   syncWeaponFactoryState();
 
   characterFamilySelect?.addEventListener('change', (event) => {
@@ -5281,6 +5605,47 @@ function buildRealmDirectoryFromConfig(family = null) {
       name: cfg.name || null,
       charDb: cfg.charDbLabel || cfg.database || null,
     }));
+}
+
+function defaultRealmIdForFamily(family) {
+  const entries = family === 'classic' ? REALM_FAMILY_MAP.classic : REALM_FAMILY_MAP.retail;
+  const primary = entries.find((entry) => toSafeNumber(entry?.config?.realmId) != null);
+  if (primary) {
+    const parsed = toSafeNumber(primary.config.realmId);
+    if (parsed != null) return parsed;
+  }
+  const fallback = family === 'classic' ? CLASSIC_REALM_LOOKUP?.default : REALM_LOOKUP?.default;
+  const parsedFallback = toSafeNumber(fallback?.config?.realmId ?? fallback?.id);
+  return parsedFallback;
+}
+
+function getBranchConfig(branchKey) {
+  const normalized = typeof branchKey === 'string' ? branchKey.trim().toLowerCase() : '';
+  if (normalized === 'classic') {
+    return {
+      key: 'classic',
+      displayName: `${CONFIG.CLASSIC_BRAND_NAME || 'DreamCore Classic'} (3.3.5)`,
+      realmId: defaultRealmIdForFamily('classic'),
+      dbAuthPool: classicAuthPool,
+      dbCharsPool: classicCharPool,
+      soapProfile: 'classic',
+      worldPort: Number(process.env.CLASSIC_WORLD_PORT) || null,
+      authPort: Number(process.env.CLASSIC_AUTH_PORT) || null,
+    };
+  }
+  if (normalized === 'retail') {
+    return {
+      key: 'retail',
+      displayName: `${CONFIG.BRAND_NAME || 'DreamCore Retail'} (master)`,
+      realmId: defaultRealmIdForFamily('retail'),
+      dbAuthPool: authPool,
+      dbCharsPool: charPool,
+      soapProfile: 'retail',
+      worldPort: Number(process.env.TC_WORLD_PORT) || null,
+      authPort: Number(process.env.TC_AUTH_PORT) || null,
+    };
+  }
+  return null;
 }
 
 function normalizeRealmDirectoryEntries(entries) {
@@ -7394,12 +7759,260 @@ async function verifyPortalPassword(password, record) {
   }
 }
 
+const ALLIANCE_RACE_IDS = [1, 3, 4, 7, 11, 22, 25, 29, 30, 32, 34, 36, 37, 52, 69, 70];
+const HORDE_RACE_IDS = [2, 5, 6, 8, 9, 10, 26, 27, 28, 31, 35, 38, 40, 41, 42, 45, 46, 47, 48, 51, 56, 66];
+
+function createHealthSkeleton(branchConfig, timestamp = new Date()) {
+  const nowIso = timestamp instanceof Date ? timestamp.toISOString() : new Date().toISOString();
+  return {
+    branch: branchConfig?.key || 'unknown',
+    displayName: branchConfig?.displayName || 'Unknown realm',
+    status: 'unknown',
+    lastUpdated: nowIso,
+    services: {
+      auth: { status: 'unknown', details: '' },
+      world: { status: 'unknown', details: '' },
+      soap: { status: 'unknown', details: '' },
+      db: { status: 'unknown', details: '' },
+    },
+    metrics: {
+      uptimeSeconds: null,
+      onlinePlayers: null,
+      maxOnline: null,
+      worldUpdateMs: null,
+      factionOnline: {
+        alliance: null,
+        horde: null,
+      },
+    },
+    history: {
+      lastRestartAt: null,
+      avgSessionSeconds: null,
+      recordOnline: null,
+    },
+    errors: [],
+  };
+}
+
+function deriveOverallStatus(base) {
+  const svc = base.services || {};
+  const svcStates = Object.values(svc).map((s) => s?.status || 'unknown');
+  if (svcStates.every((s) => s === 'offline')) return 'offline';
+  if (svcStates.every((s) => s === 'unknown')) return 'unknown';
+  if (svcStates.includes('offline') || svcStates.includes('unknown')) return 'partial';
+  return 'online';
+}
+
+function parseUptimeSeconds(text) {
+  if (!text) return null;
+  const numbers = {
+    days: /([0-9]+)\s*Day\(s\)/i,
+    hours: /([0-9]+)\s*Hour\(s\)/i,
+    minutes: /([0-9]+)\s*Minute\(s\)/i,
+    seconds: /([0-9]+)\s*Second\(s\)/i,
+  };
+  const days = Number(text.match(numbers.days)?.[1] || 0);
+  const hours = Number(text.match(numbers.hours)?.[1] || 0);
+  const minutes = Number(text.match(numbers.minutes)?.[1] || 0);
+  const seconds = Number(text.match(numbers.seconds)?.[1] || 0);
+  const total = days * 86400 + hours * 3600 + minutes * 60 + seconds;
+  return Number.isFinite(total) ? total : null;
+}
+
+function parseServerInfo(ret) {
+  const metrics = {
+    uptimeSeconds: null,
+    onlinePlayers: null,
+    maxOnline: null,
+    worldUpdateMs: null,
+  };
+  if (typeof ret !== 'string') return metrics;
+  const uptimeLine = ret.match(/Server uptime:\s*([^\n]+)/i);
+  if (uptimeLine?.[1]) {
+    metrics.uptimeSeconds = parseUptimeSeconds(uptimeLine[1]);
+  }
+  const playersMatch = ret.match(/Players online:\s*(\d+)(?:\s*\(max:\s*(\d+)\))?/i) ||
+    ret.match(/Current Players Online:\s*(\d+)(?:\s*\(max:\s*(\d+)\))?/i);
+  if (playersMatch) {
+    metrics.onlinePlayers = Number(playersMatch[1]);
+    metrics.maxOnline = Number(playersMatch[2] ?? playersMatch[1]);
+    if (!Number.isFinite(metrics.onlinePlayers)) metrics.onlinePlayers = null;
+    if (!Number.isFinite(metrics.maxOnline)) metrics.maxOnline = null;
+  }
+  const updateMatch =
+    ret.match(/Update time diff:\s*([0-9]+(?:\.[0-9]+)?)/i) || ret.match(/Average update time:\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (updateMatch?.[1]) {
+    const parsed = Number(updateMatch[1]);
+    metrics.worldUpdateMs = Number.isFinite(parsed) ? parsed : null;
+  }
+  return metrics;
+}
+
+async function collectBranchHealth(branchConfig) {
+  const base = createHealthSkeleton(branchConfig, new Date());
+  const { errors } = base;
+
+  const soapConfig = branchConfig?.soapProfile === 'classic' ? CLASSIC_SOAP : SOAP;
+  const soapRunner = branchConfig?.soapProfile === 'classic' ? executeClassicCommand : executeRetailCommand;
+
+  const runWithTimeout = (promise, timeoutMs, label) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
+
+  const realmId = toSafeNumber(branchConfig?.realmId);
+  let authRealmRow = null;
+  let authOk = false;
+
+  if (branchConfig?.dbAuthPool) {
+    try {
+      const sql = realmId != null
+        ? 'SELECT id, name, realmflags FROM `realmlist` WHERE id = ? LIMIT 1'
+        : 'SELECT id, name, realmflags FROM `realmlist` ORDER BY id LIMIT 1';
+      const params = realmId != null ? [realmId] : [];
+      const [rows] = await branchConfig.dbAuthPool.execute(sql, params);
+      authRealmRow = Array.isArray(rows) && rows.length ? rows[0] : null;
+      base.services.auth.status = 'online';
+      base.services.auth.details = authRealmRow?.name ? `Auth DB OK (${authRealmRow.name})` : 'Auth DB OK';
+      base.services.db.status = 'partial';
+      authOk = true;
+    } catch (err) {
+      base.services.auth.status = 'offline';
+      base.services.auth.details = 'Auth DB unreachable';
+      base.services.db.status = 'offline';
+      errors.push(`Auth DB error: ${err?.message || err}`);
+    }
+  }
+
+  if (branchConfig?.dbCharsPool) {
+    try {
+      const [rows] = await branchConfig.dbCharsPool.execute(
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN race IN (${ALLIANCE_RACE_IDS.join(',')}) THEN 1 ELSE 0 END) AS alliance,
+                SUM(CASE WHEN race IN (${HORDE_RACE_IDS.join(',')}) THEN 1 ELSE 0 END) AS horde
+           FROM characters
+          WHERE online = 1`
+      );
+      const row = Array.isArray(rows) && rows.length ? rows[0] : {};
+      const total = toSafeNumber(row.total);
+      const alliance = toSafeNumber(row.alliance);
+      const horde = toSafeNumber(row.horde);
+      base.metrics.onlinePlayers = total;
+      base.metrics.factionOnline.alliance = alliance;
+      base.metrics.factionOnline.horde = horde;
+      if (authOk) {
+        base.services.db.status = 'online';
+        base.services.db.details = 'Auth + characters DB OK';
+      } else {
+        base.services.db.status = 'partial';
+        base.services.db.details = 'Characters DB reachable';
+      }
+    } catch (err) {
+      if (base.services.db.status !== 'offline') {
+        base.services.db.status = authOk ? 'partial' : 'offline';
+      }
+      base.services.db.details = base.services.db.details || 'Characters DB unreachable';
+      errors.push(`Characters DB error: ${err?.message || err}`);
+    }
+  }
+
+  if (branchConfig?.dbAuthPool) {
+    try {
+      const uptimeRealmId = realmId ?? toSafeNumber(authRealmRow?.id);
+      const whereClause = uptimeRealmId != null ? 'WHERE realmid = ?' : '';
+      const [rows] = await branchConfig.dbAuthPool.execute(
+        `SELECT starttime, uptime, maxplayers
+           FROM uptime
+           ${whereClause}
+       ORDER BY starttime DESC
+          LIMIT 10`,
+        uptimeRealmId != null ? [uptimeRealmId] : []
+      );
+      if (Array.isArray(rows) && rows.length) {
+        const last = rows[0];
+        const lastRestart = toSafeNumber(last?.starttime);
+        if (lastRestart != null) {
+          base.history.lastRestartAt = new Date(lastRestart * 1000).toISOString();
+        }
+        const recordOnline = rows
+          .map((row) => toSafeNumber(row?.maxplayers))
+          .filter((v) => v != null);
+        if (recordOnline.length) {
+          base.history.recordOnline = Math.max(...recordOnline);
+          if (base.metrics.maxOnline == null) {
+            base.metrics.maxOnline = base.history.recordOnline;
+          }
+        }
+        const uptimeSecondsList = rows
+          .map((row) => toSafeNumber(row?.uptime))
+          .filter((v) => v != null && v > 0);
+        if (uptimeSecondsList.length) {
+          const avg =
+            uptimeSecondsList.reduce((sum, value) => sum + value, 0) /
+            uptimeSecondsList.length;
+          base.history.avgSessionSeconds = Math.round(avg);
+          if (base.metrics.uptimeSeconds == null) {
+            base.metrics.uptimeSeconds = toSafeNumber(rows[0]?.uptime) ?? null;
+          }
+        }
+      }
+    } catch (err) {
+      errors.push(`Uptime lookup failed: ${err?.message || err}`);
+    }
+  }
+
+  if (soapConfig && typeof soapRunner === 'function') {
+    try {
+      const { ret } = await runWithTimeout(
+        soapRunner({ soap: soapConfig, command: 'server info' }),
+        2500,
+        'SOAP'
+      );
+      const parsed = parseServerInfo(ret);
+      base.metrics.uptimeSeconds = base.metrics.uptimeSeconds ?? parsed.uptimeSeconds;
+      base.metrics.onlinePlayers = base.metrics.onlinePlayers ?? parsed.onlinePlayers;
+      base.metrics.maxOnline = base.metrics.maxOnline ?? parsed.maxOnline;
+      base.metrics.worldUpdateMs = base.metrics.worldUpdateMs ?? parsed.worldUpdateMs;
+      base.services.soap.status = 'online';
+      base.services.soap.details = 'server info OK';
+      base.services.world.status = 'online';
+      base.services.world.details = 'SOAP reachable';
+    } catch (err) {
+      base.services.soap.status = 'offline';
+      base.services.soap.details = 'SOAP unreachable';
+      errors.push(`SOAP error: ${err?.message || err}`);
+    }
+  }
+
+  base.status = deriveOverallStatus(base);
+  return base;
+}
+
 app.get('/api/status', async (req, res) => {
   try {
     const { ret } = await executeRetailCommand({ soap: SOAP, command: 'server info' });
     res.json({ ok: true, info: ret });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+app.get('/api/health/:branch', async (req, res) => {
+  const branchConfig = getBranchConfig(req.params.branch);
+  if (!branchConfig) {
+    return res.status(400).json({ error: 'Unknown branch' });
+  }
+
+  try {
+    const health = await collectBranchHealth(branchConfig);
+    return res.json(health);
+  } catch (err) {
+    const fallback = createHealthSkeleton(branchConfig, new Date());
+    fallback.errors.push(`Unhandled error in collectBranchHealth: ${err?.message || err}`);
+    return res.status(500).json(fallback);
   }
 });
 
