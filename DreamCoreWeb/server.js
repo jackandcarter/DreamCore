@@ -2706,6 +2706,7 @@ const accountScript = () => {
   const armorCloneForm = document.getElementById('armorCloneForm');
   const armorCloneMsg = document.getElementById('armorCloneMsg');
   const armorCloneSubmit = document.getElementById('armorCloneSubmit');
+  const gmArmoryDebug = (...args) => console.debug('[Armory UI]', ...args);
   const weaponFieldNames = [
     'name',
     'description',
@@ -3281,6 +3282,12 @@ const accountScript = () => {
     if (armorSearchCard) {
       armorSearchCard.classList.toggle('opacity-60', gmBlocked);
     }
+    gmArmoryDebug('Syncing armory state', {
+      gmBlocked,
+      gmClassicAccessible,
+      hasCard: Boolean(armorSearchCard),
+      hasEditor: Boolean(armorEditorPanel),
+    });
     if (!weaponSearchStatus && !armorSearchStatus) {
       return;
     }
@@ -3324,9 +3331,15 @@ const accountScript = () => {
   }
 
   function ensureArmorSearchLoaded() {
-    if (armorSearchAutoloaded || !gmClassicAccessible) {
+    if (armorSearchAutoloaded) {
+      gmArmoryDebug('Skipping autoload: already loaded');
       return;
     }
+    if (!gmClassicAccessible) {
+      gmArmoryDebug('Skipping autoload: classic GM access missing');
+      return;
+    }
+    gmArmoryDebug('Auto-loading armory search');
     armorSearchAutoloaded = true;
     loadArmorSearch(true);
   }
@@ -3597,6 +3610,12 @@ const accountScript = () => {
   }
 
   async function loadArmorSearch(resetPage = false) {
+    gmArmoryDebug('loadArmorSearch called', {
+      resetPage,
+      gmClassicAccessible,
+      hasForm: Boolean(armorSearchForm),
+      hasCard: Boolean(armorSearchCard),
+    });
     if (!gmClassicAccessible) {
       setArmorSearchStatus('Classic GM access required to search armors.');
       return;
@@ -3617,6 +3636,7 @@ const accountScript = () => {
     params.set('pageSize', String(armorSearchPageSize));
 
     try {
+      gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
       const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
       const res = await fetch(url, { credentials: 'same-origin' });
       if (res.status === 401) {
@@ -3628,6 +3648,7 @@ const accountScript = () => {
         throw new Error(data?.error || 'Search failed.');
       }
       const items = Array.isArray(data.items) ? data.items : [];
+      gmArmoryDebug('Search response', { count: items.length, page: data.page, hasMore: data.hasMore });
       renderArmorSearchResults(items);
       armorSearchPage = Number(data.page) || 1;
       const total = items.length;
@@ -3638,6 +3659,7 @@ const accountScript = () => {
       );
     } catch (err) {
       console.error('Armor search failed', err);
+      gmArmoryDebug('Armor search error', err?.message || err);
       setArmorSearchStatus(err?.message || 'Search failed.');
       if (armorSearchResults) {
         armorSearchResults.innerHTML = '<p class="text-xs text-rose-200/80">Failed to search armors. Check console for details.</p>';
@@ -3648,6 +3670,7 @@ const accountScript = () => {
   }
 
   async function loadArmorDetails(entryId) {
+    gmArmoryDebug('loadArmorDetails', { entryId, gmClassicAccessible });
     if (!gmClassicAccessible) return;
     const numericEntry = Number(entryId);
     if (!Number.isFinite(numericEntry) || numericEntry <= 0) return;
@@ -3668,6 +3691,7 @@ const accountScript = () => {
       }
       const armor = data.armor;
       currentArmorBase = armor;
+      gmArmoryDebug('Loaded armor template', { entry: armor.entry, name: armor.name });
       if (armorEditorPanel) armorEditorPanel.classList.remove('hidden');
       if (armorEditorTitle) {
         armorEditorTitle.textContent = `${armor.name || 'Unknown armor'} (ID ${armor.entry})`;
@@ -3704,6 +3728,7 @@ const accountScript = () => {
       updateArmorCloneAvailability();
     } catch (err) {
       console.error('Armor details failed', err);
+      gmArmoryDebug('Armor load failed', err?.message || err);
       if (armorCloneMsg) {
         armorCloneMsg.textContent = err?.message || 'Failed to load armor template.';
       }
@@ -4425,6 +4450,7 @@ const accountScript = () => {
     const fallbackPanel = gmSubTabPanels[0];
     const nextPanel = (targetId && document.getElementById(targetId)) || fallbackPanel;
     if (!nextPanel) return;
+    gmArmoryDebug('Switching GM subtab', { targetId, resolved: nextPanel.id });
     gmSubTabPanels.forEach((panel) => {
       panel.classList.toggle('hidden', panel.id !== nextPanel.id);
     });
@@ -4508,6 +4534,7 @@ const accountScript = () => {
     });
     gmRetailAccessible = retailMax > 0 || gmRetailFromRoster || gmSessionFlag;
     gmClassicAccessible = classicMax > 0 || gmClassicFromRoster || gmSessionFlag;
+    gmArmoryDebug('GM access computed', { gmClassicAccessible, gmRetailAccessible, gmSessionFlag });
     const hasGm = gmSessionFlag || gmRetailAccessible || gmClassicAccessible;
     const realms = [];
     if (gmRetailAccessible) realms.push('retail');
@@ -9089,11 +9116,25 @@ app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'cla
     const slotFilter = toSafeNumber(req.query?.slot ?? req.query?.InventoryType);
     const offset = (page - 1) * pageSize;
     const limit = pageSize + 1;
+    console.info('[Armory] search request', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      q: searchQuery,
+      subclassFilter,
+      slotFilter,
+      page,
+      pageSize,
+    });
     const clauses = ['class = 4'];
     const params = [];
     if (searchQuery) {
-      clauses.push('name LIKE ?');
-      params.push(`%${searchQuery}%`);
+      const numericQuery = Number(searchQuery);
+      if (Number.isFinite(numericQuery)) {
+        clauses.push('(entry = ? OR name LIKE ?)');
+        params.push(numericQuery, `%${searchQuery}%`);
+      } else {
+        clauses.push('name LIKE ?');
+        params.push(`%${searchQuery}%`);
+      }
     }
     if (subclassFilter != null) {
       clauses.push('subclass = ?');
@@ -9131,6 +9172,10 @@ app.get('/api/gm/classic/armors/:entry', requireSession, requireGm({ realm: 'cla
     if (!Number.isFinite(entry) || entry <= 0) {
       return res.status(400).json({ error: 'Invalid entry id' });
     }
+    console.info('[Armory] load details', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      entry,
+    });
     const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ? AND class = 4 LIMIT 1', [entry]);
     if (!rows.length) {
       return res.status(404).json({ error: 'Item not found' });
