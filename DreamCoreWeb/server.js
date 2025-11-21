@@ -2895,6 +2895,7 @@ const accountScript = () => {
   let currentSession = null;
   let activeTabId = 'accountTabPanel';
   let gmClassicAccessible = false;
+  let gmToolkitAccessible = false;
   let classicOnlineTimer = null;
   let healthLoaded = false;
   let charactersPayload = null;
@@ -3216,14 +3217,14 @@ const accountScript = () => {
   function setWeaponSearchLoadingState(state) {
     weaponSearchLoading = Boolean(state);
     if (weaponSearchSubmit) {
-      weaponSearchSubmit.disabled = weaponSearchLoading || !gmClassicAccessible;
+      weaponSearchSubmit.disabled = weaponSearchLoading || !gmToolkitAccessible;
       weaponSearchSubmit.classList.toggle('opacity-60', weaponSearchSubmit.disabled);
     }
   }
 
   function updateWeaponCloneAvailability() {
     if (!weaponCloneSubmit) return;
-    const disabled = weaponCloneBusy || !gmClassicAccessible || !currentWeaponBase;
+    const disabled = weaponCloneBusy || !gmToolkitAccessible || !currentWeaponBase;
     weaponCloneSubmit.disabled = disabled;
     weaponCloneSubmit.classList.toggle('opacity-60', disabled);
   }
@@ -3248,14 +3249,14 @@ const accountScript = () => {
   function setArmorSearchLoading(state) {
     armorSearchLoading = Boolean(state);
     if (armorSearchSubmit) {
-      armorSearchSubmit.disabled = armorSearchLoading || !gmClassicAccessible;
+      armorSearchSubmit.disabled = armorSearchLoading || !gmToolkitAccessible;
       armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
     }
   }
 
   function updateArmorCloneAvailability() {
     if (!armorCloneSubmit) return;
-    const disabled = armorCloneBusy || !gmClassicAccessible || !currentArmorBase;
+    const disabled = armorCloneBusy || !gmToolkitAccessible || !currentArmorBase;
     armorCloneSubmit.disabled = disabled;
     armorCloneSubmit.classList.toggle('opacity-60', disabled);
   }
@@ -3272,7 +3273,7 @@ const accountScript = () => {
   }
 
   function syncWeaponFactoryState() {
-    const gmBlocked = !gmClassicAccessible;
+    const gmBlocked = !gmToolkitAccessible;
     if (weaponFactoryCard) {
       weaponFactoryCard.classList.toggle('opacity-60', gmBlocked);
     }
@@ -3283,24 +3284,24 @@ const accountScript = () => {
       return;
     }
     if (gmBlocked) {
-      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
+      setWeaponSearchStatus('GM access required to use the weapon factory.');
       if (weaponSearchResults && !weaponSearchResults.childElementCount) {
-        weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">Classic GM access required.</p>';
+        weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">GM access required.</p>';
       }
       if (weaponEditorPanel) {
         weaponEditorPanel.classList.add('hidden');
       }
       currentWeaponBase = null;
-      setWeaponCloneMessage('Classic GM access required to clone weapons.');
-      setArmorSearchStatus('Classic GM access required to search armors.');
+      setWeaponCloneMessage('GM access required to clone weapons.');
+      setArmorSearchStatus('GM access required to search armors.');
       if (armorSearchResults && !armorSearchResults.childElementCount) {
-        armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">Classic GM access required.</p>';
+        armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">GM access required.</p>';
       }
       if (armorEditorPanel) {
         armorEditorPanel.classList.add('hidden');
       }
       currentArmorBase = null;
-      setArmorCloneMessage('Classic GM access required to clone armor.');
+      setArmorCloneMessage('GM access required to clone armor.');
     } else {
       if (!weaponSearchLoading) {
         setWeaponSearchStatus('Search or filter to choose a base weapon.');
@@ -3358,8 +3359,8 @@ const accountScript = () => {
   }
 
   async function runWeaponSearch(page = 1) {
-    if (!gmClassicAccessible) {
-      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
+    if (!gmToolkitAccessible) {
+      setWeaponSearchStatus('GM access required to use the weapon factory.');
       return;
     }
     const query = weaponSearchInput?.value.trim() || '';
@@ -3427,7 +3428,7 @@ const accountScript = () => {
 
   async function loadWeaponDetails(entry) {
     const numericEntry = Number(entry);
-    if (!gmClassicAccessible || !Number.isFinite(numericEntry) || numericEntry <= 0) {
+    if (!gmToolkitAccessible || !Number.isFinite(numericEntry) || numericEntry <= 0) {
       return;
     }
     setWeaponCloneMessage('Loading weapon template…');
@@ -3504,8 +3505,8 @@ const accountScript = () => {
 
   async function handleWeaponClone(event) {
     event?.preventDefault();
-    if (!gmClassicAccessible) {
-      setWeaponCloneMessage('Classic GM access required to clone weapons.');
+    if (!gmToolkitAccessible) {
+      setWeaponCloneMessage('GM access required to clone weapons.');
       return;
     }
     if (!currentWeaponBase || !Number.isFinite(Number(currentWeaponBase.entry))) {
@@ -3587,8 +3588,8 @@ const accountScript = () => {
   }
 
   async function loadArmorSearch(resetPage = false) {
-    if (!gmClassicAccessible) {
-      setArmorSearchStatus('Classic GM access required to search armors.');
+    if (!gmToolkitAccessible) {
+      setArmorSearchStatus('GM access required to search armors.');
       return;
     }
     if (armorSearchLoading) return;
@@ -3638,7 +3639,7 @@ const accountScript = () => {
   }
 
   async function loadArmorDetails(entryId) {
-    if (!gmClassicAccessible) return;
+    if (!gmToolkitAccessible) return;
     const numericEntry = Number(entryId);
     if (!Number.isFinite(numericEntry) || numericEntry <= 0) return;
     if (armorCloneMsg) {
@@ -3702,8 +3703,8 @@ const accountScript = () => {
 
   async function handleArmorClone(event) {
     event?.preventDefault();
-    if (!gmClassicAccessible) {
-      setArmorCloneMessage('Classic GM access required to clone armor.');
+    if (!gmToolkitAccessible) {
+      setArmorCloneMessage('GM access required to clone armor.');
       return;
     }
     if (!currentArmorBase) {
@@ -4500,6 +4501,7 @@ const accountScript = () => {
     if (classicMax > 0 || gmClassicFromRoster) realms.push('classic');
     const hasGm = Boolean(charactersPayload?.isGm) || realms.length > 0;
     gmClassicAccessible = realms.includes('classic');
+    gmToolkitAccessible = hasGm;
 
     if (gmTabButton) {
       gmTabButton.classList.toggle('hidden', !hasGm);
