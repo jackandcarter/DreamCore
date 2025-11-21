@@ -4479,6 +4479,7 @@ const accountScript = () => {
     const gmAccess = normalizeGmPayload(currentSession?.gmAccess);
     const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
     const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
+    const gmSessionFlag = Boolean(charactersPayload?.isGm);
     const gmAccountFlags =
       charactersPayload && typeof charactersPayload === 'object'
         ? charactersPayload.gmAccounts || {}
@@ -4505,9 +4506,9 @@ const accountScript = () => {
         ) || 0;
       return level > 0;
     });
-    gmRetailAccessible = retailMax > 0 || gmRetailFromRoster;
-    gmClassicAccessible = classicMax > 0 || gmClassicFromRoster;
-    const hasGm = Boolean(charactersPayload?.isGm) || gmRetailAccessible || gmClassicAccessible;
+    gmRetailAccessible = retailMax > 0 || gmRetailFromRoster || gmSessionFlag;
+    gmClassicAccessible = classicMax > 0 || gmClassicFromRoster || gmSessionFlag;
+    const hasGm = gmSessionFlag || gmRetailAccessible || gmClassicAccessible;
     const realms = [];
     if (gmRetailAccessible) realms.push('retail');
     if (gmClassicAccessible) realms.push('classic');
