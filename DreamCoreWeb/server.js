@@ -2917,6 +2917,7 @@ const accountScript = () => {
   const armorSearchPageSize = 25;
   let currentArmorBase = null;
   let armorCloneBusy = false;
+  let armorSearchAutoloaded = false;
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -3320,6 +3321,14 @@ const accountScript = () => {
     setArmorSearchLoading(armorSearchLoading);
     updateWeaponCloneAvailability();
     updateArmorCloneAvailability();
+  }
+
+  function ensureArmorSearchLoaded() {
+    if (armorSearchAutoloaded || !gmClassicAccessible) {
+      return;
+    }
+    armorSearchAutoloaded = true;
+    loadArmorSearch(true);
   }
 
   function renderWeaponSearchResults(items, hasMore) {
@@ -4522,6 +4531,10 @@ const accountScript = () => {
       setClassicOnlinePlaceholder('Open the GM tab to load the roster.');
     }
 
+    if (gmClassicAccessible && activeTabId === 'gmToolkitSection') {
+      ensureArmorSearchLoaded();
+    }
+
     syncWeaponFactoryState();
     syncClassicOnlinePolling();
   }
@@ -4531,6 +4544,9 @@ const accountScript = () => {
       const targetId = button.getAttribute('data-sub-tab-target');
       if (targetId) {
         setActiveGmSubTab(targetId);
+        if (targetId === 'gmArmoryPanel') {
+          ensureArmorSearchLoaded();
+        }
       }
     });
   });
@@ -4549,6 +4565,9 @@ const accountScript = () => {
   setActiveTab(activeTabId);
   ensureHealthLoaded();
   syncWeaponFactoryState();
+  if (activeTabId === 'gmToolkitSection') {
+    ensureArmorSearchLoaded();
+  }
 
   characterFamilySelect?.addEventListener('change', (event) => {
     const value = event.target?.value || 'retail';
