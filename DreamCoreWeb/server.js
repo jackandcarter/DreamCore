@@ -1692,7 +1692,7 @@ ${SHARED_STYLES}
           </section>
 
           <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
-            <div class="flex flex-col gap-6 lg:flex-row">
+            <div class="flex flex-col gap-6">
               <div class="flex-1 space-y-5">
                 <div class="rounded-2xl border border-violet-800/60 bg-gradient-to-r from-black via-gray-950 to-violet-950 p-3 shadow-inner shadow-violet-900/30">
                   <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1703,6 +1703,20 @@ ${SHARED_STYLES}
                   </div>
                 </div>
                 <div id="gmServerPanel" data-sub-tab-panel class="space-y-5">
+                  <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</p>
+                        <h3 class="text-lg font-semibold text-white">Classic online characters</h3>
+                        <p class="text-xs text-indigo-200/80">Visibility limited to GM access.</p>
+                      </div>
+                      <span id="classicOnlineUpdated" class="text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/70">—</span>
+                    </div>
+                    <p id="classicOnlineStatus" class="mt-2 text-xs text-indigo-200/80">Classic GM access required.</p>
+                    <div id="classicOnlineList" class="mt-4 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-indigo-100/85">
+                      <p class="text-sm text-indigo-200/70">Waiting for GM access…</p>
+                    </div>
+                  </div>
                   <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -2242,21 +2256,6 @@ ${weaponSocketInputsHtml}
                 </div>
               </div>
             </div>
-            <aside class="space-y-4 lg:w-80">
-                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200">${CONFIG.CLASSIC_BRAND_NAME}</p>
-                      <h3 class="text-lg font-semibold text-white">Classic online characters</h3>
-                    </div>
-                    <span id="classicOnlineUpdated" class="text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/70">—</span>
-                  </div>
-                  <p id="classicOnlineStatus" class="mt-2 text-xs text-indigo-200/80">Classic GM access required.</p>
-                  <div id="classicOnlineList" class="mt-4 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-indigo-100/85">
-                    <p class="text-sm text-indigo-200/70">Waiting for GM access…</p>
-                  </div>
-                </div>
-              </aside>
             </div>
           </section>
         </div>
@@ -8791,6 +8790,13 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
           .join('')}</div>`
       : '';
 
+  const loginButton =
+    state === 'success'
+      ? `<div class="mt-8 flex flex-wrap items-center gap-3">
+          <a class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:ring-2 focus:ring-indigo-400" href="/login">Return to portal login</a>
+        </div>`
+      : '';
+
   const successFooterHtml =
     state === 'success' && successFooter
       ? `<div class="mt-10 rounded-3xl gradient-border bg-gray-900/60 p-5 text-[15px] text-indigo-100/90 shadow-inner shadow-indigo-900/20">${successFooter}</div>`
@@ -8841,6 +8847,7 @@ ${SHARED_STYLES}
         <p class="mt-3 text-[15px] text-indigo-100/90">${safeMessage}</p>
         ${stepsList}
         ${successGuide}
+        ${loginButton}
         ${successFooterHtml}
       </div>
       <div class="bg-gray-900/70 border-t ${tone.border} px-6 py-5 sm:px-10">
