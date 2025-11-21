@@ -247,6 +247,16 @@ const SHARED_STYLES = `
     .corner-logo-offset {
       padding-top: clamp(5.5rem, 11vw, 7.5rem);
     }
+    .client-username-glow {
+      color: #e0f2fe;
+      text-shadow: 0 0 14px rgba(56, 189, 248, 0.55), 0 0 28px rgba(129, 140, 248, 0.45);
+      animation: username-pulse 1.35s ease-in-out infinite;
+      letter-spacing: 0.02em;
+    }
+    @keyframes username-pulse {
+      0%, 100% { transform: translateY(0); opacity: 1; }
+      50% { transform: translateY(-2px); opacity: 0.8; }
+    }
 `;
 
 // ----- DB (MariaDB for pending verifications) -----
@@ -8569,9 +8579,27 @@ app.get('/classic/verify', async (req, res) => {
       await linkPortalUserToClassicAccount(portalUserId, classicAccountId, { linkedAt: Date.now() });
     }
 
+    const portalUsername = formatClassicClientUsername(row.username || row.email || '');
     const clientLoginUsername = formatClassicClientUsername(
       classicAccount?.username || row.username || row.email || ''
     );
+
+    const loginNotices = [];
+    if (portalUsername) {
+      loginNotices.push({
+        label: 'Portal Username',
+        value: portalUsername,
+        description: 'Use this to sign in to the DreamCore portal for managing your accounts.',
+      });
+    }
+    if (clientLoginUsername) {
+      loginNotices.push({
+        label: 'Classic Client Username',
+        value: clientLoginUsername,
+        valueClass: 'client-username-glow',
+        description: 'Enter this exact username (without @ or email formatting) inside the Wrath of the Lich King client.',
+      });
+    }
 
     const successMessage = reusedClassicAccount
       ? 'Your DreamCore Classic login was already active. We linked it to your portal account so you can jump in immediately.'
@@ -8587,29 +8615,39 @@ app.get('/classic/verify', async (req, res) => {
           message: successMessage,
           successSteps: [
             {
-              number: 'Next',
+              number: 'Step 1',
+              title: 'Save your login usernames',
+              body: [
+                'Your portal and Classic client usernames are ready. Keep them handy before you start downloading.',
+                'Use the portal username for the DreamCore portal and the Classic username inside the Wrath of the Lich King client.',
+              ],
+              notice: loginNotices,
+            },
+            {
+              number: 'Step 2',
               title: 'Download the DreamCore Classic client',
-                body: [
-                  reusedClassicAccount
-                    ? 'We detected that these Classic credentials already existed and simply linked them to your portal account.'
-                    : 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
-                  'After installing, launch it and log in with the account you just verified.',
-                ],
-                notice: clientLoginUsername
-                  ? {
-                      label: 'Client Login Username',
-                      value: clientLoginUsername,
-                      description:
-                        'Do not log in with an email address in the Classic client. Use this username exactly as shown.',
-                    }
-                  : null,
-                warning:
-                  'Wrath of the Lich King client logins require the username only—do not include an email address or @ symbol.',
-                cta: {
-                  href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
-                  label: 'Download Client',
-                },
+              body: [
+                reusedClassicAccount
+                  ? 'We detected that these Classic credentials already existed and simply linked them to your portal account.'
+                  : 'Use the button below to grab the Wrath of the Lich King client that is already set up for DreamCore.',
+                'After installing, launch it and log in with the account you just verified.',
+              ],
+              notice: clientLoginUsername
+                ? {
+                    label: 'Client Login Username',
+                    value: clientLoginUsername,
+                    valueClass: 'client-username-glow',
+                    description:
+                      'Do not log in with an email address in the Classic client. Use this username exactly as shown.',
+                  }
+                : loginNotices,
+              warning:
+                'Wrath of the Lich King client logins require the username only—do not include an email address or @ symbol.',
+              cta: {
+                href: CONFIG.CLASSIC_CLIENT_DOWNLOAD_URL,
+                label: 'Download Client',
               },
+            },
           ],
           successFooter:
             'This client is already configured to connect to our server, you can now login with your account info.',
@@ -8707,19 +8745,28 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
                 )}</p>`;
               })
               .join('');
-            const notice = step.notice && (step.notice.label || step.notice.value || step.notice.description)
+            const noticesRaw = Array.isArray(step.notice)
               ? step.notice
-              : null;
-            const noticeHtml = notice
+              : step.notice && (step.notice.label || step.notice.value || step.notice.description)
+                ? [step.notice]
+                : [];
+            const notices = noticesRaw.filter((n) => n && (n.label || n.value || n.description));
+            const noticeHtml = notices.length
               ? `<div class="mt-5 rounded-2xl border border-indigo-400/40 bg-gray-900/70 p-4 text-sm text-indigo-100/90">
-                  <p class="font-semibold text-indigo-200">${escapeHtml(String(notice.label || 'Note'))}${
-                    notice.value ? `: <span class="text-white">${escapeHtml(String(notice.value))}</span>` : ''
-                  }</p>
-                  ${
-                    notice.description
-                      ? `<p class="mt-2 text-xs text-indigo-200/80">${escapeHtml(String(notice.description))}</p>`
-                      : ''
-                  }
+                  ${notices
+                    .map((notice, noticeIdx) => {
+                      const label = escapeHtml(String(notice.label || 'Note'));
+                      const valueClass = notice.valueClass ? ` ${escapeHtml(String(notice.valueClass))}` : '';
+                      const value = notice.value
+                        ? `: <span class="text-white${valueClass}">${escapeHtml(String(notice.value))}</span>`
+                        : '';
+                      const description = notice.description
+                        ? `<p class="mt-2 text-xs text-indigo-200/80">${escapeHtml(String(notice.description))}</p>`
+                        : '';
+                      const spacing = noticeIdx > 0 ? 'mt-3' : '';
+                      return `<div class="${spacing}"><p class="font-semibold text-indigo-200">${label}${value}</p>${description}</div>`;
+                    })
+                    .join('')}
                 </div>`
               : '';
             const warningHtml = step.warning
