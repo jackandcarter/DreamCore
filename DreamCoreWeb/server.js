@@ -1361,7 +1361,14 @@ const loginScript = () => {
 
   checkSession();
 };
-const LOGIN_JS = `(${loginScript.toString()})();`;
+const LOGIN_JS = `(() => {
+  const run = ${loginScript.toString()};
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+})();`;
 
 function buildPortalLimitsScriptTag() {
   const payload = {
@@ -4863,7 +4870,14 @@ const accountScript = () => {
     window.location.href = '/login';
   });
 };
-const ACCOUNT_JS = `(${accountScript.toString()})();`;
+const ACCOUNT_JS = `(() => {
+  const run = ${accountScript.toString()};
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+})();`;
 
 const RESET_PAGE = () => `<!doctype html>
 <html lang="en">
