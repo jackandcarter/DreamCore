@@ -2363,6 +2363,8 @@ ${weaponSocketInputsHtml}
                     </span>
                   </div>
 
+                  <div id="armorDebugBanner" class="mt-2 hidden rounded-xl border border-amber-400/60 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-100"></div>
+
                   <form id="armorSearchForm" class="mt-4 grid gap-4 md:grid-cols-4">
                     <div class="md:col-span-2">
                       <label for="armorSearchInput" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
@@ -2703,9 +2705,26 @@ const accountScript = () => {
   const armorEditorPanel = document.getElementById('armorEditorPanel');
   const armorEditorTitle = document.getElementById('armorEditorTitle');
   const armorEditorMeta = document.getElementById('armorEditorMeta');
+  const armorDebugBanner = document.getElementById('armorDebugBanner');
   const armorCloneForm = document.getElementById('armorCloneForm');
   const armorCloneMsg = document.getElementById('armorCloneMsg');
   const armorCloneSubmit = document.getElementById('armorCloneSubmit');
+  const gmArmoryDebug = (...args) => console.debug('[Armory UI]', ...args);
+
+  function setArmorDebugBanner(message, tone = 'info') {
+    armorLastDebug = message || '';
+    if (!armorDebugBanner) return;
+    if (!message) {
+      armorDebugBanner.classList.add('hidden');
+      armorDebugBanner.textContent = '';
+      return;
+    }
+    armorDebugBanner.textContent = message;
+    armorDebugBanner.classList.remove('hidden');
+    armorDebugBanner.classList.toggle('border-amber-400/60', tone === 'warn');
+    armorDebugBanner.classList.toggle('border-emerald-400/60', tone === 'success');
+    armorDebugBanner.classList.toggle('border-indigo-300/60', tone === 'info');
+  }
   const weaponFieldNames = [
     'name',
     'description',
@@ -2915,9 +2934,9 @@ const accountScript = () => {
   let armorSearchLoading = false;
   let armorSearchPage = 1;
   const armorSearchPageSize = 25;
+  let armorLastDebug = '';
   let currentArmorBase = null;
   let armorCloneBusy = false;
-  let armorSearchAutoloaded = false;
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -3281,6 +3300,12 @@ const accountScript = () => {
     if (armorSearchCard) {
       armorSearchCard.classList.toggle('opacity-60', gmBlocked);
     }
+    gmArmoryDebug('Syncing armory state', {
+      gmBlocked,
+      gmClassicAccessible,
+      hasCard: Boolean(armorSearchCard),
+      hasEditor: Boolean(armorEditorPanel),
+    });
     if (!weaponSearchStatus && !armorSearchStatus) {
       return;
     }
@@ -3303,6 +3328,7 @@ const accountScript = () => {
       }
       currentArmorBase = null;
       setArmorCloneMessage('Classic GM access required to clone armor.');
+      setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
     } else {
       if (!weaponSearchLoading) {
         setWeaponSearchStatus('Search or filter to choose a base weapon.');
@@ -3315,20 +3341,13 @@ const accountScript = () => {
         if (!currentArmorBase) {
           setArmorCloneMessage('Select an armor template and adjust fields to clone it into a new item.');
         }
+        setArmorDebugBanner(armorLastDebug || 'Waiting for search…', 'info');
       }
     }
     setWeaponSearchLoadingState(weaponSearchLoading);
     setArmorSearchLoading(armorSearchLoading);
     updateWeaponCloneAvailability();
     updateArmorCloneAvailability();
-  }
-
-  function ensureArmorSearchLoaded() {
-    if (armorSearchAutoloaded || !gmClassicAccessible) {
-      return;
-    }
-    armorSearchAutoloaded = true;
-    loadArmorSearch(true);
   }
 
   function renderWeaponSearchResults(items, hasMore) {
@@ -3597,6 +3616,12 @@ const accountScript = () => {
   }
 
   async function loadArmorSearch(resetPage = false) {
+    gmArmoryDebug('loadArmorSearch called', {
+      resetPage,
+      gmClassicAccessible,
+      hasForm: Boolean(armorSearchForm),
+      hasCard: Boolean(armorSearchCard),
+    });
     if (!gmClassicAccessible) {
       setArmorSearchStatus('Classic GM access required to search armors.');
       return;
@@ -3605,6 +3630,7 @@ const accountScript = () => {
     if (resetPage) armorSearchPage = 1;
     setArmorSearchLoading(true);
     setArmorSearchStatus('Searching…');
+    setArmorDebugBanner('Searching armory templates…', 'info');
 
     const params = new URLSearchParams();
     const q = (armorSearchInput?.value || '').trim();
@@ -3617,6 +3643,7 @@ const accountScript = () => {
     params.set('pageSize', String(armorSearchPageSize));
 
     try {
+      gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
       const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
       const res = await fetch(url, { credentials: 'same-origin' });
       if (res.status === 401) {
@@ -3628,9 +3655,14 @@ const accountScript = () => {
         throw new Error(data?.error || 'Search failed.');
       }
       const items = Array.isArray(data.items) ? data.items : [];
+      gmArmoryDebug('Search response', { count: items.length, page: data.page, hasMore: data.hasMore });
       renderArmorSearchResults(items);
       armorSearchPage = Number(data.page) || 1;
       const total = items.length;
+      setArmorDebugBanner(
+        `Loaded ${total} armor row${total === 1 ? '' : 's'} (page ${armorSearchPage}, more: ${data.hasMore ? 'yes' : 'no'})`,
+        'success'
+      );
       setArmorSearchStatus(
         total
           ? `Showing ${total} result${total === 1 ? '' : 's'} (page ${data.page || 1}).`
@@ -3638,7 +3670,9 @@ const accountScript = () => {
       );
     } catch (err) {
       console.error('Armor search failed', err);
+      gmArmoryDebug('Armor search error', err?.message || err);
       setArmorSearchStatus(err?.message || 'Search failed.');
+      setArmorDebugBanner(`Search failed: ${err?.message || 'unknown error'}`, 'warn');
       if (armorSearchResults) {
         armorSearchResults.innerHTML = '<p class="text-xs text-rose-200/80">Failed to search armors. Check console for details.</p>';
       }
@@ -3648,6 +3682,7 @@ const accountScript = () => {
   }
 
   async function loadArmorDetails(entryId) {
+    gmArmoryDebug('loadArmorDetails', { entryId, gmClassicAccessible });
     if (!gmClassicAccessible) return;
     const numericEntry = Number(entryId);
     if (!Number.isFinite(numericEntry) || numericEntry <= 0) return;
@@ -3668,6 +3703,7 @@ const accountScript = () => {
       }
       const armor = data.armor;
       currentArmorBase = armor;
+      gmArmoryDebug('Loaded armor template', { entry: armor.entry, name: armor.name });
       if (armorEditorPanel) armorEditorPanel.classList.remove('hidden');
       if (armorEditorTitle) {
         armorEditorTitle.textContent = `${armor.name || 'Unknown armor'} (ID ${armor.entry})`;
@@ -3704,9 +3740,11 @@ const accountScript = () => {
       updateArmorCloneAvailability();
     } catch (err) {
       console.error('Armor details failed', err);
+      gmArmoryDebug('Armor load failed', err?.message || err);
       if (armorCloneMsg) {
         armorCloneMsg.textContent = err?.message || 'Failed to load armor template.';
       }
+      setArmorDebugBanner(`Armor load failed: ${err?.message || 'Unknown error'}`, 'warn');
     }
   }
 
@@ -4425,6 +4463,7 @@ const accountScript = () => {
     const fallbackPanel = gmSubTabPanels[0];
     const nextPanel = (targetId && document.getElementById(targetId)) || fallbackPanel;
     if (!nextPanel) return;
+    gmArmoryDebug('Switching GM subtab', { targetId, resolved: nextPanel.id });
     gmSubTabPanels.forEach((panel) => {
       panel.classList.toggle('hidden', panel.id !== nextPanel.id);
     });
@@ -4435,6 +4474,9 @@ const accountScript = () => {
       button.classList.add(...(matches ? gmSubTabActiveClasses : gmSubTabInactiveClasses));
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
+    if (nextPanel.id === 'gmArmoryPanel') {
+      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
+    }
   }
 
   function setActiveTab(targetId) {
@@ -4508,6 +4550,7 @@ const accountScript = () => {
     });
     gmRetailAccessible = retailMax > 0 || gmRetailFromRoster || gmSessionFlag;
     gmClassicAccessible = classicMax > 0 || gmClassicFromRoster || gmSessionFlag;
+    gmArmoryDebug('GM access computed', { gmClassicAccessible, gmRetailAccessible, gmSessionFlag });
     const hasGm = gmSessionFlag || gmRetailAccessible || gmClassicAccessible;
     const realms = [];
     if (gmRetailAccessible) realms.push('retail');
@@ -4532,22 +4575,15 @@ const accountScript = () => {
       setClassicOnlinePlaceholder('Open the GM tab to load the roster.');
     }
 
-    if (gmClassicAccessible && activeTabId === 'gmToolkitSection') {
-      ensureArmorSearchLoaded();
-    }
-
     syncWeaponFactoryState();
     syncClassicOnlinePolling();
   }
 
-  gmSubTabButtons.forEach((button) => {
+    gmSubTabButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const targetId = button.getAttribute('data-sub-tab-target');
       if (targetId) {
         setActiveGmSubTab(targetId);
-        if (targetId === 'gmArmoryPanel') {
-          ensureArmorSearchLoaded();
-        }
       }
     });
   });
@@ -4566,9 +4602,6 @@ const accountScript = () => {
   setActiveTab(activeTabId);
   ensureHealthLoaded();
   syncWeaponFactoryState();
-  if (activeTabId === 'gmToolkitSection') {
-    ensureArmorSearchLoaded();
-  }
 
   characterFamilySelect?.addEventListener('change', (event) => {
     const value = event.target?.value || 'retail';
@@ -9089,11 +9122,25 @@ app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'cla
     const slotFilter = toSafeNumber(req.query?.slot ?? req.query?.InventoryType);
     const offset = (page - 1) * pageSize;
     const limit = pageSize + 1;
+    console.info('[Armory] search request', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      q: searchQuery,
+      subclassFilter,
+      slotFilter,
+      page,
+      pageSize,
+    });
     const clauses = ['class = 4'];
     const params = [];
     if (searchQuery) {
-      clauses.push('name LIKE ?');
-      params.push(`%${searchQuery}%`);
+      const numericQuery = Number(searchQuery);
+      if (Number.isFinite(numericQuery)) {
+        clauses.push('(entry = ? OR name LIKE ?)');
+        params.push(numericQuery, `%${searchQuery}%`);
+      } else {
+        clauses.push('name LIKE ?');
+        params.push(`%${searchQuery}%`);
+      }
     }
     if (subclassFilter != null) {
       clauses.push('subclass = ?');
@@ -9115,6 +9162,12 @@ app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'cla
     );
     const hasMore = rows.length > pageSize;
     const items = hasMore ? rows.slice(0, pageSize) : rows;
+    console.info('[Armory] search response', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      count: items.length,
+      hasMore,
+      page,
+    });
     return res.json({ ok: true, items, page, pageSize, hasMore });
   } catch (err) {
     console.error('Classic armor search failed', err);
@@ -9131,6 +9184,10 @@ app.get('/api/gm/classic/armors/:entry', requireSession, requireGm({ realm: 'cla
     if (!Number.isFinite(entry) || entry <= 0) {
       return res.status(400).json({ error: 'Invalid entry id' });
     }
+    console.info('[Armory] load details', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      entry,
+    });
     const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ? AND class = 4 LIMIT 1', [entry]);
     if (!rows.length) {
       return res.status(404).json({ error: 'Item not found' });
