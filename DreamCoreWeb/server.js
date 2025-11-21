@@ -30,6 +30,7 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import mysql from 'mysql2/promise';
+import * as itemEnums from './itemEnums.js';
 import {
   makeAuthPool,
   makeSoapConfig,
@@ -471,8 +472,8 @@ const CLASSIC_REALM_LOOKUP = createRealmLookup(
   REALM_FAMILY_MAP.classic.length ? REALM_FAMILY_MAP.classic : REALM_POOL_ENTRIES
 );
 
-const CLASSIC_CUSTOM_ITEM_MIN = 900000;
-const CLASSIC_CUSTOM_ITEM_MAX = 999999;
+const CLASSIC_CUSTOM_ITEM_MIN = Number(process.env.CLASSIC_CUSTOM_ITEM_MIN) || 60000;
+const CLASSIC_CUSTOM_ITEM_MAX = Number(process.env.CLASSIC_CUSTOM_ITEM_MAX) || 69999;
 
 const ITEM_TEMPLATE_COLUMNS = [
   'entry',
@@ -1381,6 +1382,22 @@ function buildPortalLimitsScriptTag() {
     gmClassicWeaponSearchEndpoint: '/api/gm/classic/weapons/search',
     gmClassicWeaponDetailsEndpoint: '/api/gm/classic/weapons',
     gmClassicWeaponCloneEndpoint: '/api/gm/classic/weapons',
+    gmClassicArmorSearchEndpoint: '/api/gm/classic/armors/search',
+    gmClassicArmorDetailsEndpoint: '/api/gm/classic/armors',
+    gmClassicArmorCloneEndpoint: '/api/gm/classic/armors',
+    enums: {
+      itemClass: itemEnums.ITEM_CLASS,
+      weaponSubclass: itemEnums.WEAPON_SUBCLASS,
+      armorSubclass: itemEnums.ARMOR_SUBCLASS,
+      inventoryType: itemEnums.INVENTORY_TYPE,
+      itemQuality: itemEnums.ITEM_QUALITY,
+      itemBonding: itemEnums.ITEM_BONDING,
+      socketColor335: itemEnums.SOCKET_COLOR_335,
+      socketColor: itemEnums.SOCKET_COLOR,
+      itemModType: itemEnums.ITEM_MOD_TYPE,
+      spellSchool: itemEnums.SPELL_SCHOOL,
+      itemSpellTrigger: itemEnums.ITEM_SPELL_TRIGGER,
+    },
   };
   return `
   <script>
@@ -1960,11 +1977,11 @@ ${SHARED_STYLES}
                           </div>
                           <div>
                             <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_subclass">subclass</label>
-                            <input id="weaponField_subclass" type="number" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="7" />
+                            <select id="weaponField_subclass" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400"></select>
                           </div>
                           <div>
                             <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_Quality">Quality</label>
-                            <input id="weaponField_Quality" type="number" min="0" max="7" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="4" />
+                            <select id="weaponField_Quality" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400"></select>
                           </div>
                           <div>
                             <label class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200" for="weaponField_displayid">displayid</label>
@@ -2326,11 +2343,190 @@ ${weaponSocketInputsHtml}
                   </form>
                 </div>
               </div>
-              <div id="gmArmoryPanel" data-sub-tab-panel class="hidden space-y-4">
-                <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-black via-gray-950 to-violet-950 p-6 text-center shadow-inner shadow-violet-900/30">
-                  <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">Armory</p>
-                  <h3 class="mt-2 text-xl font-semibold text-white">Coming soon</h3>
-                  <p class="mt-3 text-sm text-indigo-100/80">Armory insights and tooling will live here once development begins.</p>
+              <div id="gmArmoryPanel" data-sub-tab-panel class="space-y-5 hidden">
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4" id="armorSearchCard">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">GM toolkit</p>
+                      <h3 class="text-xl font-semibold text-white">Classic Armory (3.3.5)</h3>
+                      <p class="text-xs text-indigo-200/80">Search and clone armor templates from the world database.</p>
+                    </div>
+                    <span class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">
+                      Classic
+                    </span>
+                  </div>
+
+                  <form id="armorSearchForm" class="mt-4 grid gap-4 md:grid-cols-4">
+                    <div class="md:col-span-2">
+                      <label for="armorSearchInput" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
+                        Armor name or entry
+                      </label>
+                      <input id="armorSearchInput" type="text" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-300/40 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="e.g. Wrathful Gladiator's Plate Chestpiece or 51305" />
+                    </div>
+                    <div>
+                      <label for="armorSubclassFilter" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
+                        Armor type
+                      </label>
+                      <select id="armorSubclassFilter" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                        <option value="">Any</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="armorSlotFilter" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
+                        Slot
+                      </label>
+                      <select id="armorSlotFilter" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                        <option value="">Any</option>
+                      </select>
+                    </div>
+                    <div class="md:col-span-4 flex items-center justify-between gap-3">
+                      <p id="armorSearchStatus" class="text-xs text-indigo-200/80">Enter a name or entry ID to begin.</p>
+                      <button id="armorSearchSubmit" type="submit" class="inline-flex items-center rounded-xl border border-violet-400/70 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-violet-900/40 disabled:opacity-60 disabled:cursor-not-allowed">
+                        Search
+                      </button>
+                    </div>
+                  </form>
+
+                  <div id="armorSearchResults" class="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-3 text-xs text-indigo-100/85">
+                    <p class="text-xs text-indigo-200/70">No results yet.</p>
+                  </div>
+                </div>
+
+                <div id="armorEditorPanel" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4 hidden">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Armor editor</p>
+                      <h3 id="armorEditorTitle" class="text-xl font-semibold text-white">No armor selected</h3>
+                      <p id="armorEditorMeta" class="text-xs text-indigo-200/80"></p>
+                    </div>
+                    <span class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">
+                      Clone only
+                    </span>
+                  </div>
+
+                  <form id="armorCloneForm" class="space-y-5">
+                    <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_name">Name</label>
+                          <input id="armorField_name" type="text" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="Custom armor name" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_description">Description</label>
+                          <input id="armorField_description" type="text" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="Optional description" />
+                        </div>
+                      </div>
+                      <div class="grid gap-4 md:grid-cols-4">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_Quality">Quality</label>
+                          <select id="armorField_Quality" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_subclass">Armor type</label>
+                          <select id="armorField_subclass" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_InventoryType">Slot</label>
+                          <select id="armorField_InventoryType" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_Armor">Armor value</label>
+                          <input id="armorField_Armor" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                      <div class="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_ItemLevel">Item level</label>
+                          <input id="armorField_ItemLevel" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="200" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_RequiredLevel">Required level</label>
+                          <input id="armorField_RequiredLevel" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="80" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_StatsCount">Stats count</label>
+                          <input id="armorField_StatsCount" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+                      <div class="flex items-center justify-between">
+                        <h4 class="text-sm font-semibold text-white">Primary stats</h4>
+                        <span class="text-[11px] uppercase tracking-[0.3em] text-indigo-200/70">Up to 5</span>
+                      </div>
+                      <div class="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type1">Stat 1 type</label>
+                          <input id="armorField_stat_type1" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="7" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value1">Stat 1 value</label>
+                          <input id="armorField_stat_value1" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type2">Stat 2 type</label>
+                          <input id="armorField_stat_type2" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="4" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value2">Stat 2 value</label>
+                          <input id="armorField_stat_value2" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type3">Stat 3 type</label>
+                          <input id="armorField_stat_type3" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="5" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value3">Stat 3 value</label>
+                          <input id="armorField_stat_value3" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type4">Stat 4 type</label>
+                          <input id="armorField_stat_type4" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value4">Stat 4 value</label>
+                          <input id="armorField_stat_value4" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type5">Stat 5 type</label>
+                          <input id="armorField_stat_type5" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value5">Stat 5 value</label>
+                          <input id="armorField_stat_value5" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+                      <div class="grid gap-4 sm:grid-cols-3">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">Socket 1</label>
+                          <select id="armorField_socketColor_1" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">Socket 2</label>
+                          <select id="armorField_socketColor_2" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">Socket 3</label>
+                          <select id="armorField_socketColor_3" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_socketBonus">Socket bonus</label>
+                        <input id="armorField_socketBonus" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                      </div>
+                    </section>
+
+                    <div class="pt-2 flex items-center justify-between gap-3">
+                      <p id="armorCloneMsg" class="text-xs text-indigo-200/80">Select an armor template and adjust fields to clone it into a new item.</p>
+                      <button id="armorCloneSubmit" type="submit" class="inline-flex items-center rounded-xl border border-emerald-400/70 bg-gradient-to-r from-emerald-600 via-lime-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-emerald-900/40 disabled:opacity-60 disabled:cursor-not-allowed">
+                        Clone armor
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
               <div id="gmQuestPanel" data-sub-tab-panel class="hidden space-y-4">
@@ -2354,6 +2550,7 @@ ${weaponSocketInputsHtml}
 const accountScript = () => {
   const LIMITS = window.PORTAL_LIMITS || {};
   const MIN_PASS = Number(LIMITS.minPass) || 8;
+  const ENUMS = (LIMITS && LIMITS.enums) || {};
   const safeStorage = (() => {
     try {
       return window.localStorage;
@@ -2387,6 +2584,42 @@ const accountScript = () => {
     } catch (err) {
       // ignore storage quota failures
     }
+  }
+
+  function buildSelectOptions(selectEl, enumObj, { includeUnknown = false } = {}) {
+    if (!selectEl || !enumObj) return;
+    selectEl.innerHTML = '';
+    const entries = Object.keys(enumObj)
+      .map((key) => ({ id: Number(key), label: enumObj[key] }))
+      .sort((a, b) => a.id - b.id);
+
+    if (includeUnknown) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '—';
+      selectEl.appendChild(opt);
+    }
+
+    for (const { id, label } of entries) {
+      const opt = document.createElement('option');
+      opt.value = String(id);
+      opt.textContent = `${label} (ID ${id})`;
+      selectEl.appendChild(opt);
+    }
+  }
+
+  function formatEnumLabel(enumObj, value, prefix) {
+    const key = Number(value);
+    if (!enumObj || Number.isNaN(key)) return prefix ? `${prefix} —` : '—';
+    const label = enumObj[key];
+    if (!label) return prefix ? `${prefix} ${key}` : `Unknown (ID ${key})`;
+    return `${label} (ID ${key})`;
+  }
+
+  function normalizeSocketColor(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    return num;
   }
   const profileEmail = document.getElementById('profileEmail');
   const form = document.getElementById('accountForm');
@@ -2436,6 +2669,7 @@ const accountScript = () => {
   const classicOnlineUpdated = document.getElementById('classicOnlineUpdated');
   const healthCards = {};
   const weaponFactoryCard = document.getElementById('weaponFactoryCard');
+  const armorSearchCard = document.getElementById('armorSearchCard');
   const weaponSearchForm = document.getElementById('weaponSearchForm');
   const weaponSearchInput = document.getElementById('weaponSearchInput');
   const weaponQualityFilter = document.getElementById('weaponQualityFilter');
@@ -2452,6 +2686,19 @@ const accountScript = () => {
   const weaponCloneForm = document.getElementById('weaponCloneForm');
   const weaponCloneMsg = document.getElementById('weaponCloneMsg');
   const weaponCloneSubmit = document.getElementById('weaponCloneSubmit');
+  const armorSearchForm = document.getElementById('armorSearchForm');
+  const armorSearchInput = document.getElementById('armorSearchInput');
+  const armorSubclassFilter = document.getElementById('armorSubclassFilter');
+  const armorSlotFilter = document.getElementById('armorSlotFilter');
+  const armorSearchStatus = document.getElementById('armorSearchStatus');
+  const armorSearchSubmit = document.getElementById('armorSearchSubmit');
+  const armorSearchResults = document.getElementById('armorSearchResults');
+  const armorEditorPanel = document.getElementById('armorEditorPanel');
+  const armorEditorTitle = document.getElementById('armorEditorTitle');
+  const armorEditorMeta = document.getElementById('armorEditorMeta');
+  const armorCloneForm = document.getElementById('armorCloneForm');
+  const armorCloneMsg = document.getElementById('armorCloneMsg');
+  const armorCloneSubmit = document.getElementById('armorCloneSubmit');
   const weaponFieldNames = [
     'name',
     'description',
@@ -2552,6 +2799,30 @@ const accountScript = () => {
     map[name] = document.getElementById(`weaponField_${name}`);
     return map;
   }, {});
+  const armorFieldNames = [
+    'name',
+    'description',
+    'Quality',
+    'class',
+    'subclass',
+    'InventoryType',
+    'Armor',
+    'ItemLevel',
+    'RequiredLevel',
+    'StatsCount',
+    'socketColor_1',
+    'socketColor_2',
+    'socketColor_3',
+    'socketBonus',
+  ];
+  for (let i = 1; i <= 5; i += 1) {
+    armorFieldNames.push(`stat_type${i}`);
+    armorFieldNames.push(`stat_value${i}`);
+  }
+  const armorFieldInputs = armorFieldNames.reduce((map, name) => {
+    map[name] = document.getElementById(`armorField_${name}`);
+    return map;
+  }, {});
   const charactersCount = document.getElementById('charactersCount');
   const charactersRealmCount = document.getElementById('charactersRealmCount');
   const characterStatus = document.getElementById('charactersStatus');
@@ -2566,8 +2837,53 @@ const accountScript = () => {
   const gmClassicWeaponSearchEndpoint = LIMITS.gmClassicWeaponSearchEndpoint || '/api/gm/classic/weapons/search';
   const gmClassicWeaponDetailsEndpoint = LIMITS.gmClassicWeaponDetailsEndpoint || '/api/gm/classic/weapons';
   const gmClassicWeaponCloneEndpoint = LIMITS.gmClassicWeaponCloneEndpoint || '/api/gm/classic/weapons';
+  const gmClassicArmorSearchEndpoint = LIMITS.gmClassicArmorSearchEndpoint || '/api/gm/classic/armors/search';
+  const gmClassicArmorDetailsEndpoint = LIMITS.gmClassicArmorDetailsEndpoint || '/api/gm/classic/armors';
+  const gmClassicArmorCloneEndpoint = LIMITS.gmClassicArmorCloneEndpoint || '/api/gm/classic/armors';
   const gmOnlinePollMs = Math.max(Number(LIMITS.gmOnlinePollMs) || 20000, 5000);
   const gmClassicOnlineLimit = Math.max(Number(LIMITS.gmClassicOnlineLimit) || 12, 1);
+
+  if (weaponQualityFilter && ENUMS.itemQuality) {
+    weaponQualityFilter.innerHTML = '<option value="">Any quality</option>';
+    buildSelectOptions(weaponQualityFilter, ENUMS.itemQuality);
+  }
+  if (weaponSubclassFilter && ENUMS.weaponSubclass) {
+    weaponSubclassFilter.innerHTML = '<option value="">Any type</option>';
+    buildSelectOptions(weaponSubclassFilter, ENUMS.weaponSubclass);
+  }
+  if (weaponFieldInputs.Quality && ENUMS.itemQuality) {
+    buildSelectOptions(weaponFieldInputs.Quality, ENUMS.itemQuality, { includeUnknown: true });
+  }
+  if (weaponFieldInputs.subclass && ENUMS.weaponSubclass) {
+    buildSelectOptions(weaponFieldInputs.subclass, ENUMS.weaponSubclass, { includeUnknown: true });
+  }
+  ['socketColor_1', 'socketColor_2', 'socketColor_3'].forEach((key) => {
+    const el = weaponFieldInputs[key];
+    if (el && ENUMS.socketColor335) {
+      buildSelectOptions(el, ENUMS.socketColor335, { includeUnknown: true });
+    }
+  });
+  if (armorSubclassFilter && ENUMS.armorSubclass) {
+    buildSelectOptions(armorSubclassFilter, ENUMS.armorSubclass, { includeUnknown: true });
+  }
+  if (armorSlotFilter && ENUMS.inventoryType) {
+    buildSelectOptions(armorSlotFilter, ENUMS.inventoryType, { includeUnknown: true });
+  }
+  if (armorFieldInputs.subclass && ENUMS.armorSubclass) {
+    buildSelectOptions(armorFieldInputs.subclass, ENUMS.armorSubclass, { includeUnknown: true });
+  }
+  if (armorFieldInputs.InventoryType && ENUMS.inventoryType) {
+    buildSelectOptions(armorFieldInputs.InventoryType, ENUMS.inventoryType, { includeUnknown: true });
+  }
+  if (armorFieldInputs.Quality && ENUMS.itemQuality) {
+    buildSelectOptions(armorFieldInputs.Quality, ENUMS.itemQuality, { includeUnknown: true });
+  }
+  ['socketColor_1', 'socketColor_2', 'socketColor_3'].forEach((key) => {
+    const el = armorFieldInputs[key];
+    if (el && ENUMS.socketColor335) {
+      buildSelectOptions(el, ENUMS.socketColor335, { includeUnknown: true });
+    }
+  });
 
   let currentSession = null;
   let activeTabId = 'accountTabPanel';
@@ -2588,6 +2904,11 @@ const accountScript = () => {
   const weaponSearchPageSize = 25;
   let currentWeaponBase = null;
   let weaponCloneBusy = false;
+  let armorSearchLoading = false;
+  let armorSearchPage = 1;
+  const armorSearchPageSize = 25;
+  let currentArmorBase = null;
+  let armorCloneBusy = false;
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -2859,6 +3180,9 @@ const accountScript = () => {
 
   function formatWeaponQualityLabel(value) {
     const key = Number(value);
+    if (Number.isFinite(key) && ENUMS.itemQuality && ENUMS.itemQuality[key] != null) {
+      return ENUMS.itemQuality[key];
+    }
     if (Number.isFinite(key) && WEAPON_QUALITY_NAMES[key] != null) {
       return WEAPON_QUALITY_NAMES[key];
     }
@@ -2867,6 +3191,9 @@ const accountScript = () => {
 
   function formatWeaponSubclassLabel(value) {
     const key = Number(value);
+    if (Number.isFinite(key) && ENUMS.weaponSubclass && ENUMS.weaponSubclass[key] != null) {
+      return ENUMS.weaponSubclass[key];
+    }
     if (Number.isFinite(key) && WEAPON_SUBCLASS_NAMES[key] != null) {
       return WEAPON_SUBCLASS_NAMES[key];
     }
@@ -2905,14 +3232,50 @@ const accountScript = () => {
     }
   }
 
+  function setArmorSearchStatus(message) {
+    if (armorSearchStatus) {
+      armorSearchStatus.textContent = message;
+    }
+  }
+
+  function setArmorSearchLoading(state) {
+    armorSearchLoading = Boolean(state);
+    if (armorSearchSubmit) {
+      armorSearchSubmit.disabled = armorSearchLoading || !gmClassicAccessible;
+      armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
+    }
+  }
+
+  function updateArmorCloneAvailability() {
+    if (!armorCloneSubmit) return;
+    const disabled = armorCloneBusy || !gmClassicAccessible || !currentArmorBase;
+    armorCloneSubmit.disabled = disabled;
+    armorCloneSubmit.classList.toggle('opacity-60', disabled);
+  }
+
+  function setArmorCloneLoading(state) {
+    armorCloneBusy = Boolean(state);
+    updateArmorCloneAvailability();
+  }
+
+  function setArmorCloneMessage(message) {
+    if (armorCloneMsg) {
+      armorCloneMsg.textContent = message;
+    }
+  }
+
   function syncWeaponFactoryState() {
-    if (!weaponSearchStatus) {
+    const gmBlocked = !gmClassicAccessible;
+    if (weaponFactoryCard) {
+      weaponFactoryCard.classList.toggle('opacity-60', gmBlocked);
+    }
+    if (armorSearchCard) {
+      armorSearchCard.classList.toggle('opacity-60', gmBlocked);
+    }
+    if (!weaponSearchStatus && !armorSearchStatus) {
       return;
     }
-    if (weaponFactoryCard) {
-      weaponFactoryCard.classList.toggle('opacity-60', !gmClassicAccessible);
-    }
-    if (!gmClassicAccessible) {
+    if (gmBlocked) {
       setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
       if (weaponSearchResults && !weaponSearchResults.childElementCount) {
         weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">Classic GM access required.</p>';
@@ -2922,13 +3285,33 @@ const accountScript = () => {
       }
       currentWeaponBase = null;
       setWeaponCloneMessage('Classic GM access required to clone weapons.');
-    } else if (!weaponSearchLoading) {
-      setWeaponSearchStatus('Search or filter to choose a base weapon.');
-      if (!currentWeaponBase) {
-        setWeaponCloneMessage('Select a weapon to begin cloning.');
+      setArmorSearchStatus('Classic GM access required to search armors.');
+      if (armorSearchResults && !armorSearchResults.childElementCount) {
+        armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">Classic GM access required.</p>';
+      }
+      if (armorEditorPanel) {
+        armorEditorPanel.classList.add('hidden');
+      }
+      currentArmorBase = null;
+      setArmorCloneMessage('Classic GM access required to clone armor.');
+    } else {
+      if (!weaponSearchLoading) {
+        setWeaponSearchStatus('Search or filter to choose a base weapon.');
+        if (!currentWeaponBase) {
+          setWeaponCloneMessage('Select a weapon to begin cloning.');
+        }
+      }
+      if (!armorSearchLoading) {
+        setArmorSearchStatus('Enter a name or entry ID to begin.');
+        if (!currentArmorBase) {
+          setArmorCloneMessage('Select an armor template and adjust fields to clone it into a new item.');
+        }
       }
     }
+    setWeaponSearchLoadingState(weaponSearchLoading);
+    setArmorSearchLoading(armorSearchLoading);
     updateWeaponCloneAvailability();
+    updateArmorCloneAvailability();
   }
 
   function renderWeaponSearchResults(items, hasMore) {
@@ -3154,6 +3537,213 @@ const accountScript = () => {
       setWeaponCloneMessage(err?.message || 'Unable to clone weapon right now.');
     } finally {
       setWeaponCloneLoading(false);
+    }
+  }
+
+  function renderArmorSearchResults(items) {
+    if (!armorSearchResults) return;
+    armorSearchResults.innerHTML = '';
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">No armor templates matched your search.</p>';
+      return;
+    }
+    list.forEach((item) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className =
+        'w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left text-xs text-indigo-100/90 hover:border-violet-400/70 hover:bg-violet-900/20 transition flex items-center justify-between gap-3';
+      const left = document.createElement('div');
+      const title = document.createElement('p');
+      title.className = 'font-semibold text-indigo-50';
+      title.textContent = `${item.name || 'Unknown'} (ID ${item.entry})`;
+      left.appendChild(title);
+      const meta = document.createElement('p');
+      meta.className = 'text-[11px] text-indigo-200/80';
+      const slotLabel = formatEnumLabel(ENUMS.inventoryType, item.InventoryType, 'Slot');
+      const armorTypeLabel = formatEnumLabel(ENUMS.armorSubclass, item.subclass, 'Type');
+      const lvl = Number(item.ItemLevel);
+      const req = Number(item.RequiredLevel);
+      const parts = [];
+      if (slotLabel) parts.push(slotLabel);
+      if (armorTypeLabel) parts.push(armorTypeLabel);
+      if (Number.isFinite(lvl) && lvl > 0) parts.push(`iLvl ${lvl}`);
+      if (Number.isFinite(req) && req > 0) parts.push(`Req ${req}`);
+      meta.textContent = parts.join(' · ');
+      left.appendChild(meta);
+      row.appendChild(left);
+      row.addEventListener('click', () => {
+        loadArmorDetails(item.entry);
+      });
+      armorSearchResults.appendChild(row);
+    });
+  }
+
+  async function loadArmorSearch(resetPage = false) {
+    if (!gmClassicAccessible) {
+      setArmorSearchStatus('Classic GM access required to search armors.');
+      return;
+    }
+    if (armorSearchLoading) return;
+    if (resetPage) armorSearchPage = 1;
+    setArmorSearchLoading(true);
+    setArmorSearchStatus('Searching…');
+
+    const params = new URLSearchParams();
+    const q = (armorSearchInput?.value || '').trim();
+    if (q) params.set('q', q);
+    const subclassVal = armorSubclassFilter?.value || '';
+    if (subclassVal) params.set('armorType', subclassVal);
+    const slotVal = armorSlotFilter?.value || '';
+    if (slotVal) params.set('slot', slotVal);
+    params.set('page', String(armorSearchPage));
+    params.set('pageSize', String(armorSearchPageSize));
+
+    try {
+      const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || 'Search failed.');
+      }
+      const items = Array.isArray(data.items) ? data.items : [];
+      renderArmorSearchResults(items);
+      armorSearchPage = Number(data.page) || 1;
+      const total = items.length;
+      setArmorSearchStatus(
+        total
+          ? `Showing ${total} result${total === 1 ? '' : 's'} (page ${data.page || 1}).`
+          : 'No armor templates matched your search.'
+      );
+    } catch (err) {
+      console.error('Armor search failed', err);
+      setArmorSearchStatus(err?.message || 'Search failed.');
+      if (armorSearchResults) {
+        armorSearchResults.innerHTML = '<p class="text-xs text-rose-200/80">Failed to search armors. Check console for details.</p>';
+      }
+    } finally {
+      setArmorSearchLoading(false);
+    }
+  }
+
+  async function loadArmorDetails(entryId) {
+    if (!gmClassicAccessible) return;
+    const numericEntry = Number(entryId);
+    if (!Number.isFinite(numericEntry) || numericEntry <= 0) return;
+    if (armorCloneMsg) {
+      armorCloneMsg.textContent = 'Loading armor template…';
+    }
+    try {
+      const res = await fetch(`${gmClassicArmorDetailsEndpoint}/${numericEntry}`, {
+        credentials: 'same-origin',
+      });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !data?.armor) {
+        throw new Error(data?.error || 'Failed to load armor template.');
+      }
+      const armor = data.armor;
+      currentArmorBase = armor;
+      if (armorEditorPanel) armorEditorPanel.classList.remove('hidden');
+      if (armorEditorTitle) {
+        armorEditorTitle.textContent = `${armor.name || 'Unknown armor'} (ID ${armor.entry})`;
+      }
+      if (armorEditorMeta) {
+        const slotLabel = formatEnumLabel(ENUMS.inventoryType, armor.InventoryType, 'Slot');
+        const armorTypeLabel = formatEnumLabel(ENUMS.armorSubclass, armor.subclass, 'Type');
+        const qualityLabel = formatEnumLabel(ENUMS.itemQuality, armor.Quality, 'Quality');
+        const lvl = Number(armor.ItemLevel);
+        const req = Number(armor.RequiredLevel);
+        const parts = [];
+        if (slotLabel) parts.push(slotLabel);
+        if (armorTypeLabel) parts.push(armorTypeLabel);
+        if (qualityLabel) parts.push(qualityLabel);
+        if (Number.isFinite(lvl) && lvl > 0) parts.push(`iLvl ${lvl}`);
+        if (Number.isFinite(req) && req > 0) parts.push(`Req ${req}`);
+        armorEditorMeta.textContent = parts.join(' · ');
+      }
+      Object.entries(armorFieldInputs).forEach(([name, input]) => {
+        if (!input) return;
+        let value = armor[name];
+        if (name.startsWith('socketColor_')) {
+          value = normalizeSocketColor(value);
+        }
+        if (value == null) {
+          input.value = '';
+        } else {
+          input.value = String(value);
+        }
+      });
+      if (armorCloneMsg) {
+        armorCloneMsg.textContent = 'Adjust any fields you want to change, then use Clone armor to create a new custom template.';
+      }
+      updateArmorCloneAvailability();
+    } catch (err) {
+      console.error('Armor details failed', err);
+      if (armorCloneMsg) {
+        armorCloneMsg.textContent = err?.message || 'Failed to load armor template.';
+      }
+    }
+  }
+
+  async function handleArmorClone(event) {
+    event?.preventDefault();
+    if (!gmClassicAccessible) {
+      setArmorCloneMessage('Classic GM access required to clone armor.');
+      return;
+    }
+    if (!currentArmorBase) {
+      setArmorCloneMessage('Select an armor template first.');
+      return;
+    }
+    setArmorCloneLoading(true);
+    if (armorCloneMsg) armorCloneMsg.textContent = 'Cloning armor template…';
+    try {
+      const fields = {};
+      Object.entries(armorFieldInputs).forEach(([name, input]) => {
+        if (!input) return;
+        const raw = input.value;
+        if (name.startsWith('socketColor_')) {
+          fields[name] = normalizeSocketColor(raw || 0);
+        } else if (raw === '' || raw == null) {
+          fields[name] = currentArmorBase[name];
+        } else {
+          const num = Number(raw);
+          fields[name] = Number.isFinite(num) ? num : raw;
+        }
+      });
+      const res = await fetch(`${gmClassicArmorCloneEndpoint}/${currentArmorBase.entry}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ fields }),
+      });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || 'Clone failed.');
+      }
+      const newEntry = data.entry;
+      if (armorCloneMsg) {
+        armorCloneMsg.textContent = `Cloned armor as entry ${newEntry}. Remember to add it to loot, vendors, or scripts as needed.`;
+      }
+    } catch (err) {
+      console.error('Armor clone failed', err);
+      if (armorCloneMsg) {
+        armorCloneMsg.textContent = err?.message || 'Failed to clone armor template.';
+      }
+    } finally {
+      setArmorCloneLoading(false);
     }
   }
 
@@ -4183,6 +4773,11 @@ const accountScript = () => {
     runWeaponSearch(1);
   });
 
+  armorSearchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    loadArmorSearch(true);
+  });
+
   weaponSearchResults?.addEventListener('click', (event) => {
     const target = event?.target;
     if (!(target instanceof Element)) {
@@ -4200,6 +4795,7 @@ const accountScript = () => {
   });
 
   weaponCloneForm?.addEventListener('submit', handleWeaponClone);
+  armorCloneForm?.addEventListener('submit', handleArmorClone);
 
   gmCommandForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -5086,6 +5682,46 @@ function ensureClassicWeaponCloneValid(item) {
       throw new PortalHttpError(`stat_value${i} is out of range.`, 400);
     }
   }
+}
+
+function ensureClassicArmorCloneValid(item) {
+  if (!item || typeof item !== 'object') {
+    throw new PortalHttpError('Invalid armor payload.', 400);
+  }
+  const classValue = toSafeNumber(item.class);
+  if (classValue !== 4) {
+    throw new PortalHttpError('Only armor templates can be cloned with this tool.', 400);
+  }
+  const requiredNumericFields = ['InventoryType', 'Quality', 'ItemLevel', 'RequiredLevel', 'Armor'];
+  for (const field of requiredNumericFields) {
+    if (toSafeNumber(item[field]) == null) {
+      throw new PortalHttpError(`Invalid value for ${field}.`, 400);
+    }
+  }
+  const statsCount = toSafeNumber(item.StatsCount) ?? 0;
+  if (statsCount < 0 || statsCount > 10) {
+    throw new PortalHttpError('StatsCount must be between 0 and 10.', 400);
+  }
+  for (let i = 1; i <= 10; i += 1) {
+    const statValue = toSafeNumber(item[`stat_value${i}`]);
+    if (statValue != null && Math.abs(statValue) > CLASSIC_WEAPON_STAT_ABS_MAX) {
+      throw new PortalHttpError(`stat_value${i} is out of range.`, 400);
+    }
+  }
+}
+
+async function allocateClassicCustomArmorEntry(connection) {
+  const executor = connection || classicWorldPool;
+  const [rangeRows] = await executor.execute(
+    'SELECT entry FROM item_template WHERE entry BETWEEN ? AND ? ORDER BY entry DESC LIMIT 1 FOR UPDATE',
+    [CLASSIC_CUSTOM_ITEM_MIN, CLASSIC_CUSTOM_ITEM_MAX]
+  );
+  const lastEntry = rangeRows.length ? toSafeNumber(rangeRows[0].entry) : null;
+  const newEntry = lastEntry == null ? CLASSIC_CUSTOM_ITEM_MIN : lastEntry + 1;
+  if (!Number.isFinite(newEntry) || newEntry > CLASSIC_CUSTOM_ITEM_MAX) {
+    throw new PortalHttpError('Custom item range exhausted', 409);
+  }
+  return newEntry;
 }
 
 function escapeHtml(s) {
@@ -8390,6 +9026,137 @@ app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }
   } catch (err) {
     console.error('Classic GM online lookup failed', err);
     return res.status(500).json({ error: 'Unable to load Classic roster.' });
+  }
+});
+
+app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  try {
+    if (!classicWorldPool) {
+      return res.status(503).json({ error: 'Classic world database unavailable' });
+    }
+    const rawQuery = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const searchQuery = rawQuery ? rawQuery.slice(0, 64) : '';
+    const page = Math.max(Number(req.query?.page) || 1, 1);
+    const requestedPageSize = Number(req.query?.pageSize);
+    const pageSize = Math.min(Math.max(Number.isFinite(requestedPageSize) ? requestedPageSize : 25, 1), 100);
+    const subclassFilter = toSafeNumber(req.query?.armorType ?? req.query?.subclass);
+    const slotFilter = toSafeNumber(req.query?.slot ?? req.query?.InventoryType);
+    const offset = (page - 1) * pageSize;
+    const limit = pageSize + 1;
+    const clauses = ['class = 4'];
+    const params = [];
+    if (searchQuery) {
+      clauses.push('name LIKE ?');
+      params.push(`%${searchQuery}%`);
+    }
+    if (subclassFilter != null) {
+      clauses.push('subclass = ?');
+      params.push(subclassFilter);
+    }
+    if (slotFilter != null) {
+      clauses.push('InventoryType = ?');
+      params.push(slotFilter);
+    }
+    params.push(limit, offset);
+    const whereSql = clauses.join(' AND ');
+    const [rows] = await classicWorldPool.execute(
+      `SELECT entry, name, class, subclass, InventoryType, Quality, ItemLevel, RequiredLevel, Armor
+       FROM item_template
+       WHERE ${whereSql}
+       ORDER BY ItemLevel DESC, RequiredLevel DESC, Quality DESC, name ASC
+       LIMIT ? OFFSET ?`,
+      params
+    );
+    const hasMore = rows.length > pageSize;
+    const items = hasMore ? rows.slice(0, pageSize) : rows;
+    return res.json({ ok: true, items, page, pageSize, hasMore });
+  } catch (err) {
+    console.error('Classic armor search failed', err);
+    return res.status(500).json({ error: 'Unable to search armors right now.' });
+  }
+});
+
+app.get('/api/gm/classic/armors/:entry', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  try {
+    if (!classicWorldPool) {
+      return res.status(503).json({ error: 'Classic world database unavailable' });
+    }
+    const entry = toSafeNumber(req.params?.entry);
+    if (!Number.isFinite(entry) || entry <= 0) {
+      return res.status(400).json({ error: 'Invalid entry id' });
+    }
+    const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ? AND class = 4 LIMIT 1', [entry]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    return res.json({ ok: true, armor: rows[0] });
+  } catch (err) {
+    console.error('Classic armor lookup failed', err);
+    return res.status(500).json({ error: 'Unable to load armor right now.' });
+  }
+});
+
+app.post('/api/gm/classic/armors/:entry/clone', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+  if (!classicWorldPool) {
+    return res.status(503).json({ error: 'Classic world database unavailable' });
+  }
+  const sourceEntry = toSafeNumber(req.params?.entry);
+  if (!Number.isFinite(sourceEntry) || sourceEntry <= 0) {
+    return res.status(400).json({ error: 'Invalid base entry id' });
+  }
+  try {
+    const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ? AND class = 4 LIMIT 1', [sourceEntry]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const baseItem = rows[0];
+    let connection;
+    try {
+      connection = await classicWorldPool.getConnection();
+      await connection.beginTransaction();
+      const newEntry = await allocateClassicCustomArmorEntry(connection);
+      const overrides = req.body && typeof req.body === 'object' ? req.body.fields || req.body : {};
+      const { clone, overriddenFields } = applyItemTemplateOverrides(baseItem, overrides, { entry: newEntry });
+      clone.class = 4;
+      ensureClassicArmorCloneValid(clone);
+      const insertColumns = ITEM_TEMPLATE_COLUMNS.join(', ');
+      const placeholders = ITEM_TEMPLATE_COLUMNS.map(() => '?').join(', ');
+      const values = ITEM_TEMPLATE_COLUMNS.map((column) => clone[column]);
+      await connection.execute(`INSERT INTO item_template (${insertColumns}) VALUES (${placeholders})`, values);
+      await connection.commit();
+      await recordPortalAuditEvent({
+        portalUserId: req.session?.portal_user_id,
+        action: 'gm:classic-armor-clone',
+        details: {
+          sourceEntry,
+          newEntry,
+          name: clone.name,
+          overriddenFields,
+        },
+      });
+      return res.json({ ok: true, entry: newEntry, name: clone.name, sourceEntry });
+    } catch (err) {
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackErr) {
+          console.error('Classic armor clone rollback failed', rollbackErr);
+        }
+      }
+      if (err instanceof PortalHttpError) {
+        return res.status(err.statusCode || 400).json({ error: err.message });
+      }
+      console.error('Classic armor clone failed', err);
+      return res.status(500).json({ error: 'Unable to clone armor right now.' });
+    } finally {
+      connection?.release();
+    }
+  } catch (err) {
+    if (err instanceof PortalHttpError) {
+      return res.status(err.statusCode || 400).json({ error: err.message });
+    }
+    console.error('Classic armor clone setup failed', err);
+    return res.status(500).json({ error: 'Unable to prepare armor clone.' });
   }
 });
 
