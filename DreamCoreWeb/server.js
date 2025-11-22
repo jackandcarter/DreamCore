@@ -3629,6 +3629,7 @@ const accountScript = () => {
       return;
     }
     if (armorSearchLoading) return;
+    armorSearchInitialized = true;
     if (resetPage) armorSearchPage = 1;
     setArmorSearchLoading(true);
     setArmorSearchStatus('Searching…');
