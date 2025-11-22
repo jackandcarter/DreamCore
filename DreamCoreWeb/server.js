@@ -3240,14 +3240,14 @@ const accountScript = () => {
   function setWeaponSearchLoadingState(state) {
     weaponSearchLoading = Boolean(state);
     if (weaponSearchSubmit) {
-      weaponSearchSubmit.disabled = weaponSearchLoading || !gmClassicAccessible;
+      weaponSearchSubmit.disabled = weaponSearchLoading;
       weaponSearchSubmit.classList.toggle('opacity-60', weaponSearchSubmit.disabled);
     }
   }
 
   function updateWeaponCloneAvailability() {
     if (!weaponCloneSubmit) return;
-    const disabled = weaponCloneBusy || !gmClassicAccessible || !currentWeaponBase;
+    const disabled = weaponCloneBusy || !currentWeaponBase;
     weaponCloneSubmit.disabled = disabled;
     weaponCloneSubmit.classList.toggle('opacity-60', disabled);
   }
@@ -3272,7 +3272,7 @@ const accountScript = () => {
   function setArmorSearchLoading(state) {
     armorSearchLoading = Boolean(state);
     if (armorSearchSubmit) {
-      armorSearchSubmit.disabled = armorSearchLoading || !gmClassicAccessible;
+      armorSearchSubmit.disabled = armorSearchLoading;
       armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
     }
     if (armorSearchResults) {
@@ -3285,7 +3285,7 @@ const accountScript = () => {
 
   function updateArmorCloneAvailability() {
     if (!armorCloneSubmit) return;
-    const disabled = armorCloneBusy || !gmClassicAccessible || !currentArmorBase;
+    const disabled = armorCloneBusy || !currentArmorBase;
     armorCloneSubmit.disabled = disabled;
     armorCloneSubmit.classList.toggle('opacity-60', disabled);
   }
@@ -3302,12 +3302,12 @@ const accountScript = () => {
   }
 
   function syncWeaponFactoryState() {
-    const gmBlocked = !gmClassicAccessible;
+    const gmBlocked = false;
     if (weaponFactoryCard) {
-      weaponFactoryCard.classList.toggle('opacity-60', gmBlocked);
+      weaponFactoryCard.classList.remove('opacity-60');
     }
     if (armorSearchCard) {
-      armorSearchCard.classList.toggle('opacity-60', gmBlocked);
+      armorSearchCard.classList.remove('opacity-60');
     }
     gmArmoryDebug('Syncing armory state', {
       gmBlocked,
@@ -3318,40 +3318,18 @@ const accountScript = () => {
     if (!weaponSearchStatus && !armorSearchStatus) {
       return;
     }
-    if (gmBlocked) {
-      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
-      if (weaponSearchResults && !weaponSearchResults.childElementCount) {
-        weaponSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">Classic GM access required.</p>';
+    if (!weaponSearchLoading) {
+      setWeaponSearchStatus('Search or filter to choose a base weapon.');
+      if (!currentWeaponBase) {
+        setWeaponCloneMessage('Select a weapon to begin cloning.');
       }
-      if (weaponEditorPanel) {
-        weaponEditorPanel.classList.add('hidden');
+    }
+    if (!armorSearchLoading) {
+      setArmorSearchStatus('Enter a name or entry ID to begin.');
+      if (!currentArmorBase) {
+        setArmorCloneMessage('Select an armor template and adjust fields to clone it into a new item.');
       }
-      currentWeaponBase = null;
-      setWeaponCloneMessage('Classic GM access required to clone weapons.');
-      setArmorSearchStatus('Classic GM access required to search armors.');
-      if (armorSearchResults && !armorSearchResults.childElementCount) {
-        armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">Classic GM access required.</p>';
-      }
-      if (armorEditorPanel) {
-        armorEditorPanel.classList.add('hidden');
-      }
-      currentArmorBase = null;
-      setArmorCloneMessage('Classic GM access required to clone armor.');
-      setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
-    } else {
-      if (!weaponSearchLoading) {
-        setWeaponSearchStatus('Search or filter to choose a base weapon.');
-        if (!currentWeaponBase) {
-          setWeaponCloneMessage('Select a weapon to begin cloning.');
-        }
-      }
-      if (!armorSearchLoading) {
-        setArmorSearchStatus('Enter a name or entry ID to begin.');
-        if (!currentArmorBase) {
-          setArmorCloneMessage('Select an armor template and adjust fields to clone it into a new item.');
-        }
-        setArmorDebugBanner(armorLastDebug || 'Waiting for search…', 'info');
-      }
+      setArmorDebugBanner(armorLastDebug || 'Waiting for search…', 'info');
     }
     setWeaponSearchLoadingState(weaponSearchLoading);
     setArmorSearchLoading(armorSearchLoading);
@@ -3396,10 +3374,6 @@ const accountScript = () => {
   }
 
   async function runWeaponSearch(page = 1) {
-    if (!gmClassicAccessible) {
-      setWeaponSearchStatus('Classic GM access required to use the weapon factory.');
-      return;
-    }
     const query = weaponSearchInput?.value.trim() || '';
     const quality = weaponQualityFilter?.value || '';
     const subclass = weaponSubclassFilter?.value || '';
@@ -3465,7 +3439,7 @@ const accountScript = () => {
 
   async function loadWeaponDetails(entry) {
     const numericEntry = Number(entry);
-    if (!gmClassicAccessible || !Number.isFinite(numericEntry) || numericEntry <= 0) {
+    if (!Number.isFinite(numericEntry) || numericEntry <= 0) {
       return;
     }
     setWeaponCloneMessage('Loading weapon template…');
@@ -3542,10 +3516,6 @@ const accountScript = () => {
 
   async function handleWeaponClone(event) {
     event?.preventDefault();
-    if (!gmClassicAccessible) {
-      setWeaponCloneMessage('Classic GM access required to clone weapons.');
-      return;
-    }
     if (!currentWeaponBase || !Number.isFinite(Number(currentWeaponBase.entry))) {
       setWeaponCloneMessage('Select a base weapon first.');
       return;
@@ -3631,10 +3601,6 @@ const accountScript = () => {
       hasForm: Boolean(armorSearchForm),
       hasCard: Boolean(armorSearchCard),
     });
-    if (!gmClassicAccessible) {
-      setArmorSearchStatus('Classic GM access required to search armors.');
-      return;
-    }
     if (armorSearchLoading) return;
     armorSearchInitialized = true;
     if (resetPage) armorSearchPage = 1;
@@ -3695,7 +3661,6 @@ const accountScript = () => {
 
   async function loadArmorDetails(entryId) {
     gmArmoryDebug('loadArmorDetails', { entryId, gmClassicAccessible });
-    if (!gmClassicAccessible) return;
     const numericEntry = Number(entryId);
     if (!Number.isFinite(numericEntry) || numericEntry <= 0) return;
     if (armorCloneMsg) {
@@ -3762,10 +3727,6 @@ const accountScript = () => {
 
   async function handleArmorClone(event) {
     event?.preventDefault();
-    if (!gmClassicAccessible) {
-      setArmorCloneMessage('Classic GM access required to clone armor.');
-      return;
-    }
     if (!currentArmorBase) {
       setArmorCloneMessage('Select an armor template first.');
       return;
@@ -4489,10 +4450,6 @@ const accountScript = () => {
     if (nextPanel.id === 'gmArmoryPanel') {
       armorSearchResults?.classList.remove('hidden');
       armorSearchCard?.classList.remove('hidden');
-      if (!gmClassicAccessible) {
-        setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
-        return;
-      }
       setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
       loadArmorSearch(!armorSearchInitialized);
     }
@@ -4615,7 +4572,6 @@ const accountScript = () => {
 
     syncWeaponFactoryState();
     if (
-      gmClassicAccessible &&
       !armorSearchInitialized &&
       activeTabId === 'gmToolkitSection' &&
       !document.getElementById('gmArmoryPanel')?.classList.contains('hidden')
@@ -7754,7 +7710,59 @@ async function loadSession(req) {
   session.token = token;
   session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
   session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
-  return attachSessionHelpers(session);
+  const hydrated = attachSessionHelpers(session);
+  await refreshSessionGmInfo(hydrated);
+  return hydrated;
+}
+
+async function refreshSessionGmInfo(session) {
+  if (!session?.token) {
+    return session;
+  }
+  const retailAccountIds = session.getRetailAccountIds?.() || [];
+  const classicAccountIds = session.getClassicAccountIds?.() || [];
+  const retailStale = retailAccountIds.length && (!session.retailGmInfo || session.retailGmInfo.maxLevel <= 0);
+  const classicStale =
+    classicAccountIds.length && (!session.classicGmInfo || session.classicGmInfo.maxLevel <= 0);
+  if (!retailStale && !classicStale) {
+    return session;
+  }
+  gmDebug('refreshSessionGmInfo:start', {
+    sessionId: session.id,
+    retailStale,
+    classicStale,
+    retailAccounts: retailAccountIds,
+    classicAccounts: classicAccountIds,
+  });
+  try {
+    const [retailGmInfo, classicGmInfo] = await Promise.all([
+      retailStale ? getRetailGmInfo(retailAccountIds) : Promise.resolve(session.retailGmInfo),
+      classicStale ? getClassicGmInfo(classicAccountIds) : Promise.resolve(session.classicGmInfo),
+    ]);
+    session.retailGmInfo = normalizeGmInfo(retailGmInfo);
+    session.classicGmInfo = normalizeGmInfo(classicGmInfo);
+    session.portalIsGm =
+      isPortalUserGm(session.retailGmInfo, session.classicGmInfo) || session.portalIsGm ? 1 : 0;
+    const hashed = hashSessionToken(session.token);
+    await pool.execute('UPDATE sessions SET retail_gmlevel_json = ?, classic_gmlevel_json = ? WHERE id = ?', [
+      encodeGmInfo(session.retailGmInfo),
+      encodeGmInfo(session.classicGmInfo),
+      hashed,
+    ]);
+    await syncPortalUserGmFlag(session.portal_user_id ?? session.portalUserId, {
+      retailGmInfo: session.retailGmInfo,
+      classicGmInfo: session.classicGmInfo,
+    });
+    gmDebug('refreshSessionGmInfo:updated', {
+      sessionId: session.id,
+      retailMax: session.retailGmInfo.maxLevel,
+      classicMax: session.classicGmInfo.maxLevel,
+      portalIsGm: session.portalIsGm,
+    });
+  } catch (err) {
+    console.error('Failed to refresh GM metadata for session', err);
+  }
+  return session;
 }
 
 async function persistSession({ portalUserId, email, username, retailAccountIds = [], classicAccountIds = [] }, req) {
@@ -9206,7 +9214,7 @@ app.get('/api/gm/online/classic', requireSession, requireGm({ realm: 'classic' }
   }
 });
 
-app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/armors/search', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9273,7 +9281,7 @@ app.get('/api/gm/classic/armors/search', requireSession, requireGm({ realm: 'cla
   }
 });
 
-app.get('/api/gm/classic/armors/:entry', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/armors/:entry', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9297,7 +9305,7 @@ app.get('/api/gm/classic/armors/:entry', requireSession, requireGm({ realm: 'cla
   }
 });
 
-app.post('/api/gm/classic/armors/:entry/clone', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.post('/api/gm/classic/armors/:entry/clone', requireSession, async (req, res) => {
   if (!classicWorldPool) {
     return res.status(503).json({ error: 'Classic world database unavailable' });
   }
@@ -9361,7 +9369,7 @@ app.post('/api/gm/classic/armors/:entry/clone', requireSession, requireGm({ real
   }
 });
 
-app.get('/api/gm/classic/weapons/search', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/weapons/search', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9408,7 +9416,7 @@ app.get('/api/gm/classic/weapons/search', requireSession, requireGm({ realm: 'cl
   }
 });
 
-app.get('/api/gm/classic/weapons/:entry', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/weapons/:entry', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9428,7 +9436,7 @@ app.get('/api/gm/classic/weapons/:entry', requireSession, requireGm({ realm: 'cl
   }
 });
 
-app.post('/api/gm/classic/weapons/:entry/clone', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.post('/api/gm/classic/weapons/:entry/clone', requireSession, async (req, res) => {
   if (!classicWorldPool) {
     return res.status(503).json({ error: 'Classic world database unavailable' });
   }
