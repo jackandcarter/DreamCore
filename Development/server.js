@@ -585,6 +585,7 @@ await pool.query(`
     updated_at BIGINT NOT NULL,
     last_login_at BIGINT DEFAULT NULL,
     login_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    is_gm TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uniq_portal_email (email),
     UNIQUE KEY uniq_portal_username (username)
@@ -656,6 +657,7 @@ async function addIndexIfMissing(table, clause) {
 async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('portal_users', 'username VARCHAR(64) DEFAULT NULL AFTER email');
   await addIndexIfMissing('portal_users', 'ADD UNIQUE KEY uniq_portal_username (username)');
+  await addColumnIfMissing('portal_users', 'is_gm TINYINT(1) NOT NULL DEFAULT 0 AFTER login_count');
   await addColumnIfMissing('sessions', 'portal_user_id BIGINT UNSIGNED DEFAULT NULL AFTER id');
   await addColumnIfMissing('sessions', 'username VARCHAR(64) DEFAULT NULL AFTER email');
   await addColumnIfMissing('sessions', 'retail_accounts_json TEXT DEFAULT NULL AFTER username');
@@ -3753,6 +3755,8 @@ const accountScript = () => {
     const gmAccess = normalizeGmPayload(currentSession?.gmAccess);
     const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
     const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
+    const gmSessionFlag = Boolean(charactersPayload?.isGm);
+    const portalSessionFlag = Boolean(currentSession?.portalIsGm);
     const gmAccountFlags =
       charactersPayload && typeof charactersPayload === 'object'
         ? charactersPayload.gmAccounts || {}
@@ -3780,9 +3784,12 @@ const accountScript = () => {
       return level > 0;
     });
     const realms = [];
+    if (portalSessionFlag) {
+      realms.push('retail', 'classic');
+    }
     if (retailMax > 0 || gmRetailFromRoster) realms.push('retail');
     if (classicMax > 0 || gmClassicFromRoster) realms.push('classic');
-    const hasGm = Boolean(charactersPayload?.isGm) || realms.length > 0;
+    const hasGm = portalSessionFlag || gmSessionFlag || realms.length > 0;
     gmClassicAccessible = realms.includes('classic');
     updateWeaponBranchAccess(realms);
 
@@ -7320,6 +7327,29 @@ async function getClassicGmInfo(accountIds) {
   return fetchAccountGmRows(classicAuthPool, accountIds, { realm: 'classic' });
 }
 
+function isPortalUserGm(retailGmInfo, classicGmInfo) {
+  const retailLevel = toSafeNumber(retailGmInfo?.maxLevel) ?? 0;
+  const classicLevel = toSafeNumber(classicGmInfo?.maxLevel) ?? 0;
+  return Math.max(retailLevel, classicLevel) > 0 ? 1 : 0;
+}
+
+async function syncPortalUserGmFlag(portalUserId, { retailGmInfo, classicGmInfo } = {}) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    return;
+  }
+  const gmFlag = isPortalUserGm(retailGmInfo, classicGmInfo);
+  try {
+    await pool.execute('UPDATE portal_users SET is_gm = ? WHERE id = ? AND is_gm <> ?', [
+      gmFlag,
+      safePortalId,
+      gmFlag,
+    ]);
+  } catch (err) {
+    console.error('Failed to update portal user GM flag', safePortalId, err);
+  }
+}
+
 function pickPrimaryAccountId(portalUser) {
   if (!portalUser || typeof portalUser !== 'object') {
     return 0;
@@ -7403,6 +7433,25 @@ function attachSessionHelpers(session) {
   return session;
 }
 
+async function loadPortalGmFlag(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    return 0;
+  }
+  try {
+    const [rows] = await pool.execute('SELECT is_gm FROM portal_users WHERE id = ? LIMIT 1', [
+      safePortalId,
+    ]);
+    if (!rows.length) {
+      return 0;
+    }
+    return toSafeNumber(rows[0]?.is_gm) ? 1 : 0;
+  } catch (err) {
+    console.error('Failed to load portal GM flag', err);
+    return 0;
+  }
+}
+
 async function loadSession(req) {
   const token = getSessionToken(req);
   if (!token) return null;
@@ -7421,6 +7470,7 @@ async function loadSession(req) {
   if (session.portal_user_id == null) {
     return null;
   }
+  session.portalIsGm = await loadPortalGmFlag(session.portal_user_id);
   session.token = token;
   session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
   session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
@@ -7471,6 +7521,7 @@ async function persistSession({ portalUserId, email, username, retailAccountIds 
     console.error('Failed to load GM metadata for session', err);
     gmDebug('persistSession:gm-error', { portalUserId: safePortalId, error: err?.message });
   }
+  await syncPortalUserGmFlag(safePortalId, { retailGmInfo, classicGmInfo });
   const sessionUsername = normalizePortalUsername(username);
   await pool.execute(
     `REPLACE INTO sessions (id, portal_user_id, account_id, email, username, retail_accounts_json, classic_accounts_json,
@@ -7525,6 +7576,10 @@ async function updateSessionAccountLinks(session, { retailAccountIds, classicAcc
     console.error('Failed to refresh GM metadata for session update', err);
     gmDebug('updateSessionAccountLinks:gm-error', { sessionId: session.id, error: err?.message });
   }
+  await syncPortalUserGmFlag(session.portal_user_id ?? session.portalUserId, {
+    retailGmInfo,
+    classicGmInfo,
+  });
   try {
     await pool.execute(
       'UPDATE sessions SET retail_accounts_json = ?, classic_accounts_json = ?, retail_gmlevel_json = ?, classic_gmlevel_json = ? WHERE id = ?',
@@ -7562,6 +7617,9 @@ async function requireSession(req, res, next) {
 function hasGmAccess(session, realm, minLevel = 1) {
   if (!session) {
     return false;
+  }
+  if (session.portalIsGm) {
+    return true;
   }
   const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
   const targetLevel = toSafeNumber(minLevel) ?? 1;
@@ -7660,7 +7718,7 @@ async function loadPortalUserAccountLinks(portalUserId) {
 async function loadPortalUser(whereClause, params) {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, email, username, password_hash, salt, version, created_at, updated_at, last_login_at, login_count
+      `SELECT id, email, username, password_hash, salt, version, created_at, updated_at, last_login_at, login_count, is_gm
        FROM portal_users WHERE ${whereClause} LIMIT 1`,
       params
     );
@@ -8348,6 +8406,7 @@ app.get('/api/session', requireSession, (req, res) => {
       username: req.session.username,
       retailAccountIds,
       classicAccountIds,
+      portalIsGm: req.session.portalIsGm ? 1 : 0,
       gmAccess: {
         retail: cloneGmInfo(req.session.retailGmInfo),
         classic: cloneGmInfo(req.session.classicGmInfo),
