@@ -2727,6 +2727,15 @@ const accountScript = () => {
     armorDebugBanner.classList.toggle('border-emerald-400/60', tone === 'success');
     armorDebugBanner.classList.toggle('border-indigo-300/60', tone === 'info');
   }
+
+  function ensureArmoryPanelReady(triggerSearch = false) {
+    armorSearchResults?.classList.remove('hidden');
+    armorSearchCard?.classList.remove('hidden');
+    setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
+    if (triggerSearch || !armorSearchInitialized) {
+      loadArmorSearch(true);
+    }
+  }
   const weaponFieldNames = [
     'name',
     'description',
@@ -4448,10 +4457,7 @@ const accountScript = () => {
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
-      armorSearchResults?.classList.remove('hidden');
-      armorSearchCard?.classList.remove('hidden');
-      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
-      loadArmorSearch(!armorSearchInitialized);
+      ensureArmoryPanelReady(true);
     }
   }
 
@@ -4571,17 +4577,13 @@ const accountScript = () => {
     }
 
     syncWeaponFactoryState();
-    if (
-      !armorSearchInitialized &&
-      activeTabId === 'gmToolkitSection' &&
-      !document.getElementById('gmArmoryPanel')?.classList.contains('hidden')
-    ) {
-      loadArmorSearch(true);
+    if (activeTabId === 'gmToolkitSection') {
+      ensureArmoryPanelReady(false);
     }
     syncClassicOnlinePolling();
   }
 
-    gmSubTabButtons.forEach((button) => {
+  gmSubTabButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const targetId = button.getAttribute('data-sub-tab-target');
       if (targetId) {
