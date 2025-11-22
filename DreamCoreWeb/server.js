@@ -7577,6 +7577,12 @@ async function syncPortalUserGmFlag(portalUserId, { retailGmInfo, classicGmInfo 
     return;
   }
   const gmFlag = isPortalUserGm(retailGmInfo, classicGmInfo);
+  gmDebug('syncPortalUserGmFlag:evaluate', {
+    portalUserId: safePortalId,
+    gmFlag,
+    retailMax: retailGmInfo?.maxLevel,
+    classicMax: classicGmInfo?.maxLevel,
+  });
   try {
     await pool.execute('UPDATE portal_users SET is_gm = ? WHERE id = ? AND is_gm <> ?', [
       gmFlag,
@@ -7713,6 +7719,15 @@ async function loadSession(req) {
   session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
   session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
   const hydrated = attachSessionHelpers(session);
+  gmDebug('loadSession:hit', {
+    sessionId: hydrated.id,
+    portalUserId: hydrated.portal_user_id,
+    portalIsGm: hydrated.portalIsGm,
+    retailMax: hydrated.retailGmInfo?.maxLevel,
+    classicMax: hydrated.classicGmInfo?.maxLevel,
+    retailAccounts: hydrated.retailAccountIds,
+    classicAccounts: hydrated.classicAccountIds,
+  });
   await refreshSessionGmInfo(hydrated);
   return hydrated;
 }
@@ -7727,6 +7742,13 @@ async function refreshSessionGmInfo(session) {
   const classicStale =
     classicAccountIds.length && (!session.classicGmInfo || session.classicGmInfo.maxLevel <= 0);
   if (!retailStale && !classicStale) {
+    gmDebug('refreshSessionGmInfo:skip', {
+      sessionId: session.id,
+      portalUserId: session.portal_user_id ?? session.portalUserId,
+      retailMax: session.retailGmInfo?.maxLevel,
+      classicMax: session.classicGmInfo?.maxLevel,
+      portalIsGm: session.portalIsGm,
+    });
     return session;
   }
   gmDebug('refreshSessionGmInfo:start', {
@@ -7940,8 +7962,26 @@ function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
       !hasGmAccess(req.session, normalizedRealm, requiredLevel) &&
       !hasAnyGmAccess(req.session, requiredLevel)
     ) {
+      gmDebug('requireGm:deny', {
+        sessionId: req.session?.id,
+        portalUserId: req.session?.portal_user_id ?? req.session?.portalUserId,
+        portalIsGm: req.session?.portalIsGm,
+        retailMax: req.session?.retailGmInfo?.maxLevel,
+        classicMax: req.session?.classicGmInfo?.maxLevel,
+        realm: normalizedRealm,
+        requiredLevel,
+      });
       return res.status(403).json({ error: 'GM access required' });
     }
+    gmDebug('requireGm:allow', {
+      sessionId: req.session?.id,
+      portalUserId: req.session?.portal_user_id ?? req.session?.portalUserId,
+      portalIsGm: req.session?.portalIsGm,
+      retailMax: req.session?.retailGmInfo?.maxLevel,
+      classicMax: req.session?.classicGmInfo?.maxLevel,
+      realm: normalizedRealm,
+      requiredLevel,
+    });
     return next();
   };
 }
@@ -7968,8 +8008,26 @@ function requireRequestGm({ source = 'body', key = 'realm', fallbackRealm = null
       !hasGmAccess(req.session, resolvedRealm, requiredLevel) &&
       !hasAnyGmAccess(req.session, requiredLevel)
     ) {
+      gmDebug('requireRequestGm:deny', {
+        sessionId: req.session?.id,
+        portalUserId: req.session?.portal_user_id ?? req.session?.portalUserId,
+        portalIsGm: req.session?.portalIsGm,
+        retailMax: req.session?.retailGmInfo?.maxLevel,
+        classicMax: req.session?.classicGmInfo?.maxLevel,
+        realm: resolvedRealm,
+        requiredLevel,
+      });
       return res.status(403).json({ error: 'GM access required' });
     }
+    gmDebug('requireRequestGm:allow', {
+      sessionId: req.session?.id,
+      portalUserId: req.session?.portal_user_id ?? req.session?.portalUserId,
+      portalIsGm: req.session?.portalIsGm,
+      retailMax: req.session?.retailGmInfo?.maxLevel,
+      classicMax: req.session?.classicGmInfo?.maxLevel,
+      realm: resolvedRealm,
+      requiredLevel,
+    });
     req.gmRealm = resolvedRealm;
     return next();
   };
@@ -9238,6 +9296,15 @@ app.get('/api/gm/classic/armors/search', requireSession, async (req, res) => {
       page,
       pageSize,
     });
+    gmDebug('armory:query-build', {
+      searchQuery,
+      subclassFilter,
+      slotFilter,
+      page,
+      pageSize,
+      offset,
+      limit,
+    });
     const clauses = ['class = 4'];
     const params = [];
     if (searchQuery) {
@@ -9260,6 +9327,11 @@ app.get('/api/gm/classic/armors/search', requireSession, async (req, res) => {
     }
     params.push(limit, offset);
     const whereSql = clauses.join(' AND ');
+    gmDebug('armory:query-execute', {
+      whereSql,
+      params,
+      account: req.session?.email || req.session?.username || 'unknown',
+    });
     const [rows] = await classicWorldPool.execute(
       `SELECT entry, name, class, subclass, InventoryType, Quality, ItemLevel, RequiredLevel, Armor
        FROM item_template
@@ -9270,6 +9342,14 @@ app.get('/api/gm/classic/armors/search', requireSession, async (req, res) => {
     );
     const hasMore = rows.length > pageSize;
     const items = hasMore ? rows.slice(0, pageSize) : rows;
+    gmDebug('armory:query-result', {
+      returned: rows.length,
+      trimmed: items.length,
+      firstEntry: items[0]?.entry,
+      firstName: items[0]?.name,
+      hasMore,
+      page,
+    });
     console.info('[Armory] search response', {
       account: req.session?.email || req.session?.username || 'unknown',
       count: items.length,
@@ -9293,6 +9373,10 @@ app.get('/api/gm/classic/armors/:entry', requireSession, async (req, res) => {
       return res.status(400).json({ error: 'Invalid entry id' });
     }
     console.info('[Armory] load details', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      entry,
+    });
+    gmDebug('armory:details', {
       account: req.session?.email || req.session?.username || 'unknown',
       entry,
     });
@@ -9385,6 +9469,15 @@ app.get('/api/gm/classic/weapons/search', requireSession, async (req, res) => {
     const subclassFilter = toSafeNumber(req.query?.subclass);
     const offset = (page - 1) * pageSize;
     const limit = pageSize + 1;
+    gmDebug('weapon:query-build', {
+      searchQuery,
+      qualityFilter,
+      subclassFilter,
+      page,
+      pageSize,
+      offset,
+      limit,
+    });
     const clauses = ['class = 2'];
     const params = [];
     if (searchQuery) {
@@ -9401,6 +9494,11 @@ app.get('/api/gm/classic/weapons/search', requireSession, async (req, res) => {
     }
     params.push(limit, offset);
     const whereSql = clauses.join(' AND ');
+    gmDebug('weapon:query-execute', {
+      whereSql,
+      params,
+      account: req.session?.email || req.session?.username || 'unknown',
+    });
     const [rows] = await classicWorldPool.execute(
       `SELECT entry, name, Quality, class, subclass, ItemLevel, RequiredLevel, InventoryType, displayid
        FROM item_template
@@ -9411,6 +9509,14 @@ app.get('/api/gm/classic/weapons/search', requireSession, async (req, res) => {
     );
     const hasMore = rows.length > pageSize;
     const items = hasMore ? rows.slice(0, pageSize) : rows;
+    gmDebug('weapon:query-result', {
+      returned: rows.length,
+      trimmed: items.length,
+      firstEntry: items[0]?.entry,
+      firstName: items[0]?.name,
+      hasMore,
+      page,
+    });
     return res.json({ ok: true, items, page, pageSize, hasMore });
   } catch (err) {
     console.error('Classic weapon search failed', err);
@@ -9427,6 +9533,10 @@ app.get('/api/gm/classic/weapons/:entry', requireSession, async (req, res) => {
     if (!Number.isFinite(entry) || entry <= 0) {
       return res.status(400).json({ error: 'Invalid entry id' });
     }
+    gmDebug('weapon:details', {
+      account: req.session?.email || req.session?.username || 'unknown',
+      entry,
+    });
     const [rows] = await classicWorldPool.execute('SELECT * FROM item_template WHERE entry = ?', [entry]);
     if (!rows.length) {
       return res.status(404).json({ error: 'Item not found' });
