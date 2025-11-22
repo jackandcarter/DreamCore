@@ -4480,10 +4480,12 @@ const accountScript = () => {
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
-      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
-      if (!armorSearchInitialized && gmClassicAccessible) {
-        loadArmorSearch(true);
+      if (!gmClassicAccessible) {
+        setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
+        return;
       }
+      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
+      loadArmorSearch(!armorSearchInitialized);
     }
   }
 
