@@ -3651,21 +3651,23 @@ const accountScript = () => {
         return;
       }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.ok) {
+      if (!res.ok) {
         throw new Error(data?.error || 'Search failed.');
       }
       const items = Array.isArray(data.items) ? data.items : [];
-      gmArmoryDebug('Search response', { count: items.length, page: data.page, hasMore: data.hasMore });
+      const page = Number(data?.page) || 1;
+      const hasMore = Boolean(data?.hasMore);
+      gmArmoryDebug('Search response', { count: items.length, page, hasMore });
       renderArmorSearchResults(items);
-      armorSearchPage = Number(data.page) || 1;
+      armorSearchPage = page;
       const total = items.length;
       setArmorDebugBanner(
-        `Loaded ${total} armor row${total === 1 ? '' : 's'} (page ${armorSearchPage}, more: ${data.hasMore ? 'yes' : 'no'})`,
+        `Loaded ${total} armor row${total === 1 ? '' : 's'} (page ${armorSearchPage}, more: ${hasMore ? 'yes' : 'no'})`,
         'success'
       );
       setArmorSearchStatus(
         total
-          ? `Showing ${total} result${total === 1 ? '' : 's'} (page ${data.page || 1}).`
+          ? `Showing ${total} result${total === 1 ? '' : 's'} (page ${page}).`
           : 'No armor templates matched your search.'
       );
     } catch (err) {
