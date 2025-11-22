@@ -3629,7 +3629,6 @@ const accountScript = () => {
       hasForm: Boolean(armorSearchForm),
       hasCard: Boolean(armorSearchCard),
     });
-    armorSearchInitialized = true;
     if (!gmClassicAccessible) {
       setArmorSearchStatus('Classic GM access required to search armors.');
       return;
