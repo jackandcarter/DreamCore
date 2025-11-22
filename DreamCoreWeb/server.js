@@ -4548,10 +4548,27 @@ const accountScript = () => {
         ) || 0;
       return level > 0;
     });
-    gmRetailAccessible = retailMax > 0 || gmRetailFromRoster || gmSessionFlag;
-    gmClassicAccessible = classicMax > 0 || gmClassicFromRoster || gmSessionFlag;
-    gmArmoryDebug('GM access computed', { gmClassicAccessible, gmRetailAccessible, gmSessionFlag });
-    const hasGm = gmSessionFlag || gmRetailAccessible || gmClassicAccessible;
+    const gmRetailFromSession = retailMax > 0;
+    const gmClassicFromSession = classicMax > 0;
+    const gmRetailResolved = gmRetailFromSession || gmRetailFromRoster;
+    const gmClassicResolved = gmClassicFromSession || gmClassicFromRoster;
+    const hasGm = gmSessionFlag || gmRetailResolved || gmClassicResolved;
+
+    // Once the GM tab is visible we treat all GM toolkit subtabs as accessible. The
+    // backend still enforces GM permissions on SOAP endpoints, so the UI should not
+    // gate subpanels a second time and risk false negatives when the initial check
+    // already allowed GM access.
+    gmRetailAccessible = hasGm;
+    gmClassicAccessible = hasGm;
+    gmArmoryDebug('GM access computed', {
+      gmClassicAccessible,
+      gmRetailAccessible,
+      gmSessionFlag,
+      gmRetailFromSession,
+      gmClassicFromSession,
+      gmRetailFromRoster,
+      gmClassicFromRoster,
+    });
     const realms = [];
     if (gmRetailAccessible) realms.push('retail');
     if (gmClassicAccessible) realms.push('classic');
