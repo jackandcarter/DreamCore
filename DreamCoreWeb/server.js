@@ -2918,6 +2918,7 @@ const accountScript = () => {
   let classicOnlineTimer = null;
   let healthLoaded = false;
   let charactersPayload = null;
+  let armorSearchInitialized = false;
   let charactersLoaded = false;
   let charactersLoading = false;
   let selectedFamilyKey = 'retail';
@@ -3622,6 +3623,7 @@ const accountScript = () => {
       hasForm: Boolean(armorSearchForm),
       hasCard: Boolean(armorSearchCard),
     });
+    armorSearchInitialized = true;
     if (!gmClassicAccessible) {
       setArmorSearchStatus('Classic GM access required to search armors.');
       return;
@@ -4478,6 +4480,9 @@ const accountScript = () => {
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
       setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
+      if (!armorSearchInitialized && gmClassicAccessible) {
+        loadArmorSearch(true);
+      }
     }
   }
 
@@ -4595,6 +4600,14 @@ const accountScript = () => {
     }
 
     syncWeaponFactoryState();
+    if (
+      gmClassicAccessible &&
+      !armorSearchInitialized &&
+      activeTabId === 'gmToolkitSection' &&
+      !document.getElementById('gmArmoryPanel')?.classList.contains('hidden')
+    ) {
+      loadArmorSearch(true);
+    }
     syncClassicOnlinePolling();
   }
 
