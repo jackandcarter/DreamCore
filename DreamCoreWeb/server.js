@@ -7710,7 +7710,59 @@ async function loadSession(req) {
   session.token = token;
   session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
   session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
-  return attachSessionHelpers(session);
+  const hydrated = attachSessionHelpers(session);
+  await refreshSessionGmInfo(hydrated);
+  return hydrated;
+}
+
+async function refreshSessionGmInfo(session) {
+  if (!session?.token) {
+    return session;
+  }
+  const retailAccountIds = session.getRetailAccountIds?.() || [];
+  const classicAccountIds = session.getClassicAccountIds?.() || [];
+  const retailStale = retailAccountIds.length && (!session.retailGmInfo || session.retailGmInfo.maxLevel <= 0);
+  const classicStale =
+    classicAccountIds.length && (!session.classicGmInfo || session.classicGmInfo.maxLevel <= 0);
+  if (!retailStale && !classicStale) {
+    return session;
+  }
+  gmDebug('refreshSessionGmInfo:start', {
+    sessionId: session.id,
+    retailStale,
+    classicStale,
+    retailAccounts: retailAccountIds,
+    classicAccounts: classicAccountIds,
+  });
+  try {
+    const [retailGmInfo, classicGmInfo] = await Promise.all([
+      retailStale ? getRetailGmInfo(retailAccountIds) : Promise.resolve(session.retailGmInfo),
+      classicStale ? getClassicGmInfo(classicAccountIds) : Promise.resolve(session.classicGmInfo),
+    ]);
+    session.retailGmInfo = normalizeGmInfo(retailGmInfo);
+    session.classicGmInfo = normalizeGmInfo(classicGmInfo);
+    session.portalIsGm =
+      isPortalUserGm(session.retailGmInfo, session.classicGmInfo) || session.portalIsGm ? 1 : 0;
+    const hashed = hashSessionToken(session.token);
+    await pool.execute('UPDATE sessions SET retail_gmlevel_json = ?, classic_gmlevel_json = ? WHERE id = ?', [
+      encodeGmInfo(session.retailGmInfo),
+      encodeGmInfo(session.classicGmInfo),
+      hashed,
+    ]);
+    await syncPortalUserGmFlag(session.portal_user_id ?? session.portalUserId, {
+      retailGmInfo: session.retailGmInfo,
+      classicGmInfo: session.classicGmInfo,
+    });
+    gmDebug('refreshSessionGmInfo:updated', {
+      sessionId: session.id,
+      retailMax: session.retailGmInfo.maxLevel,
+      classicMax: session.classicGmInfo.maxLevel,
+      portalIsGm: session.portalIsGm,
+    });
+  } catch (err) {
+    console.error('Failed to refresh GM metadata for session', err);
+  }
+  return session;
 }
 
 async function persistSession({ portalUserId, email, username, retailAccountIds = [], classicAccountIds = [] }, req) {
