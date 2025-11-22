@@ -3273,6 +3273,12 @@ const accountScript = () => {
       armorSearchSubmit.disabled = armorSearchLoading || !gmClassicAccessible;
       armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
     }
+    if (armorSearchResults) {
+      armorSearchResults.innerHTML = armorSearchLoading
+        ? '<p class="text-xs text-indigo-200/70">Searching armory templates…</p>'
+        : armorSearchResults.innerHTML;
+      armorSearchResults.classList.remove('hidden');
+    }
   }
 
   function updateArmorCloneAvailability() {
@@ -3623,7 +3629,6 @@ const accountScript = () => {
       hasForm: Boolean(armorSearchForm),
       hasCard: Boolean(armorSearchCard),
     });
-    armorSearchInitialized = true;
     if (!gmClassicAccessible) {
       setArmorSearchStatus('Classic GM access required to search armors.');
       return;
@@ -4480,10 +4485,14 @@ const accountScript = () => {
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
-      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
-      if (!armorSearchInitialized && gmClassicAccessible) {
-        loadArmorSearch(true);
+      armorSearchResults?.classList.remove('hidden');
+      armorSearchCard?.classList.remove('hidden');
+      if (!gmClassicAccessible) {
+        setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
+        return;
       }
+      setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
+      loadArmorSearch(!armorSearchInitialized);
     }
   }
 
