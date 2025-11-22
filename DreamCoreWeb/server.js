@@ -3273,6 +3273,12 @@ const accountScript = () => {
       armorSearchSubmit.disabled = armorSearchLoading || !gmClassicAccessible;
       armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
     }
+    if (armorSearchResults) {
+      armorSearchResults.innerHTML = armorSearchLoading
+        ? '<p class="text-xs text-indigo-200/70">Searching armory templates…</p>'
+        : armorSearchResults.innerHTML;
+      armorSearchResults.classList.remove('hidden');
+    }
   }
 
   function updateArmorCloneAvailability() {
@@ -4480,6 +4486,8 @@ const accountScript = () => {
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
+      armorSearchResults?.classList.remove('hidden');
+      armorSearchCard?.classList.remove('hidden');
       if (!gmClassicAccessible) {
         setArmorDebugBanner('Armory disabled: Classic GM access missing.', 'warn');
         return;
