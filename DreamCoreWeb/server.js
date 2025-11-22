@@ -4541,6 +4541,7 @@ const accountScript = () => {
     const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
     const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
     const gmSessionFlag = Boolean(charactersPayload?.isGm);
+    const portalSessionFlag = Boolean(currentSession?.portalIsGm);
     const gmAccountFlags =
       charactersPayload && typeof charactersPayload === 'object'
         ? charactersPayload.gmAccounts || {}
@@ -4571,7 +4572,7 @@ const accountScript = () => {
     const gmClassicFromSession = classicMax > 0;
     const gmRetailResolved = gmRetailFromSession || gmRetailFromRoster;
     const gmClassicResolved = gmClassicFromSession || gmClassicFromRoster;
-    const hasGm = gmSessionFlag || gmRetailResolved || gmClassicResolved;
+    const hasGm = gmSessionFlag || portalSessionFlag || gmRetailResolved || gmClassicResolved;
 
     // Once the GM tab is visible we treat all GM toolkit subtabs as accessible. The
     // backend still enforces GM permissions on SOAP endpoints, so the UI should not
@@ -4583,6 +4584,7 @@ const accountScript = () => {
       gmClassicAccessible,
       gmRetailAccessible,
       gmSessionFlag,
+      portalSessionFlag,
       gmRetailFromSession,
       gmClassicFromSession,
       gmRetailFromRoster,
@@ -7711,6 +7713,25 @@ function attachSessionHelpers(session) {
   return session;
 }
 
+async function loadPortalGmFlag(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    return 0;
+  }
+  try {
+    const [rows] = await pool.execute('SELECT is_gm FROM portal_users WHERE id = ? LIMIT 1', [
+      safePortalId,
+    ]);
+    if (!rows.length) {
+      return 0;
+    }
+    return toSafeNumber(rows[0]?.is_gm) ? 1 : 0;
+  } catch (err) {
+    console.error('Failed to load portal GM flag', err);
+    return 0;
+  }
+}
+
 async function loadSession(req) {
   const token = getSessionToken(req);
   if (!token) return null;
@@ -7729,6 +7750,7 @@ async function loadSession(req) {
   if (session.portal_user_id == null) {
     return null;
   }
+  session.portalIsGm = await loadPortalGmFlag(session.portal_user_id);
   session.token = token;
   session.retailAccountIds = decodeAccountIdList(session.retail_accounts_json);
   session.classicAccountIds = decodeAccountIdList(session.classic_accounts_json);
@@ -7875,6 +7897,9 @@ async function requireSession(req, res, next) {
 function hasGmAccess(session, realm, minLevel = 1) {
   if (!session) {
     return false;
+  }
+  if (session.portalIsGm) {
+    return true;
   }
   const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
   const targetLevel = toSafeNumber(minLevel) ?? 1;
@@ -8919,6 +8944,7 @@ app.get('/api/session', requireSession, (req, res) => {
       username: req.session.username,
       retailAccountIds,
       classicAccountIds,
+      portalIsGm: req.session.portalIsGm ? 1 : 0,
       gmAccess: {
         retail: cloneGmInfo(req.session.retailGmInfo),
         classic: cloneGmInfo(req.session.classicGmInfo),
