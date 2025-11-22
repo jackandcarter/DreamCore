@@ -9317,7 +9317,7 @@ app.post('/api/gm/classic/armors/:entry/clone', requireSession, async (req, res)
   }
 });
 
-app.get('/api/gm/classic/weapons/search', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/weapons/search', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9364,7 +9364,7 @@ app.get('/api/gm/classic/weapons/search', requireSession, requireGm({ realm: 'cl
   }
 });
 
-app.get('/api/gm/classic/weapons/:entry', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.get('/api/gm/classic/weapons/:entry', requireSession, async (req, res) => {
   try {
     if (!classicWorldPool) {
       return res.status(503).json({ error: 'Classic world database unavailable' });
@@ -9384,7 +9384,7 @@ app.get('/api/gm/classic/weapons/:entry', requireSession, requireGm({ realm: 'cl
   }
 });
 
-app.post('/api/gm/classic/weapons/:entry/clone', requireSession, requireGm({ realm: 'classic' }), async (req, res) => {
+app.post('/api/gm/classic/weapons/:entry/clone', requireSession, async (req, res) => {
   if (!classicWorldPool) {
     return res.status(503).json({ error: 'Classic world database unavailable' });
   }
