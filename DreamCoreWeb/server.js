@@ -2731,8 +2731,17 @@ const accountScript = () => {
   function ensureArmoryPanelReady(triggerSearch = false) {
     armorSearchResults?.classList.remove('hidden');
     armorSearchCard?.classList.remove('hidden');
-    setArmorDebugBanner(armorLastDebug || 'Armory ready. Trigger a search to load results.', 'info');
-    if (triggerSearch || !armorSearchInitialized) {
+    setArmorDebugBanner(armorLastDebug || 'Armory ready. Enter a query or filters, then search.', 'info');
+
+    const hasUserInput = Boolean(
+      (armorSearchInput?.value || '').trim() ||
+        (armorSubclassFilter?.value || '').trim() ||
+        (armorSlotFilter?.value || '').trim()
+    );
+    const shouldRunInitialSearch = triggerSearch && !armorSearchInitialized;
+
+    if (shouldRunInitialSearch || hasUserInput) {
+      gmArmoryDebug('ensureArmoryPanelReady: triggering search', { shouldRunInitialSearch, hasUserInput });
       loadArmorSearch(true);
     }
   }
