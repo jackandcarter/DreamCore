@@ -2738,8 +2738,10 @@ const accountScript = () => {
         (armorSubclassFilter?.value || '').trim() ||
         (armorSlotFilter?.value || '').trim()
     );
+    const shouldRunInitialSearch = triggerSearch && !armorSearchInitialized;
 
-    if ((triggerSearch || !armorSearchInitialized) && hasUserInput) {
+    if (shouldRunInitialSearch || hasUserInput) {
+      gmArmoryDebug('ensureArmoryPanelReady: triggering search', { shouldRunInitialSearch, hasUserInput });
       loadArmorSearch(true);
     }
   }
