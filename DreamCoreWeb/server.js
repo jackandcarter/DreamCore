@@ -4500,42 +4500,8 @@ const accountScript = () => {
   }
 
   function updateGmAccessUI() {
-    const gmAccess = normalizeGmPayload(currentSession?.gmAccess);
-    const retailMax = Number(gmAccess.retail?.maxLevel) || 0;
-    const classicMax = Number(gmAccess.classic?.maxLevel) || 0;
-    const gmSessionFlag = Boolean(charactersPayload?.isGm);
     const portalSessionFlag = Boolean(currentSession?.portalIsGm);
-    const gmAccountFlags =
-      charactersPayload && typeof charactersPayload === 'object'
-        ? charactersPayload.gmAccounts || {}
-        : {};
-    const gmRetailFromRoster = Object.values(gmAccountFlags?.retail || {}).some((entry) => {
-      const level =
-        Number(
-          entry?.gmlevel ??
-            entry?.gmLevel ??
-            entry?.GMLevel ??
-            entry?.securitylevel ??
-            entry?.SecurityLevel
-        ) || 0;
-      return level > 0;
-    });
-    const gmClassicFromRoster = Object.values(gmAccountFlags?.classic || {}).some((entry) => {
-      const level =
-        Number(
-          entry?.gmlevel ??
-            entry?.gmLevel ??
-            entry?.GMLevel ??
-            entry?.securitylevel ??
-            entry?.SecurityLevel
-        ) || 0;
-      return level > 0;
-    });
-    const gmRetailFromSession = retailMax > 0;
-    const gmClassicFromSession = classicMax > 0;
-    const gmRetailResolved = gmRetailFromSession || gmRetailFromRoster;
-    const gmClassicResolved = gmClassicFromSession || gmClassicFromRoster;
-    const hasGm = gmSessionFlag || portalSessionFlag || gmRetailResolved || gmClassicResolved;
+    const hasGm = portalSessionFlag;
 
     // Once the GM tab is visible we treat all GM toolkit subtabs as accessible. The
     // backend still enforces GM permissions on SOAP endpoints, so the UI should not
@@ -4546,12 +4512,7 @@ const accountScript = () => {
     gmArmoryDebug('GM access computed', {
       gmClassicAccessible,
       gmRetailAccessible,
-      gmSessionFlag,
       portalSessionFlag,
-      gmRetailFromSession,
-      gmClassicFromSession,
-      gmRetailFromRoster,
-      gmClassicFromRoster,
     });
     const realms = [];
     if (gmRetailAccessible) realms.push('retail');
@@ -7567,8 +7528,11 @@ async function getClassicGmInfo(accountIds) {
 
 function isPortalUserGm(retailGmInfo, classicGmInfo) {
   const retailLevel = toSafeNumber(retailGmInfo?.maxLevel) ?? 0;
+  if (retailLevel > 0) {
+    return 1;
+  }
   const classicLevel = toSafeNumber(classicGmInfo?.maxLevel) ?? 0;
-  return Math.max(retailLevel, classicLevel) > 0 ? 1 : 0;
+  return classicLevel > 0 ? 1 : 0;
 }
 
 async function syncPortalUserGmFlag(portalUserId, { retailGmInfo, classicGmInfo } = {}) {
@@ -7927,17 +7891,7 @@ async function requireSession(req, res, next) {
 }
 
 function hasGmAccess(session, realm, minLevel = 1) {
-  if (!session) {
-    return false;
-  }
-  if (session.portalIsGm) {
-    return true;
-  }
-  const normalizedRealm = realm === 'classic' ? 'classic' : 'retail';
-  const targetLevel = toSafeNumber(minLevel) ?? 1;
-  const info = normalizedRealm === 'classic' ? session.classicGmInfo : session.retailGmInfo;
-  const gmLevel = toSafeNumber(info?.maxLevel) ?? 0;
-  return gmLevel >= targetLevel;
+  return Boolean(session?.portalIsGm);
 }
 
 function normalizeRealmInput(value, fallback = null) {
@@ -7948,7 +7902,7 @@ function normalizeRealmInput(value, fallback = null) {
 }
 
 function hasAnyGmAccess(session, minLevel = 1) {
-  return hasGmAccess(session, 'retail', minLevel) || hasGmAccess(session, 'classic', minLevel);
+  return hasGmAccess(session, 'retail', minLevel);
 }
 
 function requireGm({ realm = 'retail', minLevel = 1 } = {}) {
@@ -9114,6 +9068,7 @@ app.get('/api/characters', requireSession, async (req, res) => {
     }
 
     const payload = await buildCharactersResponse({ retailAccountIds, classicAccountIds });
+    payload.isGm = req.session?.portalIsGm ? 1 : 0;
 
     if (cacheKey) {
       CHARACTER_CACHE.set(cacheKey, {
