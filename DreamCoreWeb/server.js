@@ -2728,6 +2728,18 @@ const accountScript = () => {
     armorDebugBanner.classList.toggle('border-indigo-300/60', tone === 'info');
   }
 
+  window.addEventListener('error', (event) => {
+    if (!event?.error || !armorDebugBanner) return;
+    const details = event.error?.message || event.message || String(event.error);
+    setArmorDebugBanner(`Armory UI hit a runtime error: ${details}`, 'warn');
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    if (!event?.reason || !armorDebugBanner) return;
+    const details = event.reason?.message || event.reason || 'Unknown rejection';
+    setArmorDebugBanner(`Armory UI promise rejected: ${details}`, 'warn');
+  });
+
   function ensureArmoryPanelReady(triggerSearch = false) {
     armorSearchResults?.classList.remove('hidden');
     armorSearchCard?.classList.remove('hidden');
