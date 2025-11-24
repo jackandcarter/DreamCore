@@ -2910,9 +2910,11 @@ const accountScript = () => {
     }
   });
   if (armorSubclassFilter && ENUMS.armorSubclass) {
+    armorSubclassFilter.innerHTML = '<option value="">Any type</option>';
     buildSelectOptions(armorSubclassFilter, ENUMS.armorSubclass, { includeUnknown: true });
   }
   if (armorSlotFilter && ENUMS.inventoryType) {
+    armorSlotFilter.innerHTML = '<option value="">Any slot</option>';
     buildSelectOptions(armorSlotFilter, ENUMS.inventoryType, { includeUnknown: true });
   }
   if (armorFieldInputs.subclass && ENUMS.armorSubclass) {
