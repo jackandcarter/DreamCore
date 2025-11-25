@@ -165,6 +165,10 @@ const SHARED_STYLES = `
     p, span, a, small {
       text-shadow: 0 6px 18px rgba(8, 7, 27, 0.45);
     }
+    .has-space-bg > *:not(.space-scene):not(.corner-logo) {
+      position: relative;
+      z-index: 1;
+    }
     .gradient-border {
       position: relative;
       border: 1px solid transparent;
@@ -259,6 +263,306 @@ const SHARED_STYLES = `
       50% { transform: translateY(-2px); opacity: 0.8; }
     }
 `;
+
+const SPACE_BACKGROUND_STYLES = `
+    body {
+      background-color: #05060f;
+      color: #e2e8f0;
+    }
+    .space-scene {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .space-layer {
+      position: absolute;
+      inset: -4%;
+      width: 108%;
+      height: 108%;
+    }
+    canvas.space-layer {
+      width: 108%;
+      height: 108%;
+    }
+    .space-glow {
+      position: absolute;
+      inset: -30%;
+      background: radial-gradient(circle at 55% 45%, rgba(236, 72, 153, 0.12), rgba(14, 165, 233, 0.08), transparent 55%),
+        radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.16), transparent 42%),
+        radial-gradient(circle at 70% 75%, rgba(52, 211, 153, 0.14), transparent 55%);
+      filter: blur(120px);
+      opacity: 0.85;
+    }
+    .space-starfield { mix-blend-mode: screen; opacity: 0.9; }
+    .space-nebula { filter: blur(12px); opacity: 0.9; mix-blend-mode: screen; }
+    .space-shooting { mix-blend-mode: screen; opacity: 0.85; }
+`;
+
+const SPACE_BACKGROUND_SCRIPT = `(() => {
+  const initSpaceScene = () => {
+    if (document.getElementById('space-scene')) return;
+    const body = document.body;
+    if (!body) {
+      requestAnimationFrame(initSpaceScene);
+      return;
+    }
+    body.classList.add('has-space-bg');
+
+    const scene = document.createElement('div');
+    scene.id = 'space-scene';
+    scene.className = 'space-scene';
+
+    const nebulaCanvas = document.createElement('canvas');
+    nebulaCanvas.className = 'space-layer space-nebula';
+    const starCanvas = document.createElement('canvas');
+    starCanvas.className = 'space-layer space-starfield';
+    const shootingCanvas = document.createElement('canvas');
+    shootingCanvas.className = 'space-layer space-shooting';
+    const glowLayer = document.createElement('div');
+    glowLayer.className = 'space-layer space-glow';
+
+    scene.append(nebulaCanvas, starCanvas, shootingCanvas, glowLayer);
+    body.prepend(scene);
+
+  const nebulaCtx = nebulaCanvas.getContext('2d');
+  const starCtx = starCanvas.getContext('2d');
+  const shootingCtx = shootingCanvas.getContext('2d');
+  const smallNebula = document.createElement('canvas');
+  smallNebula.width = 340;
+  smallNebula.height = 220;
+  const smallCtx = smallNebula.getContext('2d');
+
+  const stars = [];
+  const shootingStars = [];
+  let width = 0;
+  let height = 0;
+  let parallaxX = 0;
+  let parallaxY = 0;
+  let nebulaTime = 0;
+
+  const random = (() => {
+    let seed = (Date.now() % 100000) + Math.random() * 1000;
+    return () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+  })();
+
+  function resize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    nebulaCanvas.width = width;
+    nebulaCanvas.height = height;
+    starCanvas.width = width;
+    starCanvas.height = height;
+    shootingCanvas.width = width;
+    shootingCanvas.height = height;
+  }
+
+  function pseudoRandom(x, y) {
+    return fract(Math.sin(x * 127.1 + y * 311.7 + 0.1) * 43758.5453);
+  }
+
+  function fract(n) { return n - Math.floor(n); }
+
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function valueNoise(x, y) {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const xf = x - xi;
+    const yf = y - yi;
+    const tl = pseudoRandom(xi, yi);
+    const tr = pseudoRandom(xi + 1, yi);
+    const bl = pseudoRandom(xi, yi + 1);
+    const br = pseudoRandom(xi + 1, yi + 1);
+    const top = lerp(tl, tr, fade(xf));
+    const bottom = lerp(bl, br, fade(xf));
+    return lerp(top, bottom, fade(yf));
+  }
+
+  function fractalNoise(x, y) {
+    let value = 0;
+    let amp = 1;
+    let freq = 1;
+    for (let i = 0; i < 4; i++) {
+      value += valueNoise(x * freq, y * freq) * amp;
+      amp *= 0.6;
+      freq *= 2.1;
+    }
+    return value / 2.2;
+  }
+
+  function drawNebula(delta) {
+    nebulaTime += delta * 0.00006;
+    const img = smallCtx.createImageData(smallNebula.width, smallNebula.height);
+    const data = img.data;
+    const wobbleX = Math.sin(nebulaTime * 1.3) * 12;
+    const wobbleY = Math.cos(nebulaTime * 0.9) * 10;
+    for (let y = 0; y < smallNebula.height; y++) {
+      for (let x = 0; x < smallNebula.width; x++) {
+        const nx = (x + wobbleX) * 0.018;
+        const ny = (y + wobbleY) * 0.018;
+        const noise = fractalNoise(nx + nebulaTime, ny + nebulaTime * 0.7);
+        const wisp = fractalNoise(nx * 0.6 + 40, ny * 0.6 - 30);
+        const density = Math.max(0, Math.min(1, noise * 0.8 + wisp * 0.6));
+        const colorShift = 0.6 + fractalNoise(nx * 0.4 - 80, ny * 0.4 + 120) * 0.6;
+        const violet = [138, 92, 255];
+        const magenta = [239, 120, 190];
+        const teal = [96, 203, 255];
+        const blend = (a, b, t) => a + (b - a) * t;
+        const r = blend(violet[0], magenta[0], colorShift * 0.6) + blend(teal[0], magenta[0], density * 0.35);
+        const g = blend(violet[1], magenta[1], colorShift * 0.7) + blend(teal[1], magenta[1], density * 0.25);
+        const b = blend(violet[2], teal[2], colorShift * 0.8) + blend(teal[2], 220, density * 0.2);
+        const alpha = Math.pow(density, 1.45) * 175;
+        const idx = (y * smallNebula.width + x) * 4;
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
+        data[idx + 3] = Math.min(240, alpha);
+      }
+    }
+    smallCtx.putImageData(img, 0, 0);
+    nebulaCtx.clearRect(0, 0, width, height);
+    nebulaCtx.globalAlpha = 0.95;
+    nebulaCtx.drawImage(smallNebula, -width * 0.05 + parallaxX * 18, -height * 0.05 + parallaxY * 18, width * 1.1, height * 1.1);
+  }
+
+  function initStars() {
+    const count = Math.min(520, Math.floor((width * height) / 4500));
+    stars.length = 0;
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: random() * width,
+        y: random() * height,
+        r: random() * 1.4 + 0.4,
+        twinkle: random() * Math.PI * 2,
+        speed: random() * 0.06 + 0.02,
+        hue: 190 + random() * 120,
+      });
+    }
+  }
+
+  function drawStars(delta) {
+    starCtx.clearRect(0, 0, width, height);
+    stars.forEach((star) => {
+      star.twinkle += delta * 0.002 * star.speed;
+      const pulse = 0.6 + Math.sin(star.twinkle) * 0.35;
+      const gradient = starCtx.createRadialGradient(
+        star.x + parallaxX * 8,
+        star.y + parallaxY * 8,
+        0,
+        star.x + parallaxX * 8,
+        star.y + parallaxY * 8,
+        star.r * 6
+      );
+      const hueStop = 'hsla(' + star.hue + ', 75%, 80%, ' + (0.75 * pulse) + ')';
+      gradient.addColorStop(0, hueStop);
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      starCtx.fillStyle = gradient;
+      starCtx.beginPath();
+      starCtx.arc(star.x + parallaxX * 8, star.y + parallaxY * 8, star.r * (1.4 + pulse * 0.4), 0, Math.PI * 2);
+      starCtx.fill();
+    });
+  }
+
+  function spawnShootingStar() {
+    const direction = random() > 0.5 ? 1 : -1;
+    const startX = direction > 0 ? -80 : width + 80;
+    const startY = random() * height * 0.7 + height * 0.1;
+    const speed = random() * 0.6 + 0.75;
+    shootingStars.push({
+      x: startX,
+      y: startY,
+      vx: (2.6 + random() * 1.4) * direction,
+      vy: -0.6 - random() * 0.6,
+      life: 0,
+      maxLife: 120 + random() * 50,
+      speed,
+    });
+  }
+
+  function drawShooting(delta) {
+    shootingCtx.clearRect(0, 0, width, height);
+    if (random() > 0.992 && shootingStars.length < 3) {
+      spawnShootingStar();
+    }
+    shootingStars.forEach((star, idx) => {
+      star.life += delta * star.speed;
+      star.x += star.vx * (delta * 0.06);
+      star.y += star.vy * (delta * 0.06);
+      const progress = star.life / star.maxLife;
+      const alpha = Math.max(0, 1 - progress);
+      const length = 140 * (1 - progress * 0.45);
+      const endX = star.x - star.vx * length;
+      const endY = star.y - star.vy * length * 0.35;
+      const gradient = shootingCtx.createLinearGradient(star.x, star.y, endX, endY);
+      gradient.addColorStop(0, 'rgba(255,255,255,' + (0.9 * alpha) + ')');
+      gradient.addColorStop(1, 'rgba(99,102,241,0)');
+      shootingCtx.strokeStyle = gradient;
+      shootingCtx.lineWidth = 2.2;
+      shootingCtx.beginPath();
+      shootingCtx.moveTo(star.x + parallaxX * 10, star.y + parallaxY * 10);
+      shootingCtx.lineTo(endX + parallaxX * 10, endY + parallaxY * 10);
+      shootingCtx.stroke();
+      if (progress >= 1 || star.y < -120 || star.x < -200 || star.x > width + 200) {
+        shootingStars.splice(idx, 1);
+      }
+    });
+  }
+
+  let lastTime = performance.now();
+  function animate(now) {
+    const delta = Math.min(50, now - lastTime);
+    lastTime = now;
+    drawNebula(delta);
+    drawStars(delta);
+    drawShooting(delta);
+    requestAnimationFrame(animate);
+  }
+
+  function handleParallax(event) {
+    const strength = 0.012;
+    const x = typeof event.clientX === 'number' ? event.clientX : width / 2;
+    const y = typeof event.clientY === 'number' ? event.clientY : height / 2;
+    parallaxX = (x / width - 0.5) * strength * width;
+    parallaxY = (y / height - 0.5) * strength * height;
+    scene.style.transform = 'translate3d(' + (parallaxX * -0.02) + 'px, ' + (parallaxY * -0.02) + 'px, 0)';
+  }
+
+  window.addEventListener('resize', () => {
+    resize();
+    initStars();
+  });
+  window.addEventListener('mousemove', handleParallax);
+  window.addEventListener('deviceorientation', (event) => {
+    if (typeof event.beta === 'number' && typeof event.gamma === 'number') {
+      parallaxX = (event.gamma / 45) * width * 0.01;
+      parallaxY = (event.beta / 45) * height * 0.01;
+      scene.style.transform = 'translate3d(' + (parallaxX * -0.02) + 'px, ' + (parallaxY * -0.02) + 'px, 0)';
+    }
+  });
+
+  resize();
+  initStars();
+  requestAnimationFrame(animate);
+};
+
+if (document.readyState === 'loading') {
+  const onReady = () => {
+    document.removeEventListener('DOMContentLoaded', onReady);
+    initSpaceScene();
+  };
+  document.addEventListener('DOMContentLoaded', onReady);
+  window.addEventListener('load', initSpaceScene, { once: true });
+} else {
+  initSpaceScene();
+}
+})();`;
 
 // ----- DB (MariaDB for pending verifications) -----
 // All TrinityCore-related databases (auth + characters) share the same default
@@ -1040,32 +1344,12 @@ const HOME_PAGE = () => `<!doctype html>
   <script src="/client.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.45;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.05); }
-      50% { transform: rotate(180deg) scale(1.15); }
-      100% { transform: rotate(360deg) scale(1.05); }
-    }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
@@ -1223,28 +1507,6 @@ const LOGIN_PAGE = () => `<!doctype html>
   <script src="/login.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
     @keyframes blink-signal {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.35; }
@@ -1254,10 +1516,12 @@ const LOGIN_PAGE = () => `<!doctype html>
       color: #c084fc;
       text-shadow: 0 0 12px rgba(192, 132, 252, 0.55);
     }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
@@ -1495,32 +1759,12 @@ const ACCOUNT_PAGE = () => `<!doctype html>
   <script src="/account.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-6xl relative z-10">
     <div class="bg-gray-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
@@ -5082,32 +5326,12 @@ const RESET_PAGE = () => `<!doctype html>
   <script src="/reset.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
@@ -5291,32 +5515,12 @@ const CHARACTERS_PAGE = () => `<!doctype html>
   <script src="/characters.js" defer></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${CONFIG.CORNER_LOGO}</div>
   <div class="w-full max-w-4xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl gradient-border overflow-hidden">
@@ -10659,32 +10863,12 @@ function VERIFY_PAGE({ state, title, message, steps, successSteps, successFooter
   <title>${CONFIG.HEADER_TITLE} — Verification</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body {
-      background:
-        radial-gradient(circle at 20% 20%, rgba(88, 28, 135, 0.35), rgba(0, 0, 0, 0)),
-        linear-gradient(160deg, #010101 0%, #04000f 45%, #160027 100%);
-      background-color: #010005;
-    }
-    .aurora::before {
-      content: "";
-      position: fixed;
-      inset: -30%;
-      background: conic-gradient(from 90deg at 50% 50%, rgba(99, 102, 241, 0.35), rgba(14, 165, 233, 0.2), rgba(236, 72, 153, 0.25), rgba(99, 102, 241, 0.35));
-      filter: blur(120px);
-      opacity: 0.4;
-      animation: aurora-shift 24s linear infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes aurora-shift {
-      0% { transform: rotate(0deg) scale(1.1); }
-      50% { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1.1); }
-    }
+${SPACE_BACKGROUND_STYLES}
 ${SHARED_STYLES}
   </style>
+  <script>${SPACE_BACKGROUND_SCRIPT}</script>
 </head>
-<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 aurora relative overflow-x-hidden">
+<body class="corner-logo-offset min-h-screen text-gray-100 flex items-center justify-center p-6 has-space-bg relative overflow-x-hidden">
   <div class="corner-logo text-2xl sm:text-3xl font-semibold tracking-[0.3em] text-indigo-300 drop-shadow-lg uppercase">${cornerLogo}</div>
   <div class="w-full max-w-xl relative z-10">
     <div class="bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border ${tone.border} overflow-hidden">
