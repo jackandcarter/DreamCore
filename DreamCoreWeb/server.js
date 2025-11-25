@@ -2352,6 +2352,7 @@ ${weaponSocketInputsHtml}
                   </form>
                 </div>
               </div>
+              </div>
               <div id="gmArmoryPanel" data-sub-tab-panel class="space-y-5 hidden">
                 <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4" id="armorSearchCard">
                   <div class="flex items-center justify-between gap-3">
@@ -2464,7 +2465,7 @@ ${weaponSocketInputsHtml}
                     <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
                       <div class="flex items-center justify-between">
                         <h4 class="text-sm font-semibold text-white">Primary stats</h4>
-                        <span class="text-[11px] uppercase tracking-[0.3em] text-indigo-200/70">Up to 5</span>
+                        <span class="text-[11px] uppercase tracking-[0.3em] text-indigo-200/70">Up to 10</span>
                       </div>
                       <div class="grid gap-3 md:grid-cols-2">
                         <div>
@@ -2506,6 +2507,110 @@ ${weaponSocketInputsHtml}
                         <div>
                           <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value5">Stat 5 value</label>
                           <input id="armorField_stat_value5" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type6">Stat 6 type</label>
+                          <input id="armorField_stat_type6" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value6">Stat 6 value</label>
+                          <input id="armorField_stat_value6" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type7">Stat 7 type</label>
+                          <input id="armorField_stat_type7" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value7">Stat 7 value</label>
+                          <input id="armorField_stat_value7" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type8">Stat 8 type</label>
+                          <input id="armorField_stat_type8" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value8">Stat 8 value</label>
+                          <input id="armorField_stat_value8" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type9">Stat 9 type</label>
+                          <input id="armorField_stat_type9" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value9">Stat 9 value</label>
+                          <input id="armorField_stat_value9" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_type10">Stat 10 type</label>
+                          <input id="armorField_stat_type10" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_stat_value10">Stat 10 value</label>
+                          <input id="armorField_stat_value10" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+                      <div class="grid gap-4 md:grid-cols-4">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_BuyCount">Buy count</label>
+                          <input id="armorField_BuyCount" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="1" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_BuyPrice">Buy price</label>
+                          <input id="armorField_BuyPrice" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_SellPrice">Sell price</label>
+                          <input id="armorField_SellPrice" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_MaxDurability">Max durability</label>
+                          <input id="armorField_MaxDurability" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-3">
+                      <div class="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_block">Block value</label>
+                          <input id="armorField_block" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_displayid">Display ID</label>
+                          <input id="armorField_displayid" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_GemProperties">Gem properties</label>
+                          <input id="armorField_GemProperties" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                      </div>
+                      <div class="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_holy_res">Holy res</label>
+                          <input id="armorField_holy_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_fire_res">Fire res</label>
+                          <input id="armorField_fire_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_nature_res">Nature res</label>
+                          <input id="armorField_nature_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_frost_res">Frost res</label>
+                          <input id="armorField_frost_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_shadow_res">Shadow res</label>
+                          <input id="armorField_shadow_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200" for="armorField_arcane_res">Arcane res</label>
+                          <input id="armorField_arcane_res" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
                         </div>
                       </div>
                     </section>
@@ -2868,12 +2973,25 @@ const accountScript = () => {
     'ItemLevel',
     'RequiredLevel',
     'StatsCount',
+    'BuyCount',
+    'BuyPrice',
+    'SellPrice',
+    'MaxDurability',
+    'block',
+    'displayid',
+    'GemProperties',
+    'holy_res',
+    'fire_res',
+    'nature_res',
+    'frost_res',
+    'shadow_res',
+    'arcane_res',
     'socketColor_1',
     'socketColor_2',
     'socketColor_3',
     'socketBonus',
   ];
-  for (let i = 1; i <= 5; i += 1) {
+  for (let i = 1; i <= 10; i += 1) {
     armorFieldNames.push(`stat_type${i}`);
     armorFieldNames.push(`stat_value${i}`);
   }
@@ -5788,6 +5906,18 @@ function ensureClassicArmorCloneValid(item) {
       throw new PortalHttpError(`Invalid value for ${field}.`, 400);
     }
   }
+  for (const [field, bounds] of Object.entries(CLASSIC_WEAPON_FIELD_BOUNDS)) {
+    const value = toSafeNumber(item[field]);
+    if (value == null) {
+      continue;
+    }
+    if (bounds.min != null && value < bounds.min) {
+      throw new PortalHttpError(`${field} must be at least ${bounds.min}.`, 400);
+    }
+    if (bounds.max != null && value > bounds.max) {
+      throw new PortalHttpError(`${field} must be <= ${bounds.max}.`, 400);
+    }
+  }
   const statsCount = toSafeNumber(item.StatsCount) ?? 0;
   if (statsCount < 0 || statsCount > 10) {
     throw new PortalHttpError('StatsCount must be between 0 and 10.', 400);
@@ -5797,6 +5927,11 @@ function ensureClassicArmorCloneValid(item) {
     if (statValue != null && Math.abs(statValue) > CLASSIC_WEAPON_STAT_ABS_MAX) {
       throw new PortalHttpError(`stat_value${i} is out of range.`, 400);
     }
+  }
+  const minMoney = toSafeNumber(item.minMoneyLoot) ?? 0;
+  const maxMoney = toSafeNumber(item.maxMoneyLoot) ?? 0;
+  if (maxMoney < minMoney) {
+    throw new PortalHttpError('maxMoneyLoot must be greater than or equal to minMoneyLoot.', 400);
   }
 }
 
