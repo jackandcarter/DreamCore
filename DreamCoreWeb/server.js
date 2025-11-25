@@ -163,7 +163,7 @@ const DEFAULT_APPEARANCE = Object.freeze({
   },
   ui: {
     gradientFrom: '#6b46c1',
-    gradientVia: '#ec4899',
+    gradientVia: '#38bdf8',
     gradientTo: '#22d3ee',
     inactiveBg: '#0f172a',
     inactiveText: '#cbd5f5',
@@ -347,8 +347,35 @@ const SPACE_BACKGROUND_STYLES = `
 `;
 
 const SPACE_BACKGROUND_SCRIPT = `(() => {
+  const defaultAppearance = ${JSON.stringify(DEFAULT_APPEARANCE)};
+  let appearance = JSON.parse(JSON.stringify(defaultAppearance));
+  let nebulaPalette = buildPalette(appearance.nebula.colors);
+  let applyAppearanceRef = null;
+  let pendingAppearance = null;
+
+  function hexToRgb(hex, fallback) {
+    if (typeof hex !== 'string') return fallback;
+    const normalized = hex.trim();
+    const match = normalized.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return fallback;
+    const value = match[1].length === 3
+      ? match[1].split('').map((c) => parseInt(c + c, 16))
+      : [
+          parseInt(match[1].slice(0, 2), 16),
+          parseInt(match[1].slice(2, 4), 16),
+          parseInt(match[1].slice(4, 6), 16),
+        ];
+    return value.every((n) => Number.isFinite(n)) ? value : fallback;
+  }
+
+  function buildPalette(colors) {
+    const fallback = [196, 132, 252];
+    return (Array.isArray(colors) ? colors : []).slice(0, 6).map((color) => hexToRgb(color, fallback));
+  }
+
   const initSpaceScene = () => {
-    if (document.getElementById('space-scene')) return;
+    const existingScene = document.getElementById('space-scene');
+    if (existingScene) return;
     const body = document.body;
     if (!body) {
       requestAnimationFrame(initSpaceScene);
@@ -372,319 +399,315 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
     scene.append(nebulaCanvas, starCanvas, shootingCanvas, glowLayer);
     body.prepend(scene);
 
-  const nebulaCtx = nebulaCanvas.getContext('2d');
-  const starCtx = starCanvas.getContext('2d');
-  const shootingCtx = shootingCanvas.getContext('2d');
-  const smallNebula = document.createElement('canvas');
-  smallNebula.width = 340;
-  smallNebula.height = 220;
-  const smallCtx = smallNebula.getContext('2d');
+    const nebulaCtx = nebulaCanvas.getContext('2d');
+    const starCtx = starCanvas.getContext('2d');
+    const shootingCtx = shootingCanvas.getContext('2d');
+    const smallNebula = document.createElement('canvas');
+    smallNebula.width = 340;
+    smallNebula.height = 220;
+    const smallCtx = smallNebula.getContext('2d');
 
-  const defaultAppearance = ${JSON.stringify(DEFAULT_APPEARANCE)};
-  let appearance = JSON.parse(JSON.stringify(defaultAppearance));
-  let nebulaPalette = buildPalette(appearance.nebula.colors);
-  const cursor = { x: 0, y: 0, intensity: 0 };
+    let width = 0;
+    let height = 0;
+    let parallaxX = 0;
+    let parallaxY = 0;
+    let nebulaTime = 0;
+    const stars = [];
+    const shootingStars = [];
+    const cursor = { x: 0, y: 0, intensity: 0 };
 
-  const stars = [];
-  const shootingStars = [];
-  let width = 0;
-  let height = 0;
-  let parallaxX = 0;
-  let parallaxY = 0;
-  let nebulaTime = 0;
+    const random = (() => {
+      let seed = (Date.now() % 100000) + Math.random() * 1000;
+      return () => {
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        return seed / 4294967296;
+      };
+    })();
 
-  const random = (() => {
-    let seed = (Date.now() % 100000) + Math.random() * 1000;
-    return () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
-  })();
-
-  function clamp(value, min, max) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return min;
-    return Math.min(max, Math.max(min, num));
-  }
-
-  function hexToRgb(hex, fallback) {
-    if (typeof hex !== 'string') return fallback;
-    const normalized = hex.trim();
-    const match = normalized.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
-    if (!match) return fallback;
-    const value = match[1].length === 3
-      ? match[1].split('').map((c) => parseInt(c + c, 16))
-      : [
-          parseInt(match[1].slice(0, 2), 16),
-          parseInt(match[1].slice(2, 4), 16),
-          parseInt(match[1].slice(4, 6), 16),
-        ];
-    return value.every((n) => Number.isFinite(n)) ? value : fallback;
-  }
-
-  function buildPalette(colors) {
-    const fallback = [196, 132, 252];
-    return (Array.isArray(colors) ? colors : []).slice(0, 6).map((color) => hexToRgb(color, fallback));
-  }
-
-  function applyAppearance(nextAppearance = {}) {
-    const nebula = nextAppearance?.nebula || {};
-    const currentNebula = appearance.nebula || defaultAppearance.nebula;
-    const resolvedColors = Array.isArray(nebula.colors) && nebula.colors.length
-      ? nebula.colors
-      : currentNebula.colors || defaultAppearance.nebula.colors;
-    appearance = {
-      ...appearance,
-      nebula: {
-        density: clamp(nebula.density ?? currentNebula.density ?? 1, 0.35, 1.6),
-        speed: clamp(nebula.speed ?? currentNebula.speed ?? 1, 0.5, 1.6),
-        colors: resolvedColors.slice(0, 6),
-      },
-    };
-    nebulaPalette = buildPalette(appearance.nebula.colors.length ? appearance.nebula.colors : defaultAppearance.nebula.colors);
-  }
-
-  function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    nebulaCanvas.width = width;
-    nebulaCanvas.height = height;
-    starCanvas.width = width;
-    starCanvas.height = height;
-    shootingCanvas.width = width;
-    shootingCanvas.height = height;
-  }
-
-  function pseudoRandom(x, y) {
-    return fract(Math.sin(x * 127.1 + y * 311.7 + 0.1) * 43758.5453);
-  }
-
-  function fract(n) { return n - Math.floor(n); }
-
-  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function valueNoise(x, y) {
-    const xi = Math.floor(x);
-    const yi = Math.floor(y);
-    const xf = x - xi;
-    const yf = y - yi;
-    const tl = pseudoRandom(xi, yi);
-    const tr = pseudoRandom(xi + 1, yi);
-    const bl = pseudoRandom(xi, yi + 1);
-    const br = pseudoRandom(xi + 1, yi + 1);
-    const top = lerp(tl, tr, fade(xf));
-    const bottom = lerp(bl, br, fade(xf));
-    return lerp(top, bottom, fade(yf));
-  }
-
-  function fractalNoise(x, y) {
-    let value = 0;
-    let amp = 1;
-    let freq = 1;
-    for (let i = 0; i < 4; i++) {
-      value += valueNoise(x * freq, y * freq) * amp;
-      amp *= 0.6;
-      freq *= 2.1;
+    function clamp(value, min, max) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return min;
+      return Math.min(max, Math.max(min, num));
     }
-    return value / 2.2;
-  }
 
-  function drawNebula(delta) {
-    const speed = appearance?.nebula?.speed || 1;
-    const nebulaColors = nebulaPalette.length
-      ? nebulaPalette
-      : [
-          [196, 132, 252],
-          [244, 114, 182],
-          [125, 211, 252],
-          [217, 70, 239],
-        ];
-    const primary = nebulaColors[0] || [196, 132, 252];
-    const secondary = nebulaColors[1] || primary;
-    const tertiary = nebulaColors[2] || secondary;
-    const accent = nebulaColors[3] || tertiary;
+    function applyAppearance(nextAppearance = {}) {
+      const nebula = nextAppearance?.nebula || {};
+      const currentNebula = appearance.nebula || defaultAppearance.nebula;
+      const resolvedColors = Array.isArray(nebula.colors) && nebula.colors.length
+        ? nebula.colors
+        : currentNebula.colors || defaultAppearance.nebula.colors;
+      appearance = {
+        ...appearance,
+        nebula: {
+          density: clamp(nebula.density ?? currentNebula.density ?? 1, 0.35, 1.6),
+          speed: clamp(nebula.speed ?? currentNebula.speed ?? 1, 0.5, 1.6),
+          colors: resolvedColors.slice(0, 6),
+        },
+      };
+      nebulaPalette = buildPalette(appearance.nebula.colors.length ? appearance.nebula.colors : defaultAppearance.nebula.colors);
+    }
 
-    nebulaTime += delta * 0.00006 * speed;
-    const img = smallCtx.createImageData(smallNebula.width, smallNebula.height);
-    const data = img.data;
-    const wobbleScale = 1 + (speed - 1) * 0.45;
-    const wobbleX = Math.sin(nebulaTime * 1.3) * 12 * wobbleScale;
-    const wobbleY = Math.cos(nebulaTime * 0.9) * 10 * wobbleScale;
-    for (let y = 0; y < smallNebula.height; y++) {
-      for (let x = 0; x < smallNebula.width; x++) {
-        const nx = (x + wobbleX) * 0.018;
-        const ny = (y + wobbleY) * 0.018;
-        const noise = fractalNoise(nx + nebulaTime, ny + nebulaTime * 0.7);
-        const wisp = fractalNoise(nx * 0.6 + 40, ny * 0.6 - 30);
-        const density = Math.max(
-          0,
-          Math.min(1, (noise * 0.8 + wisp * 0.6) * (appearance?.nebula?.density || 1))
-        );
-        const colorShift = 0.6 + fractalNoise(nx * 0.4 - 80, ny * 0.4 + 120) * 0.6;
-        const blend = (a, b, t) => a + (b - a) * t;
-        const r = blend(primary[0], secondary[0], colorShift * 0.6) + blend(tertiary[0], accent[0], density * 0.35);
-        const g = blend(primary[1], secondary[1], colorShift * 0.7) + blend(tertiary[1], accent[1], density * 0.25);
-        const b = blend(primary[2], tertiary[2], colorShift * 0.8) + blend(accent[2], 210, density * 0.2);
-        const alpha = Math.pow(density, 1.45) * 175;
-        const idx = (y * smallNebula.width + x) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = Math.min(240, alpha);
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      nebulaCanvas.width = width;
+      nebulaCanvas.height = height;
+      starCanvas.width = width;
+      starCanvas.height = height;
+      shootingCanvas.width = width;
+      shootingCanvas.height = height;
+    }
+
+    function pseudoRandom(x, y) {
+      return fract(Math.sin(x * 127.1 + y * 311.7 + 0.1) * 43758.5453);
+    }
+
+    function fract(n) { return n - Math.floor(n); }
+
+    function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function valueNoise(x, y) {
+      const xi = Math.floor(x);
+      const yi = Math.floor(y);
+      const xf = x - xi;
+      const yf = y - yi;
+      const tl = pseudoRandom(xi, yi);
+      const tr = pseudoRandom(xi + 1, yi);
+      const bl = pseudoRandom(xi, yi + 1);
+      const br = pseudoRandom(xi + 1, yi + 1);
+      const top = lerp(tl, tr, fade(xf));
+      const bottom = lerp(bl, br, fade(xf));
+      return lerp(top, bottom, fade(yf));
+    }
+
+    function fractalNoise(x, y) {
+      let value = 0;
+      let amp = 1;
+      let freq = 1;
+      for (let i = 0; i < 4; i++) {
+        value += valueNoise(x * freq, y * freq) * amp;
+        amp *= 0.6;
+        freq *= 2.1;
+      }
+      return value / 2.2;
+    }
+
+    function drawNebula(delta) {
+      const speed = appearance?.nebula?.speed || 1;
+      const nebulaColors = nebulaPalette.length
+        ? nebulaPalette
+        : [
+            [196, 132, 252],
+            [244, 114, 182],
+            [125, 211, 252],
+            [217, 70, 239],
+          ];
+      const primary = nebulaColors[0] || [196, 132, 252];
+      const secondary = nebulaColors[1] || primary;
+      const tertiary = nebulaColors[2] || secondary;
+      const accent = nebulaColors[3] || tertiary;
+
+      nebulaTime += delta * 0.00006 * speed;
+      const img = smallCtx.createImageData(smallNebula.width, smallNebula.height);
+      const data = img.data;
+      const wobbleScale = 1 + (speed - 1) * 0.45;
+      const wobbleX = Math.sin(nebulaTime * 1.3) * 12 * wobbleScale;
+      const wobbleY = Math.cos(nebulaTime * 0.9) * 10 * wobbleScale;
+      for (let y = 0; y < smallNebula.height; y++) {
+        for (let x = 0; x < smallNebula.width; x++) {
+          const nx = (x + wobbleX) * 0.018;
+          const ny = (y + wobbleY) * 0.018;
+          const noise = fractalNoise(nx + nebulaTime, ny + nebulaTime * 0.7);
+          const wisp = fractalNoise(nx * 0.6 + 40, ny * 0.6 - 30);
+          const density = Math.max(
+            0,
+            Math.min(1, (noise * 0.8 + wisp * 0.6) * (appearance?.nebula?.density || 1))
+          );
+          const colorShift = 0.6 + fractalNoise(nx * 0.4 - 80, ny * 0.4 + 120) * 0.6;
+          const blend = (a, b, t) => a + (b - a) * t;
+          const r = blend(primary[0], secondary[0], colorShift * 0.6) + blend(tertiary[0], accent[0], density * 0.35);
+          const g = blend(primary[1], secondary[1], colorShift * 0.7) + blend(tertiary[1], accent[1], density * 0.25);
+          const b = blend(primary[2], tertiary[2], colorShift * 0.8) + blend(accent[2], 210, density * 0.2);
+          const alpha = Math.pow(density, 1.45) * 175;
+          const idx = (y * smallNebula.width + x) * 4;
+          data[idx] = r;
+          data[idx + 1] = g;
+          data[idx + 2] = b;
+          data[idx + 3] = Math.min(240, alpha);
+        }
+      }
+      smallCtx.putImageData(img, 0, 0);
+      nebulaCtx.clearRect(0, 0, width, height);
+      nebulaCtx.globalAlpha = 0.95;
+      nebulaCtx.drawImage(smallNebula, -width * 0.05, -height * 0.05, width * 1.1, height * 1.1);
+      if (cursor.intensity > 0.02) {
+        const radius = Math.min(width, height) * 0.18;
+        const gradient = nebulaCtx.createRadialGradient(cursor.x, cursor.y, radius * 0.12, cursor.x, cursor.y, radius);
+        const glow = accent || tertiary;
+        gradient.addColorStop(0, 'rgba(' + glow[0] + ', ' + glow[1] + ', ' + glow[2] + ', 0.15)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        nebulaCtx.save();
+        nebulaCtx.globalCompositeOperation = 'screen';
+        nebulaCtx.globalAlpha = Math.min(0.35, 0.2 * cursor.intensity);
+        nebulaCtx.fillStyle = gradient;
+        nebulaCtx.fillRect(cursor.x - radius, cursor.y - radius, radius * 2, radius * 2);
+        nebulaCtx.restore();
+        cursor.intensity *= 0.94;
       }
     }
-    smallCtx.putImageData(img, 0, 0);
-    nebulaCtx.clearRect(0, 0, width, height);
-    nebulaCtx.globalAlpha = 0.95;
-    nebulaCtx.drawImage(smallNebula, -width * 0.05, -height * 0.05, width * 1.1, height * 1.1);
-    if (cursor.intensity > 0.02) {
-      const radius = Math.min(width, height) * 0.18;
-      const gradient = nebulaCtx.createRadialGradient(cursor.x, cursor.y, radius * 0.12, cursor.x, cursor.y, radius);
-      const glow = accent || tertiary;
-      gradient.addColorStop(0, 'rgba(' + glow[0] + ', ' + glow[1] + ', ' + glow[2] + ', 0.15)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0)');
-      nebulaCtx.save();
-      nebulaCtx.globalCompositeOperation = 'screen';
-      nebulaCtx.globalAlpha = Math.min(0.35, 0.2 * cursor.intensity);
-      nebulaCtx.fillStyle = gradient;
-      nebulaCtx.fillRect(cursor.x - radius, cursor.y - radius, radius * 2, radius * 2);
-      nebulaCtx.restore();
-      cursor.intensity *= 0.94;
-    }
-  }
 
-  function initStars() {
-    const count = Math.min(520, Math.floor((width * height) / 4500));
-    stars.length = 0;
-    for (let i = 0; i < count; i++) {
-      stars.push({
-        x: random() * width,
-        y: random() * height,
-        r: random() * 1.4 + 0.4,
-        twinkle: random() * Math.PI * 2,
-        speed: random() * 0.06 + 0.02,
-        hue: 190 + random() * 120,
+    function initStars() {
+      const count = Math.min(520, Math.floor((width * height) / 4500));
+      stars.length = 0;
+      for (let i = 0; i < count; i++) {
+        stars.push({
+          x: random() * width,
+          y: random() * height,
+          r: random() * 1.4 + 0.4,
+          twinkle: random() * Math.PI * 2,
+          speed: random() * 0.06 + 0.02,
+          hue: 190 + random() * 120,
+        });
+      }
+    }
+
+    function drawStars(delta) {
+      starCtx.clearRect(0, 0, width, height);
+      stars.forEach((star) => {
+        star.twinkle += delta * 0.002 * star.speed;
+        const pulse = 0.6 + Math.sin(star.twinkle) * 0.35;
+        const gradient = starCtx.createRadialGradient(
+          star.x + parallaxX * 8,
+          star.y + parallaxY * 8,
+          0,
+          star.x + parallaxX * 8,
+          star.y + parallaxY * 8,
+          star.r * 6
+        );
+        const hueStop = 'hsla(' + star.hue + ', 75%, 80%, ' + (0.75 * pulse) + ')';
+        gradient.addColorStop(0, hueStop);
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        starCtx.fillStyle = gradient;
+        starCtx.beginPath();
+        starCtx.arc(star.x + parallaxX * 8, star.y + parallaxY * 8, star.r * (1.4 + pulse * 0.4), 0, Math.PI * 2);
+        starCtx.fill();
       });
     }
-  }
 
-  function drawStars(delta) {
-    starCtx.clearRect(0, 0, width, height);
-    stars.forEach((star) => {
-      star.twinkle += delta * 0.002 * star.speed;
-      const pulse = 0.6 + Math.sin(star.twinkle) * 0.35;
-      const gradient = starCtx.createRadialGradient(
-        star.x + parallaxX * 8,
-        star.y + parallaxY * 8,
-        0,
-        star.x + parallaxX * 8,
-        star.y + parallaxY * 8,
-        star.r * 6
-      );
-      const hueStop = 'hsla(' + star.hue + ', 75%, 80%, ' + (0.75 * pulse) + ')';
-      gradient.addColorStop(0, hueStop);
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      starCtx.fillStyle = gradient;
-      starCtx.beginPath();
-      starCtx.arc(star.x + parallaxX * 8, star.y + parallaxY * 8, star.r * (1.4 + pulse * 0.4), 0, Math.PI * 2);
-      starCtx.fill();
-    });
-  }
-
-  function spawnShootingStar() {
-    const direction = random() > 0.5 ? 1 : -1;
-    const startX = direction > 0 ? -80 : width + 80;
-    const startY = random() * height * 0.7 + height * 0.1;
-    const speed = random() * 0.6 + 0.75;
-    shootingStars.push({
-      x: startX,
-      y: startY,
-      vx: (2.6 + random() * 1.4) * direction,
-      vy: -0.6 - random() * 0.6,
-      life: 0,
-      maxLife: 120 + random() * 50,
-      speed,
-    });
-  }
-
-  function drawShooting(delta) {
-    shootingCtx.clearRect(0, 0, width, height);
-    if (random() > 0.992 && shootingStars.length < 3) {
-      spawnShootingStar();
+    function spawnShootingStar() {
+      const direction = random() > 0.5 ? 1 : -1;
+      const startX = direction > 0 ? -80 : width + 80;
+      const startY = random() * height * 0.7 + height * 0.1;
+      const speed = random() * 0.6 + 0.75;
+      shootingStars.push({
+        x: startX,
+        y: startY,
+        vx: (2.6 + random() * 1.4) * direction,
+        vy: -0.6 - random() * 0.6,
+        life: 0,
+        maxLife: 120 + random() * 50,
+        speed,
+      });
     }
-    shootingStars.forEach((star, idx) => {
-      star.life += delta * star.speed;
-      star.x += star.vx * (delta * 0.06);
-      star.y += star.vy * (delta * 0.06);
-      const progress = star.life / star.maxLife;
-      const alpha = Math.max(0, 1 - progress);
-      const length = 140 * (1 - progress * 0.45);
-      const endX = star.x - star.vx * length;
-      const endY = star.y - star.vy * length * 0.35;
-      const gradient = shootingCtx.createLinearGradient(star.x, star.y, endX, endY);
-      gradient.addColorStop(0, 'rgba(255,255,255,' + (0.9 * alpha) + ')');
-      gradient.addColorStop(1, 'rgba(99,102,241,0)');
-      shootingCtx.strokeStyle = gradient;
-      shootingCtx.lineWidth = 2.2;
-      shootingCtx.beginPath();
-      shootingCtx.moveTo(star.x + parallaxX * 10, star.y + parallaxY * 10);
-      shootingCtx.lineTo(endX + parallaxX * 10, endY + parallaxY * 10);
-      shootingCtx.stroke();
-      if (progress >= 1 || star.y < -120 || star.x < -200 || star.x > width + 200) {
-        shootingStars.splice(idx, 1);
+
+    function drawShooting(delta) {
+      shootingCtx.clearRect(0, 0, width, height);
+      if (random() > 0.992 && shootingStars.length < 3) {
+        spawnShootingStar();
       }
+      shootingStars.forEach((star, idx) => {
+        star.life += delta * star.speed;
+        star.x += star.vx * (delta * 0.06);
+        star.y += star.vy * (delta * 0.06);
+        if (star.life > star.maxLife || star.y < -120 || star.x < -120 || star.x > width + 120) {
+          shootingStars.splice(idx, 1);
+          return;
+        }
+        const gradient = shootingCtx.createLinearGradient(
+          star.x,
+          star.y,
+          star.x - star.vx * 8,
+          star.y - star.vy * 8
+        );
+        gradient.addColorStop(0, 'rgba(226, 232, 240, 0.95)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+        shootingCtx.beginPath();
+        shootingCtx.strokeStyle = gradient;
+        shootingCtx.lineWidth = 2.4;
+        shootingCtx.moveTo(star.x + parallaxX * 12, star.y + parallaxY * 12);
+        shootingCtx.lineTo(star.x - star.vx * 9 + parallaxX * 12, star.y - star.vy * 9 + parallaxY * 12);
+        shootingCtx.stroke();
+      });
+    }
+
+    let lastTime = performance.now();
+    function animate(now) {
+      const delta = Math.min(50, now - lastTime);
+      lastTime = now;
+      drawNebula(delta);
+      drawStars(delta);
+      drawShooting(delta);
+      requestAnimationFrame(animate);
+    }
+
+    function handlePointerMove(event) {
+      cursor.x = typeof event.clientX === 'number' ? event.clientX : width / 2;
+      cursor.y = typeof event.clientY === 'number' ? event.clientY : height / 2;
+      cursor.intensity = 1;
+    }
+
+    window.addEventListener('resize', () => {
+      resize();
+      initStars();
     });
-  }
+    window.addEventListener('mousemove', handlePointerMove, { passive: true });
 
-  let lastTime = performance.now();
-  function animate(now) {
-    const delta = Math.min(50, now - lastTime);
-    lastTime = now;
-    drawNebula(delta);
-    drawStars(delta);
-    drawShooting(delta);
-    requestAnimationFrame(animate);
-  }
+    applyAppearanceRef = applyAppearance;
+    if (pendingAppearance) {
+      applyAppearanceRef(pendingAppearance);
+      pendingAppearance = null;
+    }
 
-  function handlePointerMove(event) {
-    cursor.x = typeof event.clientX === 'number' ? event.clientX : width / 2;
-    cursor.y = typeof event.clientY === 'number' ? event.clientY : height / 2;
-    cursor.intensity = 1;
-  }
-
-  window.addEventListener('resize', () => {
     resize();
     initStars();
-  });
-  window.addEventListener('mousemove', handlePointerMove, { passive: true });
-
-  resize();
-  initStars();
-  requestAnimationFrame(animate);
-};
-
-window.SpaceSceneController = {
-  applyAppearance(nextAppearance) {
-    if (nextAppearance && typeof nextAppearance === 'object') {
-      applyAppearance(nextAppearance);
-    }
-  },
-  defaults: defaultAppearance,
-};
-
-if (document.readyState === 'loading') {
-  const onReady = () => {
-    document.removeEventListener('DOMContentLoaded', onReady);
-    initSpaceScene();
+    requestAnimationFrame(animate);
   };
-  document.addEventListener('DOMContentLoaded', onReady);
-  window.addEventListener('load', initSpaceScene, { once: true });
-} else {
-  initSpaceScene();
-}
+
+  const ensureScene = () => {
+    const scene = document.getElementById('space-scene');
+    if (!scene || !scene.querySelector('.space-nebula') || !scene.querySelector('.space-starfield')) {
+      scene?.remove();
+      initSpaceScene();
+    }
+  };
+
+  window.SpaceSceneController = {
+    applyAppearance(nextAppearance) {
+      if (typeof applyAppearanceRef === 'function') {
+        applyAppearanceRef(nextAppearance);
+      } else if (nextAppearance && typeof nextAppearance === 'object') {
+        pendingAppearance = nextAppearance;
+      }
+    },
+    defaults: defaultAppearance,
+    ensureScene,
+  };
+
+  if (document.readyState === 'loading') {
+    const onReady = () => {
+      document.removeEventListener('DOMContentLoaded', onReady);
+      initSpaceScene();
+    };
+    document.addEventListener('DOMContentLoaded', onReady);
+    window.addEventListener('load', initSpaceScene, { once: true });
+  } else {
+    initSpaceScene();
+  }
 })();`;
+
+
 
 // ----- DB (MariaDB for pending verifications) -----
 // All TrinityCore-related databases (auth + characters) share the same default
@@ -3272,7 +3295,7 @@ const accountScript = () => {
     nebula: { density: 0.9, speed: 1, colors: ['#c084fc', '#f472b6', '#7dd3fc', '#d946ef'] },
     ui: {
       gradientFrom: '#6b46c1',
-      gradientVia: '#ec4899',
+      gradientVia: '#38bdf8',
       gradientTo: '#22d3ee',
       inactiveBg: '#0f172a',
       inactiveText: '#cbd5f5',
@@ -3790,6 +3813,9 @@ const accountScript = () => {
     appearanceSettings = normalizeAppearanceClient(nextSettings || appearanceSettings);
     const root = document.documentElement;
     const ui = appearanceSettings.ui;
+    if (window.SpaceSceneController?.ensureScene) {
+      window.SpaceSceneController.ensureScene();
+    }
     root.style.setProperty('--dc-accent-from', ui.gradientFrom);
     root.style.setProperty('--dc-accent-via', ui.gradientVia);
     root.style.setProperty('--dc-accent-to', ui.gradientTo);
