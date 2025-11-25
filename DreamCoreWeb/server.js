@@ -2352,6 +2352,7 @@ ${weaponSocketInputsHtml}
                   </form>
                 </div>
               </div>
+              </div>
               <div id="gmArmoryPanel" data-sub-tab-panel class="space-y-5 hidden">
                 <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4" id="armorSearchCard">
                   <div class="flex items-center justify-between gap-3">
