@@ -4524,17 +4524,21 @@ const accountScript = () => {
 
   function updateGmAccessUI() {
     const portalSessionFlag = Boolean(currentSession?.portalIsGm);
-    const hasGm = portalSessionFlag;
+    const gmToolkitVisible = gmTabButton ? !gmTabButton.classList.contains('hidden') : false;
+    const hasGm = portalSessionFlag || gmToolkitVisible;
 
     // Once the GM tab is visible we treat all GM toolkit subtabs as accessible. The
     // backend still enforces GM permissions on SOAP endpoints, so the UI should not
     // gate subpanels a second time and risk false negatives when the initial check
-    // already allowed GM access.
+    // already allowed GM access. If the GM tab is already rendered (e.g. from a prior
+    // session), keep the subtabs enabled so the Armory and other tools always render
+    // when clicked.
     gmRetailAccessible = hasGm;
     gmClassicAccessible = hasGm;
     gmArmoryDebug('GM access computed', {
       gmClassicAccessible,
       gmRetailAccessible,
+      gmToolkitVisible,
       portalSessionFlag,
     });
     const realms = [];
