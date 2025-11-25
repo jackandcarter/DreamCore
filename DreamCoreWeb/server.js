@@ -155,9 +155,35 @@ const CLASSIC_SOAP = makeSoapConfig({
 
 const RESET_TOKEN_TTL_MS = CONFIG.RESET_TOKEN_TTL_MIN * 60 * 1000;
 
+const DEFAULT_APPEARANCE = Object.freeze({
+  nebula: {
+    density: 0.9,
+    speed: 1,
+    colors: ['#c084fc', '#f472b6', '#7dd3fc', '#d946ef'],
+  },
+  ui: {
+    gradientFrom: '#6b46c1',
+    gradientVia: '#ec4899',
+    gradientTo: '#22d3ee',
+    inactiveBg: '#0f172a',
+    inactiveText: '#cbd5f5',
+    inactiveBorder: '#334155',
+    surfaceOpacity: 0.7,
+    textColor: '#e2e8f0',
+  },
+});
+
 const SHARED_STYLES = `
     :root {
       --dc-border-gradient: linear-gradient(120deg, #a855f7, #6366f1, #0ea5e9);
+      --dc-accent-from: ${DEFAULT_APPEARANCE.ui.gradientFrom};
+      --dc-accent-via: ${DEFAULT_APPEARANCE.ui.gradientVia};
+      --dc-accent-to: ${DEFAULT_APPEARANCE.ui.gradientTo};
+      --dc-tab-muted-bg: ${DEFAULT_APPEARANCE.ui.inactiveBg};
+      --dc-tab-muted-text: ${DEFAULT_APPEARANCE.ui.inactiveText};
+      --dc-tab-muted-border: ${DEFAULT_APPEARANCE.ui.inactiveBorder};
+      --dc-surface-opacity: ${DEFAULT_APPEARANCE.ui.surfaceOpacity};
+      --dc-text-color: ${DEFAULT_APPEARANCE.ui.textColor};
     }
     h1, h2, h3, h4, label {
       text-shadow: 0 12px 32px rgba(8, 7, 27, 0.55), 0 0 20px rgba(99, 102, 241, 0.4);
@@ -198,6 +224,26 @@ const SHARED_STYLES = `
       box-shadow: 0 12px 28px rgba(14, 165, 233, 0.35);
       border-radius: 999px;
     }
+    [data-tab-target] {
+      background-color: var(--dc-tab-muted-bg);
+      color: var(--dc-tab-muted-text);
+      border-color: var(--dc-tab-muted-border);
+      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    [data-tab-target].is-active {
+      background-image: linear-gradient(120deg, var(--dc-accent-from), var(--dc-accent-via), var(--dc-accent-to));
+      color: #0f172a;
+      border-color: transparent;
+      box-shadow: 0 12px 30px rgba(99, 102, 241, 0.35);
+    }
+    .themed-panel {
+      background-color: rgba(15, 23, 42, var(--dc-surface-opacity));
+      color: var(--dc-text-color);
+    }
+    .themed-border {
+      border-color: color-mix(in srgb, var(--dc-tab-muted-text) 25%, transparent);
+    }
+    .themed-text { color: var(--dc-text-color); }
     .glow-input {
       background: rgba(255, 255, 255, 0.97);
       color: #0f172a;
@@ -334,6 +380,11 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
   smallNebula.height = 220;
   const smallCtx = smallNebula.getContext('2d');
 
+  const defaultAppearance = ${JSON.stringify(DEFAULT_APPEARANCE)};
+  let appearance = JSON.parse(JSON.stringify(defaultAppearance));
+  let nebulaPalette = buildPalette(appearance.nebula.colors);
+  const cursor = { x: 0, y: 0, intensity: 0 };
+
   const stars = [];
   const shootingStars = [];
   let width = 0;
@@ -349,6 +400,49 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
       return seed / 4294967296;
     };
   })();
+
+  function clamp(value, min, max) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return min;
+    return Math.min(max, Math.max(min, num));
+  }
+
+  function hexToRgb(hex, fallback) {
+    if (typeof hex !== 'string') return fallback;
+    const normalized = hex.trim();
+    const match = normalized.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return fallback;
+    const value = match[1].length === 3
+      ? match[1].split('').map((c) => parseInt(c + c, 16))
+      : [
+          parseInt(match[1].slice(0, 2), 16),
+          parseInt(match[1].slice(2, 4), 16),
+          parseInt(match[1].slice(4, 6), 16),
+        ];
+    return value.every((n) => Number.isFinite(n)) ? value : fallback;
+  }
+
+  function buildPalette(colors) {
+    const fallback = [196, 132, 252];
+    return (Array.isArray(colors) ? colors : []).slice(0, 6).map((color) => hexToRgb(color, fallback));
+  }
+
+  function applyAppearance(nextAppearance = {}) {
+    const nebula = nextAppearance?.nebula || {};
+    const currentNebula = appearance.nebula || defaultAppearance.nebula;
+    const resolvedColors = Array.isArray(nebula.colors) && nebula.colors.length
+      ? nebula.colors
+      : currentNebula.colors || defaultAppearance.nebula.colors;
+    appearance = {
+      ...appearance,
+      nebula: {
+        density: clamp(nebula.density ?? currentNebula.density ?? 1, 0.35, 1.6),
+        speed: clamp(nebula.speed ?? currentNebula.speed ?? 1, 0.5, 1.6),
+        colors: resolvedColors.slice(0, 6),
+      },
+    };
+    nebulaPalette = buildPalette(appearance.nebula.colors.length ? appearance.nebula.colors : defaultAppearance.nebula.colors);
+  }
 
   function resize() {
     width = window.innerWidth;
@@ -398,26 +492,41 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
   }
 
   function drawNebula(delta) {
-    nebulaTime += delta * 0.00006;
+    const speed = appearance?.nebula?.speed || 1;
+    const nebulaColors = nebulaPalette.length
+      ? nebulaPalette
+      : [
+          [196, 132, 252],
+          [244, 114, 182],
+          [125, 211, 252],
+          [217, 70, 239],
+        ];
+    const primary = nebulaColors[0] || [196, 132, 252];
+    const secondary = nebulaColors[1] || primary;
+    const tertiary = nebulaColors[2] || secondary;
+    const accent = nebulaColors[3] || tertiary;
+
+    nebulaTime += delta * 0.00006 * speed;
     const img = smallCtx.createImageData(smallNebula.width, smallNebula.height);
     const data = img.data;
-    const wobbleX = Math.sin(nebulaTime * 1.3) * 12;
-    const wobbleY = Math.cos(nebulaTime * 0.9) * 10;
+    const wobbleScale = 1 + (speed - 1) * 0.45;
+    const wobbleX = Math.sin(nebulaTime * 1.3) * 12 * wobbleScale;
+    const wobbleY = Math.cos(nebulaTime * 0.9) * 10 * wobbleScale;
     for (let y = 0; y < smallNebula.height; y++) {
       for (let x = 0; x < smallNebula.width; x++) {
         const nx = (x + wobbleX) * 0.018;
         const ny = (y + wobbleY) * 0.018;
         const noise = fractalNoise(nx + nebulaTime, ny + nebulaTime * 0.7);
         const wisp = fractalNoise(nx * 0.6 + 40, ny * 0.6 - 30);
-        const density = Math.max(0, Math.min(1, noise * 0.8 + wisp * 0.6));
+        const density = Math.max(
+          0,
+          Math.min(1, (noise * 0.8 + wisp * 0.6) * (appearance?.nebula?.density || 1))
+        );
         const colorShift = 0.6 + fractalNoise(nx * 0.4 - 80, ny * 0.4 + 120) * 0.6;
-        const violet = [138, 92, 255];
-        const magenta = [239, 120, 190];
-        const teal = [96, 203, 255];
         const blend = (a, b, t) => a + (b - a) * t;
-        const r = blend(violet[0], magenta[0], colorShift * 0.6) + blend(teal[0], magenta[0], density * 0.35);
-        const g = blend(violet[1], magenta[1], colorShift * 0.7) + blend(teal[1], magenta[1], density * 0.25);
-        const b = blend(violet[2], teal[2], colorShift * 0.8) + blend(teal[2], 220, density * 0.2);
+        const r = blend(primary[0], secondary[0], colorShift * 0.6) + blend(tertiary[0], accent[0], density * 0.35);
+        const g = blend(primary[1], secondary[1], colorShift * 0.7) + blend(tertiary[1], accent[1], density * 0.25);
+        const b = blend(primary[2], tertiary[2], colorShift * 0.8) + blend(accent[2], 210, density * 0.2);
         const alpha = Math.pow(density, 1.45) * 175;
         const idx = (y * smallNebula.width + x) * 4;
         data[idx] = r;
@@ -429,7 +538,21 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
     smallCtx.putImageData(img, 0, 0);
     nebulaCtx.clearRect(0, 0, width, height);
     nebulaCtx.globalAlpha = 0.95;
-    nebulaCtx.drawImage(smallNebula, -width * 0.05 + parallaxX * 18, -height * 0.05 + parallaxY * 18, width * 1.1, height * 1.1);
+    nebulaCtx.drawImage(smallNebula, -width * 0.05, -height * 0.05, width * 1.1, height * 1.1);
+    if (cursor.intensity > 0.02) {
+      const radius = Math.min(width, height) * 0.18;
+      const gradient = nebulaCtx.createRadialGradient(cursor.x, cursor.y, radius * 0.12, cursor.x, cursor.y, radius);
+      const glow = accent || tertiary;
+      gradient.addColorStop(0, `rgba(${glow[0]}, ${glow[1]}, ${glow[2]}, 0.15)`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      nebulaCtx.save();
+      nebulaCtx.globalCompositeOperation = 'screen';
+      nebulaCtx.globalAlpha = Math.min(0.35, 0.2 * cursor.intensity);
+      nebulaCtx.fillStyle = gradient;
+      nebulaCtx.fillRect(cursor.x - radius, cursor.y - radius, radius * 2, radius * 2);
+      nebulaCtx.restore();
+      cursor.intensity *= 0.94;
+    }
   }
 
   function initStars() {
@@ -525,31 +648,30 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
     requestAnimationFrame(animate);
   }
 
-  function handleParallax(event) {
-    const strength = 0.012;
-    const x = typeof event.clientX === 'number' ? event.clientX : width / 2;
-    const y = typeof event.clientY === 'number' ? event.clientY : height / 2;
-    parallaxX = (x / width - 0.5) * strength * width;
-    parallaxY = (y / height - 0.5) * strength * height;
-    scene.style.transform = 'translate3d(' + (parallaxX * -0.02) + 'px, ' + (parallaxY * -0.02) + 'px, 0)';
+  function handlePointerMove(event) {
+    cursor.x = typeof event.clientX === 'number' ? event.clientX : width / 2;
+    cursor.y = typeof event.clientY === 'number' ? event.clientY : height / 2;
+    cursor.intensity = 1;
   }
 
   window.addEventListener('resize', () => {
     resize();
     initStars();
   });
-  window.addEventListener('mousemove', handleParallax);
-  window.addEventListener('deviceorientation', (event) => {
-    if (typeof event.beta === 'number' && typeof event.gamma === 'number') {
-      parallaxX = (event.gamma / 45) * width * 0.01;
-      parallaxY = (event.beta / 45) * height * 0.01;
-      scene.style.transform = 'translate3d(' + (parallaxX * -0.02) + 'px, ' + (parallaxY * -0.02) + 'px, 0)';
-    }
-  });
+  window.addEventListener('mousemove', handlePointerMove, { passive: true });
 
   resize();
   initStars();
   requestAnimationFrame(animate);
+};
+
+window.SpaceSceneController = {
+  applyAppearance(nextAppearance) {
+    if (nextAppearance && typeof nextAppearance === 'object') {
+      applyAppearance(nextAppearance);
+    }
+  },
+  defaults: defaultAppearance,
 };
 
 if (document.readyState === 'loading') {
@@ -1089,6 +1211,17 @@ await pool.query(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS portal_appearance_settings (
+    portal_user_id BIGINT UNSIGNED NOT NULL,
+    settings_json TEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (portal_user_id),
+    CONSTRAINT fk_portal_user_appearance FOREIGN KEY (portal_user_id)
+      REFERENCES portal_users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
 async function addColumnIfMissing(table, clause) {
   try {
     await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${clause}`);
@@ -1126,6 +1259,96 @@ async function ensurePortalSchemaUpgrades() {
   await addColumnIfMissing('sessions', 'classic_gmlevel_json TEXT DEFAULT NULL AFTER retail_gmlevel_json');
   await addIndexIfMissing('sessions', 'ADD KEY idx_session_portal_user (portal_user_id)');
   await addColumnIfMissing('pending', "game_type VARCHAR(16) NOT NULL DEFAULT 'retail' AFTER email");
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function isColorString(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return Boolean(text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i) || text.match(/^rgba?\(/i));
+}
+
+function sanitizeColor(value, fallback) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return isColorString(text) ? text : fallback;
+}
+
+function normalizeAppearanceSettings(settings = {}) {
+  const nebula = settings.nebula || {};
+  const ui = settings.ui || {};
+  const nebulaColors = Array.isArray(nebula.colors)
+    ? nebula.colors.map((c) => sanitizeColor(c, null)).filter(Boolean)
+    : [];
+  return {
+    nebula: {
+      density: clampNumber(nebula.density, 0.35, 1.6, DEFAULT_APPEARANCE.nebula.density),
+      speed: clampNumber(nebula.speed, 0.5, 1.6, DEFAULT_APPEARANCE.nebula.speed),
+      colors: nebulaColors.length ? nebulaColors.slice(0, 6) : DEFAULT_APPEARANCE.nebula.colors,
+    },
+    ui: {
+      gradientFrom: sanitizeColor(ui.gradientFrom, DEFAULT_APPEARANCE.ui.gradientFrom),
+      gradientVia: sanitizeColor(ui.gradientVia, DEFAULT_APPEARANCE.ui.gradientVia),
+      gradientTo: sanitizeColor(ui.gradientTo, DEFAULT_APPEARANCE.ui.gradientTo),
+      inactiveBg: sanitizeColor(ui.inactiveBg, DEFAULT_APPEARANCE.ui.inactiveBg),
+      inactiveText: sanitizeColor(ui.inactiveText, DEFAULT_APPEARANCE.ui.inactiveText),
+      inactiveBorder: sanitizeColor(ui.inactiveBorder, DEFAULT_APPEARANCE.ui.inactiveBorder),
+      surfaceOpacity: clampNumber(ui.surfaceOpacity, 0.35, 0.95, DEFAULT_APPEARANCE.ui.surfaceOpacity),
+      textColor: sanitizeColor(ui.textColor, DEFAULT_APPEARANCE.ui.textColor),
+    },
+  };
+}
+
+function mergeAppearanceSettings(current = DEFAULT_APPEARANCE, incoming = {}) {
+  const base = normalizeAppearanceSettings(current);
+  const nebula = incoming?.nebula || {};
+  const ui = incoming?.ui || {};
+  return normalizeAppearanceSettings({
+    nebula: { ...base.nebula, ...nebula },
+    ui: { ...base.ui, ...ui },
+  });
+}
+
+async function getPortalAppearanceSettings(portalUserId) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    return DEFAULT_APPEARANCE;
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT settings_json FROM portal_appearance_settings WHERE portal_user_id = ? LIMIT 1',
+      [safePortalId]
+    );
+    const raw = rows?.[0]?.settings_json;
+    if (!raw) {
+      return DEFAULT_APPEARANCE;
+    }
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return mergeAppearanceSettings(DEFAULT_APPEARANCE, parsed || {});
+  } catch (err) {
+    console.error('Failed to load portal appearance settings', err);
+    return DEFAULT_APPEARANCE;
+  }
+}
+
+async function savePortalAppearanceSettings(portalUserId, settings) {
+  const safePortalId = toSafeNumber(portalUserId);
+  if (safePortalId == null) {
+    throw new Error('Missing portal user id for appearance settings');
+  }
+  const normalized = mergeAppearanceSettings(DEFAULT_APPEARANCE, settings || {});
+  const payload = JSON.stringify(normalized);
+  const now = Date.now();
+  await pool.execute(
+    `INSERT INTO portal_appearance_settings (portal_user_id, settings_json, updated_at)
+     VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE settings_json = VALUES(settings_json), updated_at = VALUES(updated_at)`,
+    [safePortalId, payload, now]
+  );
+  return normalized;
 }
 
 async function hydratePortalUserLinks(portalUser) {
@@ -1658,6 +1881,7 @@ function buildPortalLimitsScriptTag() {
     gmClassicArmorSearchEndpoint: '/api/gm/classic/armors/search',
     gmClassicArmorDetailsEndpoint: '/api/gm/classic/armors',
     gmClassicArmorCloneEndpoint: '/api/gm/classic/armors',
+    appearanceDefaults: ${JSON.stringify(DEFAULT_APPEARANCE)},
     enums: {
       itemClass: itemEnums.ITEM_CLASS,
       weaponSubclass: itemEnums.WEAPON_SUBCLASS,
@@ -1811,6 +2035,11 @@ ${SHARED_STYLES}
                       class="flex-1 min-w-[140px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
                 Characters
               </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="appearanceTabPanel"
+                      data-tab-target="appearanceTabPanel"
+                      class="flex-1 min-w-[140px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                Appearance
+              </button>
               <button id="gmTabButton" type="button" role="tab" aria-selected="false" aria-controls="gmToolkitSection"
                       data-tab-target="gmToolkitSection"
                       class="hidden flex-1 min-w-[140px] rounded-2xl border border-white/10 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-100/70 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -1959,6 +2188,118 @@ ${SHARED_STYLES}
             <pre id="charactersStatus" class="mt-6 text-sm whitespace-pre-wrap text-indigo-100 bg-gray-900/70 gradient-border rounded-2xl p-4 min-h-[3rem] transition">Select a family to load your roster.</pre>
             <div id="charactersEmptyState" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-indigo-200/80">Link a retail or classic account to view characters.</div>
             <div id="characterCardGrid" class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+          </section>
+
+          <section id="appearanceTabPanel" data-tab-panel class="hidden rounded-3xl gradient-border themed-panel p-6 shadow-inner shadow-indigo-900/30">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Visuals</p>
+                <h2 class="text-2xl font-semibold text-white themed-text">Appearance</h2>
+                <p class="text-sm text-indigo-200/80">Tune the Orion-inspired nebula and the dashboard chrome.</p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button id="appearanceReset" type="button" class="inline-flex items-center justify-center rounded-2xl border border-indigo-400/60 bg-gray-900/70 px-4 py-2 text-sm font-semibold text-indigo-100 transition hover:border-indigo-300 hover:text-white hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-md shadow-indigo-900/30">Reset to defaults</button>
+                <button id="appearanceSave" type="button" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-400 hover:via-purple-400 hover:to-blue-400 focus:outline-none focus:ring-2 focus:ring-indigo-400">Save appearance</button>
+              </div>
+            </div>
+
+            <div class="mt-6 grid gap-5 lg:grid-cols-2">
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-5 space-y-4 themed-panel">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">Nebula</p>
+                    <h3 class="text-lg font-semibold text-white themed-text">Background motion</h3>
+                    <p class="text-sm text-indigo-200/80">Disable camera sway and gently nudge nearby dust with your cursor.</p>
+                  </div>
+                  <span class="rounded-full bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200">Live</span>
+                </div>
+                <div class="space-y-4">
+                  <label class="block text-sm font-semibold text-indigo-200" for="nebulaDensityInput">Nebula density</label>
+                  <input id="nebulaDensityInput" type="range" min="0.35" max="1.6" step="0.05" class="w-full" />
+                  <div class="flex items-center justify-between text-xs text-indigo-200/80">
+                    <span>Lighter fog</span>
+                    <span id="nebulaDensityValue" class="font-semibold text-indigo-100">1.0</span>
+                  </div>
+                </div>
+                <div class="space-y-4">
+                  <label class="block text-sm font-semibold text-indigo-200" for="nebulaSpeedInput">Nebula drift speed</label>
+                  <input id="nebulaSpeedInput" type="range" min="0.5" max="1.6" step="0.05" class="w-full" />
+                  <div class="flex items-center justify-between text-xs text-indigo-200/80">
+                    <span>Calm</span>
+                    <span id="nebulaSpeedValue" class="font-semibold text-indigo-100">1.0x</span>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <p class="text-sm font-semibold text-indigo-200">Nebula palette</p>
+                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <label class="flex flex-col gap-1 text-xs text-indigo-200/80">Core glow
+                      <input id="nebulaColor1" type="color" class="h-10 w-full cursor-pointer rounded" />
+                    </label>
+                    <label class="flex flex-col gap-1 text-xs text-indigo-200/80">Dust veil
+                      <input id="nebulaColor2" type="color" class="h-10 w-full cursor-pointer rounded" />
+                    </label>
+                    <label class="flex flex-col gap-1 text-xs text-indigo-200/80">Iridescent edge
+                      <input id="nebulaColor3" type="color" class="h-10 w-full cursor-pointer rounded" />
+                    </label>
+                    <label class="flex flex-col gap-1 text-xs text-indigo-200/80">Highlight
+                      <input id="nebulaColor4" type="color" class="h-10 w-full cursor-pointer rounded" />
+                    </label>
+                  </div>
+                  <p class="text-xs text-indigo-200/70">Defaults mirror the Orion nebula—deep violets with magenta and cyan bloom.</p>
+                </div>
+              </article>
+
+              <article class="rounded-2xl border border-white/5 bg-gray-900/60 p-5 space-y-4 themed-panel">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.4em] text-indigo-300">UI polish</p>
+                    <h3 class="text-lg font-semibold text-white themed-text">Buttons & surfaces</h3>
+                    <p class="text-sm text-indigo-200/80">Dial in gradients, muted tab states, and surface opacity.</p>
+                  </div>
+                  <span class="rounded-full bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200">Theme</span>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-3">
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Gradient from
+                    <input id="uiGradientFrom" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Gradient mid
+                    <input id="uiGradientVia" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Gradient to
+                    <input id="uiGradientTo" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-3">
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Inactive tab
+                    <input id="uiInactiveBg" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Inactive text
+                    <input id="uiInactiveText" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Inactive border
+                    <input id="uiInactiveBorder" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                </div>
+                <div class="space-y-4">
+                  <label class="block text-sm font-semibold text-indigo-200" for="uiSurfaceOpacity">Surface opacity</label>
+                  <input id="uiSurfaceOpacity" type="range" min="0.35" max="0.95" step="0.01" class="w-full" />
+                  <div class="flex items-center justify-between text-xs text-indigo-200/80">
+                    <span>Opaque</span>
+                    <span id="uiSurfaceOpacityValue" class="font-semibold text-indigo-100">0.70</span>
+                  </div>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Text color
+                    <input id="uiTextColor" type="color" class="h-10 w-full cursor-pointer rounded" />
+                  </label>
+                  <label class="flex flex-col gap-2 text-xs text-indigo-200/80">Preview
+                    <div id="appearancePreview" class="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-indigo-100">Buttons, cards, and tabs update live.</div>
+                  </label>
+                </div>
+              </article>
+            </div>
+
+            <p id="appearanceStatus" class="mt-5 text-sm text-indigo-100"></p>
           </section>
 
           <section id="gmToolkitSection" data-tab-panel class="hidden rounded-3xl gradient-border bg-gray-900/70 p-6 shadow-inner shadow-violet-900/30">
@@ -2927,6 +3268,61 @@ const accountScript = () => {
     gmSubtab: 'dreamcore.dashboard.gmSubtab',
   };
 
+  const APPEARANCE_DEFAULTS = (window.PORTAL_LIMITS && window.PORTAL_LIMITS.appearanceDefaults) || {
+    nebula: { density: 0.9, speed: 1, colors: ['#c084fc', '#f472b6', '#7dd3fc', '#d946ef'] },
+    ui: {
+      gradientFrom: '#6b46c1',
+      gradientVia: '#ec4899',
+      gradientTo: '#22d3ee',
+      inactiveBg: '#0f172a',
+      inactiveText: '#cbd5f5',
+      inactiveBorder: '#334155',
+      surfaceOpacity: 0.7,
+      textColor: '#e2e8f0',
+    },
+  };
+
+  function clampAppearance(value, min, max, fallback) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(max, Math.max(min, num));
+  }
+
+  function isValidColorValue(value) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    return Boolean(text.match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i));
+  }
+
+  function toHexColor(value, fallback) {
+    if (isValidColorValue(value)) return value.trim().toLowerCase();
+    return fallback;
+  }
+
+  function normalizeAppearanceClient(settings = {}) {
+    const nebula = settings.nebula || {};
+    const ui = settings.ui || {};
+    const nebulaColors = Array.isArray(nebula.colors)
+      ? nebula.colors.map((color) => toHexColor(color, null)).filter(Boolean)
+      : [];
+    return {
+      nebula: {
+        density: clampAppearance(nebula.density, 0.35, 1.6, APPEARANCE_DEFAULTS.nebula.density),
+        speed: clampAppearance(nebula.speed, 0.5, 1.6, APPEARANCE_DEFAULTS.nebula.speed),
+        colors: nebulaColors.length ? nebulaColors.slice(0, 6) : APPEARANCE_DEFAULTS.nebula.colors,
+      },
+      ui: {
+        gradientFrom: toHexColor(ui.gradientFrom, APPEARANCE_DEFAULTS.ui.gradientFrom),
+        gradientVia: toHexColor(ui.gradientVia, APPEARANCE_DEFAULTS.ui.gradientVia),
+        gradientTo: toHexColor(ui.gradientTo, APPEARANCE_DEFAULTS.ui.gradientTo),
+        inactiveBg: toHexColor(ui.inactiveBg, APPEARANCE_DEFAULTS.ui.inactiveBg),
+        inactiveText: toHexColor(ui.inactiveText, APPEARANCE_DEFAULTS.ui.inactiveText),
+        inactiveBorder: toHexColor(ui.inactiveBorder, APPEARANCE_DEFAULTS.ui.inactiveBorder),
+        surfaceOpacity: clampAppearance(ui.surfaceOpacity, 0.35, 0.95, APPEARANCE_DEFAULTS.ui.surfaceOpacity),
+        textColor: toHexColor(ui.textColor, APPEARANCE_DEFAULTS.ui.textColor),
+      },
+    };
+  }
+
   function readStoredValue(key) {
     if (!safeStorage || typeof safeStorage.getItem !== 'function' || typeof key !== 'string') {
       return null;
@@ -3010,6 +3406,29 @@ const accountScript = () => {
   const classicLinkSubmit = document.getElementById('classicLinkSubmit');
   const classicLinkedSummary = document.getElementById('classicLinkedSummary');
   const classicDownloadButton = document.getElementById('classicDownloadButton');
+  const appearanceSaveButton = document.getElementById('appearanceSave');
+  const appearanceResetButton = document.getElementById('appearanceReset');
+  const appearanceStatus = document.getElementById('appearanceStatus');
+  const nebulaDensityInput = document.getElementById('nebulaDensityInput');
+  const nebulaSpeedInput = document.getElementById('nebulaSpeedInput');
+  const nebulaDensityValue = document.getElementById('nebulaDensityValue');
+  const nebulaSpeedValue = document.getElementById('nebulaSpeedValue');
+  const nebulaColorInputs = [
+    document.getElementById('nebulaColor1'),
+    document.getElementById('nebulaColor2'),
+    document.getElementById('nebulaColor3'),
+    document.getElementById('nebulaColor4'),
+  ];
+  const uiGradientFrom = document.getElementById('uiGradientFrom');
+  const uiGradientVia = document.getElementById('uiGradientVia');
+  const uiGradientTo = document.getElementById('uiGradientTo');
+  const uiInactiveBg = document.getElementById('uiInactiveBg');
+  const uiInactiveText = document.getElementById('uiInactiveText');
+  const uiInactiveBorder = document.getElementById('uiInactiveBorder');
+  const uiSurfaceOpacity = document.getElementById('uiSurfaceOpacity');
+  const uiSurfaceOpacityValue = document.getElementById('uiSurfaceOpacityValue');
+  const uiTextColor = document.getElementById('uiTextColor');
+  const appearancePreview = document.getElementById('appearancePreview');
   const tabButtons = document.querySelectorAll('[data-tab-target]');
   const tabPanels = document.querySelectorAll('[data-tab-panel]');
   const gmTabButton = document.getElementById('gmTabButton');
@@ -3339,6 +3758,8 @@ const accountScript = () => {
   let armorLastDebug = '';
   let currentArmorBase = null;
   let armorCloneBusy = false;
+  let appearanceSettings = normalizeAppearanceClient(APPEARANCE_DEFAULTS);
+  let appearanceLoaded = false;
 
   const storedTabId = readStoredValue(STORAGE_KEYS.tab);
   if (storedTabId && document.getElementById(storedTabId)) {
@@ -3364,6 +3785,138 @@ const accountScript = () => {
     button.disabled = state;
     button.classList.toggle('opacity-60', state);
   }
+
+  function applyAppearanceTheme(nextSettings) {
+    appearanceSettings = normalizeAppearanceClient(nextSettings || appearanceSettings);
+    const root = document.documentElement;
+    const ui = appearanceSettings.ui;
+    root.style.setProperty('--dc-accent-from', ui.gradientFrom);
+    root.style.setProperty('--dc-accent-via', ui.gradientVia);
+    root.style.setProperty('--dc-accent-to', ui.gradientTo);
+    root.style.setProperty('--dc-tab-muted-bg', ui.inactiveBg);
+    root.style.setProperty('--dc-tab-muted-text', ui.inactiveText);
+    root.style.setProperty('--dc-tab-muted-border', ui.inactiveBorder);
+    root.style.setProperty('--dc-surface-opacity', ui.surfaceOpacity);
+    root.style.setProperty('--dc-text-color', ui.textColor);
+    document.querySelectorAll('.gradient-border').forEach((el) => {
+      el.style.backgroundColor = `rgba(15, 23, 42, ${ui.surfaceOpacity})`;
+    });
+    document.querySelectorAll('[data-tab-target]').forEach((button) => {
+      const selected = button.getAttribute('aria-selected') === 'true';
+      button.classList.toggle('is-active', selected);
+    });
+    if (appearancePreview) {
+      appearancePreview.style.backgroundImage = `linear-gradient(120deg, ${ui.gradientFrom}, ${ui.gradientVia}, ${ui.gradientTo})`;
+      appearancePreview.style.color = ui.textColor;
+      appearancePreview.style.borderColor = ui.inactiveBorder;
+    }
+    if (window.SpaceSceneController?.applyAppearance) {
+      window.SpaceSceneController.applyAppearance({ nebula: appearanceSettings.nebula });
+    }
+  }
+
+  function updateAppearanceForm(settings) {
+    const next = normalizeAppearanceClient(settings || appearanceSettings);
+    appearanceSettings = next;
+    if (nebulaDensityInput && typeof next.nebula.density === 'number') {
+      nebulaDensityInput.value = String(next.nebula.density);
+      nebulaDensityValue.textContent = next.nebula.density.toFixed(2);
+    }
+    if (nebulaSpeedInput && typeof next.nebula.speed === 'number') {
+      nebulaSpeedInput.value = String(next.nebula.speed);
+      nebulaSpeedValue.textContent = `${next.nebula.speed.toFixed(2)}x`;
+    }
+    nebulaColorInputs.forEach((input, idx) => {
+      if (input) input.value = next.nebula.colors[idx] || next.nebula.colors[0];
+    });
+    if (uiGradientFrom) uiGradientFrom.value = next.ui.gradientFrom;
+    if (uiGradientVia) uiGradientVia.value = next.ui.gradientVia;
+    if (uiGradientTo) uiGradientTo.value = next.ui.gradientTo;
+    if (uiInactiveBg) uiInactiveBg.value = next.ui.inactiveBg;
+    if (uiInactiveText) uiInactiveText.value = next.ui.inactiveText;
+    if (uiInactiveBorder) uiInactiveBorder.value = next.ui.inactiveBorder;
+    if (uiSurfaceOpacity) {
+      uiSurfaceOpacity.value = String(next.ui.surfaceOpacity);
+      uiSurfaceOpacityValue.textContent = Number(next.ui.surfaceOpacity).toFixed(2);
+    }
+    if (uiTextColor) uiTextColor.value = next.ui.textColor;
+  }
+
+  function collectAppearanceFromForm() {
+    return normalizeAppearanceClient({
+      nebula: {
+        density: nebulaDensityInput ? Number(nebulaDensityInput.value) : appearanceSettings.nebula.density,
+        speed: nebulaSpeedInput ? Number(nebulaSpeedInput.value) : appearanceSettings.nebula.speed,
+        colors: nebulaColorInputs.map((input, idx) =>
+          input?.value || appearanceSettings.nebula.colors[idx] || appearanceSettings.nebula.colors[0]
+        ),
+      },
+      ui: {
+        gradientFrom: uiGradientFrom?.value,
+        gradientVia: uiGradientVia?.value,
+        gradientTo: uiGradientTo?.value,
+        inactiveBg: uiInactiveBg?.value,
+        inactiveText: uiInactiveText?.value,
+        inactiveBorder: uiInactiveBorder?.value,
+        surfaceOpacity: uiSurfaceOpacity ? Number(uiSurfaceOpacity.value) : appearanceSettings.ui.surfaceOpacity,
+        textColor: uiTextColor?.value,
+      },
+    });
+  }
+
+  async function loadAppearanceSettings() {
+    appearanceLoaded = true;
+    if (appearanceStatus) {
+      appearanceStatus.textContent = 'Loading appearance…';
+    }
+    try {
+      const res = await fetch('/api/appearance', { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to load appearance.');
+      }
+      appearanceSettings = normalizeAppearanceClient(data?.settings || APPEARANCE_DEFAULTS);
+      updateAppearanceForm(appearanceSettings);
+      applyAppearanceTheme(appearanceSettings);
+      if (appearanceStatus) appearanceStatus.textContent = 'Appearance loaded and applied.';
+    } catch (err) {
+      applyAppearanceTheme(appearanceSettings);
+      if (appearanceStatus) appearanceStatus.textContent = err?.message || 'Unable to load appearance.';
+    }
+  }
+
+  async function persistAppearanceSettings() {
+    const payload = collectAppearanceFromForm();
+    applyAppearanceTheme(payload);
+    if (appearanceStatus) appearanceStatus.textContent = 'Saving…';
+    if (appearanceSaveButton) appearanceSaveButton.disabled = true;
+    try {
+      const res = await fetch('/api/appearance', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to save appearance.');
+      }
+      appearanceSettings = normalizeAppearanceClient(data?.settings || payload);
+      updateAppearanceForm(appearanceSettings);
+      if (appearanceStatus) appearanceStatus.textContent = 'Appearance saved for this account.';
+    } catch (err) {
+      if (appearanceStatus) appearanceStatus.textContent = err?.message || 'Unable to save appearance.';
+    } finally {
+      if (appearanceSaveButton) appearanceSaveButton.disabled = false;
+    }
+  }
+
+  function ensureAppearanceLoaded() {
+    if (appearanceLoaded) return;
+    loadAppearanceSettings();
+  }
+
+  applyAppearanceTheme(appearanceSettings);
 
   function realmLabel(realm) {
     const labels = LIMITS.familyLabels || {};
@@ -4919,6 +5472,7 @@ const accountScript = () => {
     tabButtons.forEach((button) => {
       const matches = button.getAttribute('data-tab-target') === targetId;
       button.setAttribute('aria-selected', matches ? 'true' : 'false');
+      button.classList.toggle('is-active', matches);
       button.classList.toggle('bg-gradient-to-r', matches);
       button.classList.toggle('from-indigo-500', matches);
       button.classList.toggle('via-purple-500', matches);
@@ -4932,6 +5486,9 @@ const accountScript = () => {
     });
     if (targetId === 'gmToolkitSection') {
       ensureHealthLoaded();
+    }
+    if (targetId === 'appearanceTabPanel') {
+      ensureAppearanceLoaded();
     }
     if (classicOnlineStatus && gmClassicAccessible) {
       classicOnlineStatus.textContent =
@@ -5012,6 +5569,46 @@ const accountScript = () => {
       }
     });
   });
+
+  const appearanceInputs = [
+    nebulaDensityInput,
+    nebulaSpeedInput,
+    uiGradientFrom,
+    uiGradientVia,
+    uiGradientTo,
+    uiInactiveBg,
+    uiInactiveText,
+    uiInactiveBorder,
+    uiSurfaceOpacity,
+    uiTextColor,
+    ...nebulaColorInputs,
+  ].filter(Boolean);
+
+  appearanceInputs.forEach((input) => {
+    const handler = () => {
+      const preview = collectAppearanceFromForm();
+      updateAppearanceForm(preview);
+      applyAppearanceTheme(preview);
+      if (appearanceStatus) appearanceStatus.textContent = 'Previewing — save to persist.';
+    };
+    input.addEventListener('input', handler);
+    input.addEventListener('change', handler);
+  });
+
+  updateAppearanceForm(appearanceSettings);
+
+  appearanceSaveButton?.addEventListener('click', () => {
+    persistAppearanceSettings();
+  });
+
+  appearanceResetButton?.addEventListener('click', () => {
+    appearanceSettings = normalizeAppearanceClient(APPEARANCE_DEFAULTS);
+    updateAppearanceForm(appearanceSettings);
+    applyAppearanceTheme(appearanceSettings);
+    if (appearanceStatus) appearanceStatus.textContent = 'Reverted to defaults — save to store.';
+  });
+
+  ensureAppearanceLoaded();
 
   setActiveGmSubTab(readStoredValue(STORAGE_KEYS.gmSubtab) || 'gmServerPanel');
   setActiveTab(activeTabId);
@@ -9401,6 +9998,34 @@ app.get('/api/session', requireSession, (req, res) => {
       expiresAt: req.session.expires_at,
     },
   });
+});
+
+app.get('/api/appearance', requireSession, async (req, res) => {
+  const portalUserId = req.session?.portal_user_id;
+  if (portalUserId == null) {
+    return res.status(400).json({ error: 'Missing portal session.' });
+  }
+  try {
+    const settings = await getPortalAppearanceSettings(portalUserId);
+    return res.json({ ok: true, settings });
+  } catch (err) {
+    console.error('Failed to load appearance settings', err);
+    return res.status(500).json({ error: 'Unable to load appearance settings.' });
+  }
+});
+
+app.post('/api/appearance', requireSession, async (req, res) => {
+  const portalUserId = req.session?.portal_user_id;
+  if (portalUserId == null) {
+    return res.status(400).json({ error: 'Missing portal session.' });
+  }
+  try {
+    const settings = await savePortalAppearanceSettings(portalUserId, req.body || {});
+    return res.json({ ok: true, settings });
+  } catch (err) {
+    console.error('Failed to persist appearance settings', err);
+    return res.status(500).json({ error: 'Unable to save appearance settings.' });
+  }
 });
 
 app.post('/api/account/reset-password', requireSession, async (req, res) => {
