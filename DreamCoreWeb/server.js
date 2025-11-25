@@ -3588,11 +3588,28 @@ const accountScript = () => {
   }
 
   function renderArmorSearchResults(items) {
-    if (!armorSearchResults) return;
+    if (!armorSearchResults) {
+      gmArmoryDebug('renderArmorSearchResults:no-results-dom', { count: Array.isArray(items) ? items.length : -1 });
+      return;
+    }
+    gmArmoryDebug('renderArmorSearchResults:enter', {
+      count: Array.isArray(items) ? items.length : -1,
+      hasResultsDom: Boolean(armorSearchResults),
+      resultsClass: armorSearchResults?.className,
+      first:
+        Array.isArray(items) && items[0]
+          ? { entry: items[0].entry, name: items[0].name }
+          : null,
+    });
+
     armorSearchResults.innerHTML = '';
     const list = Array.isArray(items) ? items : [];
     if (!list.length) {
       armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">No armor templates matched your search.</p>';
+      gmArmoryDebug('renderArmorSearchResults:after-update', {
+        hasResultsDom: Boolean(armorSearchResults),
+        resultsClass: armorSearchResults?.className,
+      });
       return;
     }
     list.forEach((item) => {
@@ -3623,6 +3640,12 @@ const accountScript = () => {
         loadArmorDetails(item.entry);
       });
       armorSearchResults.appendChild(row);
+    });
+    armorSearchResults?.classList.remove('hidden');
+    armorSearchResults.style.outline = '2px solid lime';
+    gmArmoryDebug('renderArmorSearchResults:after-update', {
+      hasResultsDom: Boolean(armorSearchResults),
+      resultsClass: armorSearchResults?.className,
     });
   }
 
@@ -4480,6 +4503,12 @@ const accountScript = () => {
     });
     persistStoredValue(STORAGE_KEYS.gmSubtab, nextPanel.id);
     if (nextPanel.id === 'gmArmoryPanel') {
+      gmArmoryDebug('resumeArmoryPanelReady', {
+        gmClassicAccessible,
+        hasResultsDom: Boolean(armorSearchResults),
+        resultsClass: armorSearchResults?.className,
+        armorSearchInitialized,
+      });
       ensureArmoryPanelReady(true);
     }
   }
