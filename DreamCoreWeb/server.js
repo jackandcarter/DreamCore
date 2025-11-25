@@ -543,7 +543,7 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
       const radius = Math.min(width, height) * 0.18;
       const gradient = nebulaCtx.createRadialGradient(cursor.x, cursor.y, radius * 0.12, cursor.x, cursor.y, radius);
       const glow = accent || tertiary;
-      gradient.addColorStop(0, `rgba(${glow[0]}, ${glow[1]}, ${glow[2]}, 0.15)`);
+      gradient.addColorStop(0, 'rgba(' + glow[0] + ', ' + glow[1] + ', ' + glow[2] + ', 0.15)');
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
       nebulaCtx.save();
       nebulaCtx.globalCompositeOperation = 'screen';
@@ -1881,7 +1881,7 @@ function buildPortalLimitsScriptTag() {
     gmClassicArmorSearchEndpoint: '/api/gm/classic/armors/search',
     gmClassicArmorDetailsEndpoint: '/api/gm/classic/armors',
     gmClassicArmorCloneEndpoint: '/api/gm/classic/armors',
-    appearanceDefaults: ${JSON.stringify(DEFAULT_APPEARANCE)},
+    appearanceDefaults: DEFAULT_APPEARANCE,
     enums: {
       itemClass: itemEnums.ITEM_CLASS,
       weaponSubclass: itemEnums.WEAPON_SUBCLASS,
