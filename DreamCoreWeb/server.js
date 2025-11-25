@@ -159,7 +159,7 @@ const DEFAULT_APPEARANCE = Object.freeze({
   nebula: {
     density: 0.9,
     speed: 1,
-    colors: ['#c084fc', '#f472b6', '#7dd3fc', '#d946ef'],
+    colors: ['#7c3aed', '#4f46e5', '#38bdf8', '#60a5fa'],
   },
   ui: {
     gradientFrom: '#6b46c1',
@@ -369,7 +369,7 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
   }
 
   function buildPalette(colors) {
-    const fallback = [196, 132, 252];
+    const fallback = [124, 58, 237];
     return (Array.isArray(colors) ? colors : []).slice(0, 6).map((color) => hexToRgb(color, fallback));
   }
 
@@ -499,10 +499,10 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
       const nebulaColors = nebulaPalette.length
         ? nebulaPalette
         : [
-            [196, 132, 252],
-            [244, 114, 182],
-            [125, 211, 252],
-            [217, 70, 239],
+            [124, 58, 237],
+            [79, 70, 229],
+            [56, 189, 248],
+            [96, 165, 250],
           ];
       const primary = nebulaColors[0] || [196, 132, 252];
       const secondary = nebulaColors[1] || primary;
@@ -525,12 +525,37 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
             0,
             Math.min(1, (noise * 0.8 + wisp * 0.6) * (appearance?.nebula?.density || 1))
           );
-          const colorShift = 0.6 + fractalNoise(nx * 0.4 - 80, ny * 0.4 + 120) * 0.6;
-          const blend = (a, b, t) => a + (b - a) * t;
-          const r = blend(primary[0], secondary[0], colorShift * 0.6) + blend(tertiary[0], accent[0], density * 0.35);
-          const g = blend(primary[1], secondary[1], colorShift * 0.7) + blend(tertiary[1], accent[1], density * 0.25);
-          const b = blend(primary[2], tertiary[2], colorShift * 0.8) + blend(accent[2], 210, density * 0.2);
-          const alpha = Math.pow(density, 1.45) * 175;
+          const ribbonNoise = fractalNoise(nx * 0.52 - 60, ny * 0.52 + 90);
+          const patchNoise = fractalNoise(nx * 0.75 + 140, ny * 0.75 - 120);
+          const wispyColor = fractalNoise(nx * 1.1 - 220, ny * 1.1 + 260);
+
+          const cWeights = [
+            0.65 + (1 - ribbonNoise) * 0.6,
+            0.45 + patchNoise * 0.7,
+            0.35 + Math.abs(ribbonNoise - 0.5) * 0.9,
+            0.25 + wispyColor * 0.85,
+          ];
+          const weightSum = cWeights.reduce((sum, val) => sum + val, 0.0001);
+          const normalize = (w) => (w / weightSum) * (0.8 + density * 0.5);
+          const weights = cWeights.map(normalize);
+
+          const r =
+            primary[0] * weights[0] +
+            secondary[0] * weights[1] +
+            tertiary[0] * weights[2] +
+            accent[0] * weights[3];
+          const g =
+            primary[1] * weights[0] +
+            secondary[1] * weights[1] +
+            tertiary[1] * weights[2] +
+            accent[1] * weights[3];
+          const b =
+            primary[2] * weights[0] +
+            secondary[2] * weights[1] +
+            tertiary[2] * weights[2] +
+            accent[2] * weights[3];
+
+          const alpha = Math.pow(density, 1.35) * 180;
           const idx = (y * smallNebula.width + x) * 4;
           data[idx] = r;
           data[idx + 1] = g;
@@ -3292,7 +3317,7 @@ const accountScript = () => {
   };
 
   const APPEARANCE_DEFAULTS = (window.PORTAL_LIMITS && window.PORTAL_LIMITS.appearanceDefaults) || {
-    nebula: { density: 0.9, speed: 1, colors: ['#c084fc', '#f472b6', '#7dd3fc', '#d946ef'] },
+    nebula: { density: 0.9, speed: 1, colors: ['#7c3aed', '#4f46e5', '#38bdf8', '#60a5fa'] },
     ui: {
       gradientFrom: '#6b46c1',
       gradientVia: '#38bdf8',
