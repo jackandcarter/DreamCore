@@ -2581,12 +2581,12 @@ ${weaponSocketInputsHtml}
               </div>
               </div>
               <div id="gmArmoryPanel" data-sub-tab-panel class="space-y-5 hidden">
-                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4" id="armorSearchCard">
-                  <div class="flex items-center justify-between gap-3">
+                <div class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-5" id="armorSearchCard">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">GM toolkit</p>
                       <h3 class="text-xl font-semibold text-white">Classic Armory (3.3.5)</h3>
-                      <p class="text-xs text-indigo-200/80">Search and clone armor templates from the world database.</p>
+                      <p class="text-sm text-indigo-100/80">Search and clone armor templates from the world database.</p>
                     </div>
                     <span class="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200/80">
                       Classic
@@ -2595,43 +2595,46 @@ ${weaponSocketInputsHtml}
 
                   <div id="armorDebugBanner" class="mt-2 hidden rounded-xl border border-amber-400/60 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-100"></div>
 
-                  <form id="armorSearchForm" class="mt-4 grid gap-4 md:grid-cols-4">
-                    <div class="md:col-span-2">
-                      <label for="armorSearchInput" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
+                  <form id="armorSearchForm" class="space-y-3">
+                    <div>
+                      <label for="armorSearchInput" class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">
                         Armor name or entry
                       </label>
-                      <input id="armorSearchInput" type="text" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-300/40 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="e.g. Wrathful Gladiator's Plate Chestpiece or 51305" />
+                      <input id="armorSearchInput" type="text" class="glow-input w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="e.g. Wrathful Gladiator's Plate Chestpiece or 51305" />
                     </div>
-                    <div>
-                      <label for="armorSubclassFilter" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
-                        Armor type
-                      </label>
-                      <select id="armorSubclassFilter" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
-                        <option value="">Any</option>
-                      </select>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label for="armorSubclassFilter" class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">
+                          Armor type
+                        </label>
+                        <select id="armorSubclassFilter" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                          <option value="">Any</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label for="armorSlotFilter" class="block text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200">
+                          Slot
+                        </label>
+                        <select id="armorSlotFilter" class="dark-select w-full rounded-2xl p-3 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                          <option value="">Any</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label for="armorSlotFilter" class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1">
-                        Slot
-                      </label>
-                      <select id="armorSlotFilter" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
-                        <option value="">Any</option>
-                      </select>
-                    </div>
-                    <div class="md:col-span-4 flex items-center justify-between gap-3">
-                      <p id="armorSearchStatus" class="text-xs text-indigo-200/80">Enter a name or entry ID to begin.</p>
-                      <button id="armorSearchSubmit" type="submit" class="inline-flex items-center rounded-xl border border-violet-400/70 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-violet-900/40 disabled:opacity-60 disabled:cursor-not-allowed">
-                        Search
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p id="armorSearchStatus" class="text-xs text-indigo-200/80">Search or filter to choose a base armor template.</p>
+                      <button id="armorSearchSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-400 hover:via-purple-400 hover:to-indigo-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Search armor
                       </button>
                     </div>
                   </form>
 
-                  <div id="armorSearchResults" class="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 p-3 text-xs text-indigo-100/85">
-                    <p class="text-xs text-indigo-200/70">No results yet.</p>
+                  <div id="armorSearchResults" class="grid gap-3">
+                    <p class="text-sm text-indigo-200/75">Search for an existing Classic armor to begin.</p>
                   </div>
+                  <p id="armorSearchMore" class="hidden text-xs text-indigo-200/70">More matches exist. Refine your search to narrow the list.</p>
                 </div>
 
-                <div id="armorEditorPanel" class="rounded-2xl border border-white/10 bg-gray-900/70 p-5 space-y-4 hidden">
+                <div id="armorEditorPanel" class="hidden space-y-4 rounded-2xl border border-white/10 bg-gray-900/70 p-5">
                   <div class="flex items-center justify-between gap-3">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-300">Armor editor</p>
@@ -3036,6 +3039,7 @@ const accountScript = () => {
   const armorSearchStatus = document.getElementById('armorSearchStatus');
   const armorSearchSubmit = document.getElementById('armorSearchSubmit');
   const armorSearchResults = document.getElementById('armorSearchResults');
+  const armorSearchMore = document.getElementById('armorSearchMore');
   const armorEditorPanel = document.getElementById('armorEditorPanel');
   const armorEditorTitle = document.getElementById('armorEditorTitle');
   const armorEditorMeta = document.getElementById('armorEditorMeta');
@@ -3314,6 +3318,7 @@ const accountScript = () => {
   let armorSearchLoading = false;
   let armorSearchPage = 1;
   const armorSearchPageSize = 25;
+  const armorSearchPageLimit = 10;
   let armorLastDebug = '';
   let currentArmorBase = null;
   let armorCloneBusy = false;
@@ -3652,9 +3657,12 @@ const accountScript = () => {
       armorSearchSubmit.disabled = armorSearchLoading;
       armorSearchSubmit.classList.toggle('opacity-60', armorSearchSubmit.disabled);
     }
+    if (armorSearchMore) {
+      armorSearchMore.classList.add('hidden');
+    }
     if (armorSearchResults) {
       armorSearchResults.innerHTML = armorSearchLoading
-        ? '<p class="text-xs text-indigo-200/70">Searching armory templates…</p>'
+        ? '<p class="text-sm text-indigo-200/75">Searching armory templates…</p>'
         : armorSearchResults.innerHTML;
       armorSearchResults.classList.remove('hidden');
     }
@@ -3702,11 +3710,11 @@ const accountScript = () => {
       }
     }
     if (!armorSearchLoading) {
-      setArmorSearchStatus('Enter a name or entry ID to begin.');
+      setArmorSearchStatus('Search or filter to choose a base armor template.');
       if (!currentArmorBase) {
         setArmorCloneMessage('Select an armor template and adjust fields to clone it into a new item.');
       }
-      setArmorDebugBanner(armorLastDebug || 'Waiting for search…', 'info');
+      setArmorDebugBanner(armorLastDebug || 'Ready to search armor templates.', 'info');
     }
     setWeaponSearchLoadingState(weaponSearchLoading);
     setArmorSearchLoading(armorSearchLoading);
@@ -3932,7 +3940,7 @@ const accountScript = () => {
     }
   }
 
-  function renderArmorSearchResults(items) {
+  function renderArmorSearchResults(items, hasMore = false) {
     if (!armorSearchResults) {
       gmArmoryDebug('renderArmorSearchResults:no-results-dom', { count: Array.isArray(items) ? items.length : -1 });
       return;
@@ -3950,44 +3958,50 @@ const accountScript = () => {
     armorSearchResults.innerHTML = '';
     const list = Array.isArray(items) ? items : [];
     if (!list.length) {
-      armorSearchResults.innerHTML = '<p class="text-xs text-indigo-200/70">No armor templates matched your search.</p>';
+      armorSearchResults.innerHTML = '<p class="text-sm text-indigo-200/75">No armor templates matched your search.</p>';
       gmArmoryDebug('renderArmorSearchResults:after-update', {
         hasResultsDom: Boolean(armorSearchResults),
         resultsClass: armorSearchResults?.className,
       });
+      if (armorSearchMore) {
+        armorSearchMore.classList.add('hidden');
+      }
       return;
     }
     list.forEach((item) => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className =
-        'w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left text-xs text-indigo-100/90 hover:border-violet-400/70 hover:bg-violet-900/20 transition flex items-center justify-between gap-3';
-      const left = document.createElement('div');
-      const title = document.createElement('p');
-      title.className = 'font-semibold text-indigo-50';
-      title.textContent = `${item.name || 'Unknown'} (ID ${item.entry})`;
-      left.appendChild(title);
-      const meta = document.createElement('p');
-      meta.className = 'text-[11px] text-indigo-200/80';
-      const slotLabel = formatEnumLabel(ENUMS.inventoryType, item.InventoryType, 'Slot');
-      const armorTypeLabel = formatEnumLabel(ENUMS.armorSubclass, item.subclass, 'Type');
-      const lvl = Number(item.ItemLevel);
-      const req = Number(item.RequiredLevel);
-      const parts = [];
-      if (slotLabel) parts.push(slotLabel);
-      if (armorTypeLabel) parts.push(armorTypeLabel);
-      if (Number.isFinite(lvl) && lvl > 0) parts.push(`iLvl ${lvl}`);
-      if (Number.isFinite(req) && req > 0) parts.push(`Req ${req}`);
-      meta.textContent = parts.join(' · ');
-      left.appendChild(meta);
-      row.appendChild(left);
-      row.addEventListener('click', () => {
-        loadArmorDetails(item.entry);
+      const entryValue = Number(item?.entry);
+      const entryLabel = Number.isFinite(entryValue) ? `#${entryValue}` : '—';
+      const qualityLabel = formatEnumLabel(ENUMS.itemQuality, item?.Quality, 'Quality');
+      const slotLabel = formatEnumLabel(ENUMS.inventoryType, item?.InventoryType, 'Slot');
+      const armorTypeLabel = formatEnumLabel(ENUMS.armorSubclass, item?.subclass, 'Type');
+      const lvl = Number(item?.ItemLevel ?? item?.itemLevel);
+      const req = Number(item?.RequiredLevel ?? item?.requiredLevel);
+      const metaParts = [qualityLabel, slotLabel, armorTypeLabel].filter(Boolean);
+      const levelParts = [];
+      if (Number.isFinite(lvl) && lvl > 0) levelParts.push(`ilvl ${lvl}`);
+      if (Number.isFinite(req) && req > 0) levelParts.push(`req ${req}`);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.armorEntry = Number.isFinite(entryValue) ? String(entryValue) : '';
+      button.className =
+        'rounded-2xl border border-white/10 bg-gray-900/60 p-3 text-left transition hover:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400';
+      button.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-white font-semibold">${escapeHtml(item?.name || `Entry ${entryValue || '—'}`)}</span>
+          <span class="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-200/80">${escapeHtml(entryLabel)}</span>
+        </div>
+        <p class="text-xs text-indigo-200/75">${escapeHtml(metaParts.join(' · ') || 'Classic armor template')}</p>
+        <p class="text-[11px] text-indigo-200/70">${escapeHtml(levelParts.join(' · ') || 'Ready to load template')}</p>
+      `;
+      button.addEventListener('click', () => {
+        loadArmorDetails(entryValue);
       });
-      armorSearchResults.appendChild(row);
+      armorSearchResults.appendChild(button);
     });
     armorSearchResults?.classList.remove('hidden');
-    armorSearchResults.style.outline = '2px solid lime';
+    if (armorSearchMore) {
+      armorSearchMore.classList.toggle('hidden', !hasMore);
+    }
     gmArmoryDebug('renderArmorSearchResults:after-update', {
       hasResultsDom: Boolean(armorSearchResults),
       resultsClass: armorSearchResults?.className,
@@ -4008,42 +4022,57 @@ const accountScript = () => {
     setArmorSearchStatus('Searching…');
     setArmorDebugBanner('Searching armory templates…', 'info');
 
-    const params = new URLSearchParams();
+    const baseParams = new URLSearchParams();
     const q = (armorSearchInput?.value || '').trim();
-    if (q) params.set('q', q);
+    if (q) baseParams.set('q', q);
     const subclassVal = armorSubclassFilter?.value || '';
-    if (subclassVal) params.set('armorType', subclassVal);
+    if (subclassVal) baseParams.set('armorType', subclassVal);
     const slotVal = armorSlotFilter?.value || '';
-    if (slotVal) params.set('slot', slotVal);
-    params.set('page', String(armorSearchPage));
-    params.set('pageSize', String(armorSearchPageSize));
+    if (slotVal) baseParams.set('slot', slotVal);
 
     try {
-      gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
-      const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
-      const res = await fetch(url, { credentials: 'same-origin' });
-      if (res.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || 'Search failed.');
-      }
-      const items = Array.isArray(data.items) ? data.items : [];
-      const page = Number(data?.page) || 1;
-      const hasMore = Boolean(data?.hasMore);
-      gmArmoryDebug('Search response', { count: items.length, page, hasMore });
-      renderArmorSearchResults(items);
-      armorSearchPage = page;
-      const total = items.length;
+      const aggregated = [];
+      let page = 1;
+      let hasMore = false;
+      do {
+        const params = new URLSearchParams(baseParams);
+        params.set('page', String(page));
+        params.set('pageSize', String(armorSearchPageSize));
+        gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
+        const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || 'Search failed.');
+        }
+        const items = Array.isArray(data.items) ? data.items : [];
+        hasMore = Boolean(data?.hasMore);
+        gmArmoryDebug('Search response', { count: items.length, page, hasMore });
+        aggregated.push(...items);
+        page += 1;
+        if (hasMore && page > armorSearchPageLimit) {
+          gmArmoryDebug('Reached armory page fetch limit', { armorSearchPageLimit });
+          break;
+        }
+      } while (hasMore);
+
+      armorSearchPage = 1;
+      renderArmorSearchResults(aggregated, hasMore);
+      const total = aggregated.length;
+      const statusSuffix = hasMore ? ' Refine your search to narrow results.' : '';
       setArmorDebugBanner(
-        `Loaded ${total} armor row${total === 1 ? '' : 's'} (page ${armorSearchPage}, more: ${hasMore ? 'yes' : 'no'})`,
-        'success'
+        total
+          ? `Loaded ${total} armor template${total === 1 ? '' : 's'}${hasMore ? ' (more results available)' : ''}.`
+          : 'No armor templates matched your search.',
+        total ? 'success' : 'info'
       );
       setArmorSearchStatus(
         total
-          ? `Showing ${total} result${total === 1 ? '' : 's'} (page ${page}).`
+          ? `Found ${total} armor template${total === 1 ? '' : 's'}.${statusSuffix}`
           : 'No armor templates matched your search.'
       );
     } catch (err) {
@@ -4052,7 +4081,10 @@ const accountScript = () => {
       setArmorSearchStatus(err?.message || 'Search failed.');
       setArmorDebugBanner(`Search failed: ${err?.message || 'unknown error'}`, 'warn');
       if (armorSearchResults) {
-        armorSearchResults.innerHTML = '<p class="text-xs text-rose-200/80">Failed to search armors. Check console for details.</p>';
+        armorSearchResults.innerHTML = '<p class="text-sm text-rose-200/80">Failed to search armors. Check console for details.</p>';
+      }
+      if (armorSearchMore) {
+        armorSearchMore.classList.add('hidden');
       }
     } finally {
       setArmorSearchLoading(false);
