@@ -165,7 +165,7 @@ const SHARED_STYLES = `
     p, span, a, small {
       text-shadow: 0 6px 18px rgba(8, 7, 27, 0.45);
     }
-    .has-space-bg > *:not(.space-scene) {
+    .has-space-bg > *:not(.space-scene):not(.corner-logo) {
       position: relative;
       z-index: 1;
     }
@@ -301,25 +301,30 @@ const SPACE_BACKGROUND_STYLES = `
 `;
 
 const SPACE_BACKGROUND_SCRIPT = `(() => {
-  if (document.getElementById('space-scene')) return;
-  const body = document.body;
-  body.classList.add('has-space-bg');
+  const initSpaceScene = () => {
+    if (document.getElementById('space-scene')) return;
+    const body = document.body;
+    if (!body) {
+      requestAnimationFrame(initSpaceScene);
+      return;
+    }
+    body.classList.add('has-space-bg');
 
-  const scene = document.createElement('div');
-  scene.id = 'space-scene';
-  scene.className = 'space-scene';
+    const scene = document.createElement('div');
+    scene.id = 'space-scene';
+    scene.className = 'space-scene';
 
-  const nebulaCanvas = document.createElement('canvas');
-  nebulaCanvas.className = 'space-layer space-nebula';
-  const starCanvas = document.createElement('canvas');
-  starCanvas.className = 'space-layer space-starfield';
-  const shootingCanvas = document.createElement('canvas');
-  shootingCanvas.className = 'space-layer space-shooting';
-  const glowLayer = document.createElement('div');
-  glowLayer.className = 'space-layer space-glow';
+    const nebulaCanvas = document.createElement('canvas');
+    nebulaCanvas.className = 'space-layer space-nebula';
+    const starCanvas = document.createElement('canvas');
+    starCanvas.className = 'space-layer space-starfield';
+    const shootingCanvas = document.createElement('canvas');
+    shootingCanvas.className = 'space-layer space-shooting';
+    const glowLayer = document.createElement('div');
+    glowLayer.className = 'space-layer space-glow';
 
-  scene.append(nebulaCanvas, starCanvas, shootingCanvas, glowLayer);
-  body.prepend(scene);
+    scene.append(nebulaCanvas, starCanvas, shootingCanvas, glowLayer);
+    body.prepend(scene);
 
   const nebulaCtx = nebulaCanvas.getContext('2d');
   const starCtx = starCanvas.getContext('2d');
@@ -545,6 +550,18 @@ const SPACE_BACKGROUND_SCRIPT = `(() => {
   resize();
   initStars();
   requestAnimationFrame(animate);
+};
+
+if (document.readyState === 'loading') {
+  const onReady = () => {
+    document.removeEventListener('DOMContentLoaded', onReady);
+    initSpaceScene();
+  };
+  document.addEventListener('DOMContentLoaded', onReady);
+  window.addEventListener('load', initSpaceScene, { once: true });
+} else {
+  initSpaceScene();
+}
 })();`;
 
 // ----- DB (MariaDB for pending verifications) -----
