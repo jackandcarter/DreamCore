@@ -4734,7 +4734,10 @@ const accountScript = () => {
       const armor = data.armor;
       currentArmorBase = armor;
       gmArmoryDebug('Loaded armor template', { entry: armor.entry, name: armor.name });
-      if (armorEditorPanel) armorEditorPanel.classList.remove('hidden');
+      if (armorEditorPanel) {
+        armorEditorPanel.classList.remove('hidden');
+        armorEditorPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       if (armorEditorTitle) {
         armorEditorTitle.textContent = `${armor.name || 'Unknown armor'} (ID ${armor.entry})`;
       }
