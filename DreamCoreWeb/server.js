@@ -4652,48 +4652,36 @@ const accountScript = () => {
     if (slotVal) baseParams.set('slot', slotVal);
 
     try {
-      const aggregated = [];
-      let page = 1;
-      let hasMore = false;
-      do {
-        const params = new URLSearchParams(baseParams);
-        params.set('page', String(page));
-        params.set('pageSize', String(armorSearchPageSize));
-        gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
-        const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
-        const res = await fetch(url, { credentials: 'same-origin' });
-        if (res.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || 'Search failed.');
-        }
-        const items = Array.isArray(data.items) ? data.items : [];
-        hasMore = Boolean(data?.hasMore);
-        gmArmoryDebug('Search response', { count: items.length, page, hasMore });
-        aggregated.push(...items);
-        page += 1;
-        if (hasMore && page > armorSearchPageLimit) {
-          gmArmoryDebug('Reached armory page fetch limit', { armorSearchPageLimit });
-          break;
-        }
-      } while (hasMore);
+      const params = new URLSearchParams(baseParams);
+      params.set('page', String(armorSearchPage));
+      params.set('pageSize', String(armorSearchPageSize));
+      gmArmoryDebug('Searching armors with params', Object.fromEntries(params.entries()));
+      const url = `${gmClassicArmorSearchEndpoint}?${params.toString()}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Search failed.');
+      }
+      const items = Array.isArray(data.items) ? data.items : [];
+      const hasMore = Boolean(data?.hasMore);
+      gmArmoryDebug('Search response', { count: items.length, page: armorSearchPage, hasMore });
 
-      armorSearchPage = 1;
-      renderArmorSearchResults(aggregated, hasMore);
-      const total = aggregated.length;
+      renderArmorSearchResults(items, hasMore);
+      armorSearchPage = Number(data?.page) || 1;
       const statusSuffix = hasMore ? ' Refine your search to narrow results.' : '';
       setArmorDebugBanner(
-        total
-          ? `Loaded ${total} armor template${total === 1 ? '' : 's'}${hasMore ? ' (more results available)' : ''}.`
+        items.length
+          ? `Loaded ${items.length} armor template${items.length === 1 ? '' : 's'}${hasMore ? ' (more results available)' : ''}.`
           : 'No armor templates matched your search.',
-        total ? 'success' : 'info'
+        items.length ? 'success' : 'info'
       );
       setArmorSearchStatus(
-        total
-          ? `Found ${total} armor template${total === 1 ? '' : 's'}.${statusSuffix}`
+        items.length
+          ? `Found ${items.length} armor template${items.length === 1 ? '' : 's'}.${statusSuffix}`
           : 'No armor templates matched your search.'
       );
     } catch (err) {
@@ -5920,6 +5908,22 @@ const accountScript = () => {
       return;
     }
     loadWeaponDetails(entry);
+  });
+
+  armorSearchResults?.addEventListener('click', (event) => {
+    const target = event?.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const button = target.closest('[data-armor-entry]');
+    if (!button) {
+      return;
+    }
+    const entry = Number(button.getAttribute('data-armor-entry'));
+    if (!Number.isFinite(entry) || entry <= 0) {
+      return;
+    }
+    loadArmorDetails(entry);
   });
 
   weaponCloneForm?.addEventListener('submit', handleWeaponClone);
