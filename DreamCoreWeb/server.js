@@ -3078,8 +3078,8 @@ ${weaponSocketInputsHtml}
                           <select id="armorField_InventoryType" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-indigo-50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"></select>
                         </div>
                         <div>
-                          <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_Armor">Armor value</label>
-                          <input id="armorField_Armor" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
+                        <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-1" for="armorField_armor">Armor value</label>
+                        <input id="armorField_armor" type="number" class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-indigo-50 placeholder:text-indigo-200/50 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="0" />
                         </div>
                       </div>
                       <div class="grid gap-4 md:grid-cols-3">
@@ -3274,7 +3274,7 @@ ${weaponSocketInputsHtml}
 
                     <div class="pt-2 flex items-center justify-between gap-3">
                       <p id="armorCloneMsg" class="text-xs text-indigo-200/80">Select an armor template and adjust fields to clone it into a new item.</p>
-                      <button id="armorCloneSubmit" type="submit" class="inline-flex items-center rounded-xl border border-emerald-400/70 bg-gradient-to-r from-emerald-600 via-lime-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-gray-900 shadow-lg shadow-emerald-900/40 disabled:opacity-60 disabled:cursor-not-allowed">
+                      <button id="armorCloneSubmit" type="submit" class="inline-flex items-center rounded-xl border border-emerald-400/70 bg-gradient-to-r from-emerald-600 via-lime-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-900/40 disabled:opacity-60 disabled:cursor-not-allowed">
                         Clone armor
                       </button>
                     </div>
@@ -3684,7 +3684,7 @@ const accountScript = () => {
     'class',
     'subclass',
     'InventoryType',
-    'Armor',
+    'armor',
     'ItemLevel',
     'RequiredLevel',
     'StatsCount',
@@ -6791,7 +6791,7 @@ function ensureClassicArmorCloneValid(item) {
   if (classValue !== 4) {
     throw new PortalHttpError('Only armor templates can be cloned with this tool.', 400);
   }
-  const requiredNumericFields = ['InventoryType', 'Quality', 'ItemLevel', 'RequiredLevel', 'Armor'];
+  const requiredNumericFields = ['InventoryType', 'Quality', 'ItemLevel', 'RequiredLevel', 'armor'];
   for (const field of requiredNumericFields) {
     if (toSafeNumber(item[field]) == null) {
       throw new PortalHttpError(`Invalid value for ${field}.`, 400);
